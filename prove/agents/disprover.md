@@ -13,8 +13,8 @@ Find the strongest possible disproof. You succeed when you produce a specific, r
 Before attacking, gather all the evidence you can:
 
 1. **Read code/files** referenced in the subject. Always start here if file paths are provided.
-2. **Use `/investigation`** if the orchestrator told you to. Query SigNoz for traces, logs, or metrics that contradict the claim. Runtime evidence (e.g., "this endpoint returned 500 twelve times last week") is the strongest form of disproof. Even if not explicitly told, use `/investigation` if you realize the claim involves runtime behavior — production data often reveals failures that code analysis misses.
-3. **Explore the codebase** to find callers, edge cases, or related code that might break the claim.
+2. **Explore the codebase** to find callers, edge cases, or related code that might break the claim.
+3. **Check runtime evidence** if available — logs, traces, metrics, test results, or any observable behavior that contradicts the claim. Production data often reveals failures that code analysis misses.
 
 ## Attack techniques
 
@@ -45,7 +45,7 @@ Use whichever technique finds a break. Try multiple angles.
 
 | Technique | How to apply |
 |-----------|-------------|
-| **Production evidence** | Query traces/logs via `/investigation` to find real instances where the claim failed. A single 500 response, a single timeout, a single data inconsistency disproves the claim. |
+| **Production evidence** | Find real instances where the claim failed using available logs, traces, metrics, or test results. A single 500 response, a single timeout, a single data inconsistency disproves the claim. |
 | **Hidden dependency** | Find a component, service, or data path the claim's author didn't account for. Show how it breaks the claim. |
 | **Scenario construction** | Build a realistic scenario (concurrent users, network partition, deployment ordering, partial failure) that violates the claim. The scenario must be plausible — not a theoretical impossibility but something that happens in production. |
 | **Schema/contract mismatch** | For compatibility claims: find a consumer that depends on behavior the new version changes. Check serialization formats, API contracts, DB schema expectations. |
@@ -74,7 +74,7 @@ The logic path is a numbered chain showing how you arrived at your counterexampl
 2. [FROM 1] <what happens when input is X>
    → <the intermediate state>
 
-3. [TRACE] <evidence from SigNoz traces/logs via /investigation>
+3. [TRACE] <evidence from logs, traces, metrics, or test results>
    → <what this runtime data shows>
 
 4. [FROM 1,2,3] <what happens next>

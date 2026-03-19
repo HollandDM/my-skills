@@ -13,8 +13,8 @@ Build the strongest possible proof. You succeed when every case, path, or scenar
 Before building your proof, gather all the evidence you can:
 
 1. **Read code/files** referenced in the subject. Always start here if file paths are provided.
-2. **Use `/investigation`** if the orchestrator told you to. Query SigNoz for traces, logs, or metrics that support the claim. Runtime evidence (e.g., "this endpoint has returned 200 for the last 10,000 requests") strengthens a proof significantly. Even if not explicitly told, use `/investigation` if you realize the claim involves runtime behavior you can't determine from code alone.
-3. **Explore the codebase** to find related code — callers, dependencies, tests — that might strengthen or weaken your argument.
+2. **Explore the codebase** to find related code — callers, dependencies, tests — that might strengthen or weaken your argument.
+3. **Check runtime evidence** if available — logs, traces, metrics, test results, or any observable behavior that supports the claim.
 
 ## Proof techniques
 
@@ -37,14 +37,14 @@ Use whichever technique fits the claim. You are assigned at most 2 vectors — p
 | Technique | When to use |
 |-----------|-------------|
 | **Complexity analysis** | Derive time/space complexity from the algorithm structure. Show Big-O bounds with step-by-step derivation from the code. |
-| **Benchmarking proof** | Cite actual benchmark results, profiler output, or production latency metrics via `/investigation`. Empirical measurements backing theoretical analysis. |
+| **Benchmarking proof** | Cite actual benchmark results, profiler output, or production latency metrics. Empirical measurements backing theoretical analysis. |
 | **Resource bound reasoning** | Show memory, connection pool, thread count, or other resources are bounded. Trace the allocation/release lifecycle to prove no leaks or unbounded growth. |
 
 ### For system behavior (architecture, runtime, integration)
 
 | Technique | When to use |
 |-----------|-------------|
-| **Trace-based evidence** | Query production traces/logs via `/investigation` to show the claim holds empirically across real traffic. |
+| **Trace-based evidence** | Use available production traces, logs, or metrics to show the claim holds empirically across real traffic. |
 | **Structural analysis** | Examine how components connect — data flow, dependency graph, call chain — to show the claim follows from the architecture. |
 | **Constraint propagation** | Identify constraints at each layer (types, validation, DB schema, config) and show the claim is a consequence of their intersection. |
 | **Backward compatibility reasoning** | For migration/change claims: show that all consumers of the old interface are satisfied by the new one. |
@@ -73,7 +73,7 @@ The logic path is a numbered chain where each step builds on previous steps. Eve
 2. [FROM 1] <claim that follows from step 1>
    → <what this means for the claim>
 
-3. [TRACE] <evidence from SigNoz traces/logs via /investigation>
+3. [TRACE] <evidence from logs, traces, metrics, or test results>
    → <what this runtime data establishes>
 
 4. [FROM 1,2,3] <claim that follows from prior steps>

@@ -97,14 +97,6 @@ Provide each agent with:
 - Their role (prover or disprover)
 - **Their assigned angle — exactly 1-2 specific vectors to pursue**
 - The path to their instruction file so they can read it
-- Guidance on whether `/investigation` would help (see below)
-
-**When to use `/investigation`**: If the claim involves runtime behavior, production data, latency, error rates, or anything that can't be determined from code alone, tell the agents to use the `/investigation` skill to query SigNoz traces/logs for evidence. Examples:
-- "this endpoint never returns 500" → needs production trace data
-- "this job completes within 5 minutes" → needs execution time logs
-- "this error was fixed by commit X" → needs error rate before/after
-
-Even for code-only claims, `/investigation` can provide supporting evidence (e.g., "this branch is actually reachable in production" via trace data).
 
 **Agent prompt template**:
 ```
@@ -119,9 +111,6 @@ Subject under analysis:
 
 Claim to <prove/prove FALSE>:
 <claim>
-
-Investigation guidance:
-<"Use /investigation to query SigNoz for runtime evidence" OR "Code/static analysis should suffice">
 ```
 
 ### 3. Judge the round
@@ -175,16 +164,14 @@ Collect all judge verdicts. The round result requires **more than 50% agreement*
 - If >50% say `DISPROVEN` → round result is **DISPROVEN**
 - Otherwise (no majority, or majority `UNDECIDED`) → round result is **UNDECIDED**
 
-If the result is PROVEN or DISPROVEN, go to step 6 (present verdict).
+Regardless of the result (PROVEN, DISPROVEN, or UNDECIDED), go to step 4 (ask user what to do next). The user always gets the final say — they may want more context or another round even if judges reached a verdict.
 
-If UNDECIDED, go to step 4 (ask user what to do next).
+### 4. Ask user for next action
 
-### 4. Ask user for next action (when UNDECIDED)
-
-When judges can't reach a majority, present the current state and ask the user to choose:
+After every round, present the result and let the user decide what to do next. The user always has the final say — even if judges reached a clear verdict, the user may want more scrutiny.
 
 ```
-## Round <N> result: UNDECIDED
+## Round <N> result: <PROVEN | DISPROVEN | UNDECIDED>
 
 ### Judge votes:
 - Judge 1 (<vector>): <verdict> — <rationale summary>
@@ -197,25 +184,30 @@ When judges can't reach a majority, present the current state and ask the user t
 ### Strongest disprover argument (from Disprover <X>):
 <1-2 sentence summary>
 
-### Why judges couldn't agree:
-<what's unresolved>
+### <If UNDECIDED: "Why judges couldn't agree:" / If PROVEN/DISPROVEN: "Key reasoning:">
+<what's unresolved or what convinced the majority>
 
 ### What would you like to do?
-1. **More context** — provide additional information to refine the claim, then run a new prove/disprove round
-2. **Battle round** — let the strongest arguments fight each other directly
-3. **End** — stop here, accept the current state as the result
+1. **Accept** — accept this verdict as the final result (go to step 6)
+2. **More context** — provide additional information to refine the claim, then run a new prove/disprove round
+3. **Battle round** — let the strongest arguments fight each other directly
+4. **End** — stop here without a verdict
 ```
 
-The user MUST choose one of these three options. Handle each:
+The user MUST choose one of these options. Handle each:
 
-#### Option 1: More context → new prove/disprove round
+#### Option 1: Accept the verdict
+
+If the user accepts, go to step 6 (present verdict). Use the current round's judge majority as the final verdict. If the current round was UNDECIDED, present it as UNDECIDED with both sides' arguments.
+
+#### Option 2: More context → new prove/disprove round
 
 If the user provides more context:
 1. **Refine the claim statement** based on the new information. Show the refined claim to the user and confirm before proceeding.
 2. Spawn a fresh **prove/disprove round** (same structure as step 2 — provers, disprovers, vibe check agent, reinforcement agent). Use the refined claim.
 3. Judge the round (step 3).
 
-#### Option 2: Battle round
+#### Option 3: Battle round
 
 Spawn targeted counter-agents that attack specific arguments from the previous round. **No vibe check agent in battle rounds** — only direct argument combat.
 
@@ -261,7 +253,7 @@ After the battle round completes, judge the results (step 3). Then:
 - If judges reach a verdict → step 6 (present verdict)
 - If still UNDECIDED → step 4 again (ask user)
 
-#### Option 3: End the session
+#### Option 4: End the session
 
 If the user chooses to end, **stop immediately**. Present whatever information has been gathered so far without forcing a verdict. Use this format:
 
