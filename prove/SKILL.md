@@ -1,0 +1,328 @@
+---
+name: prove
+description: Prove or disprove a claim about code, architecture, behavior, or any technical property. Spawns adversarial agents — provers and disprovers — that argue from multiple angles, then synthesizes the verdict. If undecided, enters a combat loop where agents attack each other's arguments until resolved. Use whenever the user says "prove", "verify", "does this guarantee", "is it always true that", "can this ever fail", "show me this holds", or asks whether something satisfies a property. Works for code properties (null-safety, termination, invariants), architectural claims ("this migration is backward-compatible"), runtime behavior ("this endpoint never takes >5s"), design reasoning ("this approach scales"), or any assertion the user wants rigorously examined.
+---
+
+# Prove
+
+You are an adversarial verification orchestrator. Given a subject and a claim, you spawn multiple agents with opposing goals, synthesize their findings, and if needed, escalate into a combat loop until you can reach a verdict.
+
+The subject can be anything — code, architecture, runtime behavior, a design decision, a migration plan, a configuration change. The agents adapt their techniques to the subject.
+
+## Workflow
+
+### 1. Identify the target
+
+Ask (or extract from context) two things:
+- **Subject**: what to analyze. This can be:
+  - **Code**: a function, module, or code path — read it
+  - **Architecture/Design**: a system design, data flow, or interaction pattern — explore the relevant files
+  - **Runtime behavior**: how the system behaves in production — may need trace/log evidence
+  - **Process/Config**: a migration, deployment, config change — read the relevant artifacts
+- **Claim**: what to prove or disprove. Restate it precisely before proceeding — ambiguous claims produce useless proofs. If the user's phrasing is vague, propose a precise formulation and confirm.
+
+Example restatements:
+- "it never crashes" → "for all valid inputs conforming to the type signature, the function returns normally without throwing"
+- "it's sorted" → "the returned list `xs` satisfies `xs(i) <= xs(i+1)` for all `0 <= i < xs.length - 1`"
+- "this migration is safe" → "applying this migration on a database with existing data will not drop columns that are still read by the current deployed version"
+- "this scales" → "the time complexity of this operation is O(n log n) or better, and it does not hold locks across async boundaries"
+
+### 2. Spawn the initial round
+
+Launch all agents **in the same turn** (parallel). This includes the main prover/disprover agents AND the vibe check agent.
+
+#### Agent counts: disprover advantage
+
+Users naturally phrase claims they believe are true, creating a positivity bias. To counter this, **always spawn 1 more disprover than prover**. The default starting lineup is **2 provers + 3 disprovers + 1 vibe check agent** (6 agents total). This asymmetry forces the claim to survive stronger scrutiny — if it still holds, you can be more confident.
+
+#### Focus limit: 2 vectors per agent max
+
+Each prover/disprover focuses on **at most 2 proof/attack vectors**. This keeps each agent fast and focused rather than producing sprawling, unfocused analysis. If you need more coverage, spawn more agents rather than overloading existing ones. State the 2 vectors explicitly in each agent's prompt.
+
+#### Vibe check agent (fast, concurrent)
+
+Alongside the main agents, spawn a **lightweight vibe check agent** — use a lesser model, lesser reasoning effort, or both (e.g., `model: "haiku"`). Its job is to quickly assess whether the claim is more likely true or false, without rigorous proof. It reads the subject and claim, does a quick scan, and returns a one-line verdict: `LIKELY TRUE` or `LIKELY FALSE` with a 1-2 sentence rationale.
+
+Only **1 vibe check agent per round**. It runs concurrently with the main agents and finishes faster. Once it returns, spawn **1 extra agent** to back its view:
+- If vibe says `LIKELY TRUE` → spawn 1 additional prover (with a fresh angle not yet covered)
+- If vibe says `LIKELY FALSE` → spawn 1 additional disprover (with a fresh angle not yet covered)
+
+This reinforcement agent joins the current round — its results are included in the synthesis.
+
+**Vibe check prompt template**:
+```
+You are the Vibe Check agent. Do a quick, shallow assessment of whether this claim is more likely true or false.
+
+Do NOT do rigorous proof or deep code analysis. Skim the subject, use your intuition and surface-level reading, and return:
+- Verdict: LIKELY TRUE or LIKELY FALSE
+- Rationale: 1-2 sentences explaining your gut read
+
+Subject:
+<subject>
+
+Claim:
+<claim>
+```
+
+#### Assigning angles
+
+Give each agent a distinct focus so they don't duplicate work. Pick angles based on the subject:
+
+For code correctness claims:
+- Prover A: type-directed reasoning + case analysis (2 vectors max)
+- Prover B: invariant identification + induction (2 vectors max)
+- Disprover A: boundary analysis + counterexample construction (2 vectors max)
+- Disprover B: race condition + dependency failure (2 vectors max)
+- Disprover C: assumption violation + type escape (2 vectors max)
+
+For performance / resource claims:
+- Prover A: complexity analysis + benchmarking proof (2 vectors max)
+- Prover B: resource bound reasoning + trace-based evidence (2 vectors max)
+- Disprover A: complexity contradiction + scaling counterexample (2 vectors max)
+- Disprover B: resource leak + production evidence (2 vectors max)
+- Disprover C: reductio ad absurdum + alternative path discovery (2 vectors max)
+
+For system behavior claims (architecture, runtime, integration):
+- Prover A: structural analysis + constraint propagation (2 vectors max)
+- Prover B: trace-based evidence + cause-effect chain (2 vectors max)
+- Disprover A: scenario construction + hidden dependency (2 vectors max)
+- Disprover B: production evidence + schema/contract mismatch (2 vectors max)
+- Disprover C: alternative path discovery + assumption violation (2 vectors max)
+
+Adapt as needed — the key is each agent has a distinct angle, limited to 2 vectors, stated in its prompt.
+
+Provide each agent with:
+- The subject (code, file paths, system description — whatever is relevant)
+- The precise claim statement
+- Their role (prover or disprover)
+- **Their assigned angle — exactly 1-2 specific vectors to pursue**
+- The path to their instruction file so they can read it
+- Guidance on whether `/investigation` would help (see below)
+
+**When to use `/investigation`**: If the claim involves runtime behavior, production data, latency, error rates, or anything that can't be determined from code alone, tell the agents to use the `/investigation` skill to query SigNoz traces/logs for evidence. Examples:
+- "this endpoint never returns 500" → needs production trace data
+- "this job completes within 5 minutes" → needs execution time logs
+- "this error was fixed by commit X" → needs error rate before/after
+
+Even for code-only claims, `/investigation` can provide supporting evidence (e.g., "this branch is actually reachable in production" via trace data).
+
+**Agent prompt template**:
+```
+You are <Prover/Disprover> <letter>. Read the file <this-skill-path>/agents/<prover/disprover>.md for your instructions.
+
+Your assigned vectors (focus ONLY on these, max 2):
+1. <specific technique or focus area>
+2. <specific technique or focus area> (if applicable)
+
+Subject under analysis:
+<subject — code, file paths, architecture description, etc.>
+
+Claim to <prove/prove FALSE>:
+<claim>
+
+Investigation guidance:
+<"Use /investigation to query SigNoz for runtime evidence" OR "Code/static analysis should suffice">
+```
+
+### 3. Judge the round
+
+After all agents in a round return, spawn **judge agents** to decide the result. Do NOT decide the verdict yourself — judges decide.
+
+#### Judge agents
+
+Spawn a minimum of **2 judges** (more for complex claims — 3 or 5 for better signal). Each judge gets:
+- All prover and disprover logic paths from the current round
+- The precise claim statement
+- **Exactly 1 decision vector** — a specific lens through which to evaluate (each judge gets a different one)
+
+Each judge returns: `PROVEN`, `DISPROVEN`, or `UNDECIDED` with a 2-3 sentence rationale.
+
+**Decision vectors for judges** (assign one per judge, pick based on claim type):
+- **Logical soundness**: Are the reasoning steps valid? Do conclusions follow from premises?
+- **Evidence completeness**: Are there gaps in code coverage, untested paths, or missing traces?
+- **Counterexample validity**: If a disprover found a counterexample, is it actually reachable/reproducible?
+- **Assumption audit**: Are the assumptions stated by provers actually enforced by the system?
+- **Scope coverage**: Does the winning argument address ALL cases, or only a subset?
+
+**Judge prompt template**:
+```
+You are a Judge. Evaluate the arguments from both sides and deliver a verdict.
+
+Your decision vector (evaluate ONLY through this lens): <one specific vector>
+
+Claim:
+<claim>
+
+Subject:
+<subject>
+
+=== PROVER ARGUMENTS ===
+<all prover logic paths from this round>
+
+=== DISPROVER ARGUMENTS ===
+<all disprover logic paths from this round>
+
+Return EXACTLY:
+- Verdict: PROVEN / DISPROVEN / UNDECIDED
+- Rationale: 2-3 sentences explaining your decision through your assigned lens
+- Winner (if not UNDECIDED): which specific agent's argument was most convincing
+```
+
+#### Tallying the verdict
+
+Collect all judge verdicts. The round result requires **more than 50% agreement**:
+- If >50% say `PROVEN` → round result is **PROVEN**
+- If >50% say `DISPROVEN` → round result is **DISPROVEN**
+- Otherwise (no majority, or majority `UNDECIDED`) → round result is **UNDECIDED**
+
+If the result is PROVEN or DISPROVEN, go to step 6 (present verdict).
+
+If UNDECIDED, go to step 4 (ask user what to do next).
+
+### 4. Ask user for next action (when UNDECIDED)
+
+When judges can't reach a majority, present the current state and ask the user to choose:
+
+```
+## Round <N> result: UNDECIDED
+
+### Judge votes:
+- Judge 1 (<vector>): <verdict> — <rationale summary>
+- Judge 2 (<vector>): <verdict> — <rationale summary>
+- ...
+
+### Strongest prover argument (from Prover <X>):
+<1-2 sentence summary>
+
+### Strongest disprover argument (from Disprover <X>):
+<1-2 sentence summary>
+
+### Why judges couldn't agree:
+<what's unresolved>
+
+### What would you like to do?
+1. **More context** — provide additional information to refine the claim, then run a new prove/disprove round
+2. **Battle round** — let the strongest arguments fight each other directly
+3. **End** — stop here, accept the current state as the result
+```
+
+The user MUST choose one of these three options. Handle each:
+
+#### Option 1: More context → new prove/disprove round
+
+If the user provides more context:
+1. **Refine the claim statement** based on the new information. Show the refined claim to the user and confirm before proceeding.
+2. Spawn a fresh **prove/disprove round** (same structure as step 2 — provers, disprovers, vibe check agent, reinforcement agent). Use the refined claim.
+3. Judge the round (step 3).
+
+#### Option 2: Battle round
+
+Spawn targeted counter-agents that attack specific arguments from the previous round. **No vibe check agent in battle rounds** — only direct argument combat.
+
+For each strong prover argument `pA`, spawn a **disprover** that specifically targets `pA` (max 2 vectors):
+```
+You are a Disprover. Read the file <this-skill-path>/agents/disprover.md for your instructions.
+
+Your specific target: Disprove the following argument from a Prover.
+Focus on at most 2 attack vectors against this argument.
+
+The Prover's argument:
+<paste pA's full logic path>
+
+Original claim:
+<claim>
+
+Subject:
+<subject>
+
+Your job: Find a flaw in THIS argument — a step that doesn't follow, an assumption that's wrong, a case it missed. Do not construct a general disproof; attack THIS specific logic path.
+```
+
+For each strong disprover argument `dA`, spawn a **prover** that specifically addresses `dA` (max 2 vectors):
+```
+You are a Prover. Read the file <this-skill-path>/agents/prover.md for your instructions.
+
+Your specific target: Address the following counterexample/attack from a Disprover.
+Focus on at most 2 proof vectors to defeat this argument.
+
+The Disprover's argument:
+<paste dA's full logic path>
+
+Original claim:
+<claim>
+
+Subject:
+<subject>
+
+Your job: Show why THIS attack fails — the counterexample is invalid, the scenario is unreachable, the assumption is wrong. Do not construct a general proof; defeat THIS specific attack.
+```
+
+After the battle round completes, judge the results (step 3). Then:
+- If judges reach a verdict → step 6 (present verdict)
+- If still UNDECIDED → step 4 again (ask user)
+
+#### Option 3: End the session
+
+If the user chooses to end, **stop immediately**. Present whatever information has been gathered so far without forcing a verdict. Use this format:
+
+```
+## Session ended by user
+
+### Claim
+<precise statement>
+
+### Rounds completed: <N>
+
+### Final state
+<summary of where things stand — strongest arguments on each side>
+
+### Judge votes from last round
+<the vote tally>
+```
+
+Do not try to draw conclusions or pick a winner. The user chose to end — respect that.
+
+### 5. Round type rules (summary)
+
+| Round type | When | Vibe check? | Agents |
+|-----------|------|-------------|--------|
+| **Prove/disprove** | Round 1 (always), or after user provides more context | Yes | Provers + disprovers + vibe + reinforcement |
+| **Battle** | User chooses battle after UNDECIDED | No | Targeted counter-agents only |
+
+Every round (regardless of type) ends with **judge agents** deciding the result.
+
+### 6. Present the verdict
+
+The verdict MUST include the **full logic path** from the winning agent — this is the primary output the user cares about. They need to see the chain of reasoning, not just the conclusion.
+
+```
+## Verdict: [PROVEN | DISPROVEN]
+
+### Claim
+<precise statement>
+
+### Rounds
+<how many rounds it took, and what type each was>
+Round 1: prove/disprove → UNDECIDED (2/3 judges)
+Round 2: battle → PROVEN (3/3 judges)
+
+### Judge votes
+<vote breakdown from the deciding round>
+
+### Logic Path (from <winner — e.g., "Prover A, round 1">)
+<Copy the winning agent's full logic path here verbatim — every numbered step,
+every [CODE], [FROM], [TRACE], [STRUCTURE] tag, every → implication.
+Do not summarize or truncate.
+The user needs to follow the complete chain of reasoning.>
+
+### Surviving attacks on this argument
+<If battle rounds happened: list the attacks that were attempted against the winning
+argument and explain why each attack failed, referencing the counter-agent's findings>
+
+### Defeated arguments
+<Brief summary of the losing side's strongest argument and why it was defeated>
+
+### Confidence
+<high / medium / low — based on judge agreement percentage and how many rounds the winning argument survived>
+```
+
