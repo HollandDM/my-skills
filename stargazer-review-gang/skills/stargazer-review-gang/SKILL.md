@@ -12,7 +12,7 @@ description: >
 
 # Stargazer Review Gang
 
-**Announce at start:** "I'm using the stargazer-review-gang skill to review your code."
+**Announce at start:** "Starting the stargazer-review-gang."
 
 ## Constraints
 
