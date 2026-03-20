@@ -19,15 +19,15 @@ description: >
 1. **NO BUILD COMMANDS.** You and all sub-agents are FORBIDDEN from running `./mill`, `compile`,
    `test`, `checkStyle`, `checkStyleDirty`, `reformat`, `checkUnused`, `WarnUnusedCode`, or any
    build/lint command.
-2. **YOU DO NOT READ DIFFS, SOURCE FILES, OR SUB-AGENT INSTRUCTION FILES.** You get file list
-   from `git diff --name-only` and line count from `git diff --stat`. Sub-agents read their own
-   instructions, diffs, and files. Do NOT use the Read tool on any `.md` file in this skill.
+2. **YOU DO NOT READ DIFFS, SOURCE FILES, OR SUB-AGENT INSTRUCTION FILES.** Do NOT run any
+   `git diff` commands. Do NOT use the Read tool on any `.md` file in this skill. The orchestrator
+   and reviewers read everything they need themselves.
 3. **NO STOP CONDITION FOR PR SIZE.** Handle all PRs regardless of file count or line count.
 
 ## Workflow
 
-1. Get changed file list → ask user for context
-2. Spawn **routing orchestrator** → get back routing plan (JSON)
+1. Ask user for context
+2. Spawn **routing orchestrator** → get back file list, depth, and routing plan (JSON)
 3. Spawn **reviewer agents** in parallel based on routing plan
 4. **Validate** blocker/suggestion findings
 5. **Aggregate** and present report
@@ -35,64 +35,50 @@ description: >
 
 ---
 
-## Step 1: Get File List and Ask for Context
+## Step 1: Ask for Context
 
-Run these two commands:
-```bash
-git diff --name-only HEAD~1
-git diff --stat HEAD~1
-```
+Present **exactly this prompt** as your first action (do NOT add or modify options):
 
-Then present **exactly this prompt** (do NOT add or modify options):
-
-> "Found N files, M lines. Depth: [lite/standard/deep].
+> "I'm about to review your latest changes. Want to add context first?
 >
 > 1. **Skip** — start reviewing now
 > 2. **Add context** — tell me what these changes are about
 >
 > Reply 1 or 2 (or type context directly):"
 
-Do NOT add extra options. Do NOT analyze or categorize files before asking.
+Do NOT run any git commands. Do NOT analyze files before asking.
 
 - **User replies 1:** Proceed to Step 2.
 - **User replies 2:** Stop and wait for context. Then proceed.
 - **User types context:** Use it and proceed.
 
-### Depth Calculation
-
-| Total changed lines | Depth | Reviewer model |
-|---------------------|-------|---------------|
-| < 50 | lite | All haiku |
-| 50–500 | standard | Roster defaults |
-| > 500 | deep | Standard → opus, haiku stays haiku |
-
 ---
 
 ## Step 2: Spawn Routing Orchestrator
 
-Spawn a **single haiku agent** with this prompt (do NOT read the orchestrator file yourself):
+Spawn a **single agent** with this prompt (do NOT read the orchestrator file yourself).
+Use `model: "sonnet"` — the orchestrator reads all diffs and needs reliable pattern matching.
 
 ```
 You are the routing orchestrator. Read your instructions from:
 agents/orchestrator.md (relative to this skill's directory)
 
-Then route these files (base: HEAD~1):
-
-[file paths from git diff --name-only, one per line]
+Then route the changes (base: HEAD~1).
 ```
 
-That's it. The orchestrator reads its own instructions, reads diffs, and returns JSON.
-Do NOT read `agents/orchestrator.md` yourself. Do NOT read any diffs.
+The orchestrator finds changed files, reads diffs, routes, and returns JSON:
 
-**Wait for the orchestrator to complete.** It returns:
 ```json
 {
   "total_files": 12,
   "total_lines": 2982,
+  "depth": "deep",
   "routing": {"path/to/File.scala": ["1", "2", "3"]},
   "workload": {"1": {"lines": 850}, "2": {"lines": 3200, "split": [...]}}
 }
 ```
+
+**Wait for the orchestrator to complete before proceeding.**
 
 ---
 
