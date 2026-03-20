@@ -168,11 +168,33 @@ After all reviewers complete, validate BLOCKER and SUGGESTION findings to elimin
 
 ### Sub-Aggregator Scaling
 
-- **≤6 reviewer outputs:** Aggregate directly.
-- **>6:** Spawn sub-aggregators (max 6 outputs each). They dedup, filter, drop vague.
-  Main agent does final cross-group dedup + re-queries.
+> **MANDATORY.** Count the reviewer agents that returned findings (sub-reviewers like 1a, 1b count
+> separately). If >6, you MUST spawn sub-aggregators. Do NOT aggregate >6 outputs yourself.
 
-### Filters
+- **≤6 reviewer outputs:** Aggregate directly using the filters below.
+- **>6 reviewer outputs:** Split into batches of ≤6. Group related reviewers together (e.g.,
+  FDB + ZIO + Temporal share data-correctness concerns). Spawn one sub-aggregator per batch:
+
+```
+You are a sub-aggregator. Apply these filters to the findings below:
+1. Deduplicate same-line findings. Priority: Security > Data loss > Performance > Observability > Code quality > Testing > Style
+2. Drop confidence < 70 (keep BLOCKER 60-69 marked as borderline_requery)
+3. Drop vague findings (no line number, no concrete fix, not in diff)
+
+## Findings
+[paste findings from assigned reviewers]
+
+## Output
+Return JSON array: [{severity, confidence, reviewer, file, line, issue, current_code, suggested_fix, cross_references?, borderline_requery?}]
+```
+
+After all sub-aggregators complete:
+1. Collect all surviving findings
+2. Run a **final cross-group dedup pass** (same line flagged by different batches)
+3. Handle re-queries for `borderline_requery` findings
+4. Present the report
+
+### Filters (for direct aggregation or final pass)
 
 1. **Deduplicate** same-line findings. Priority: Security > Data loss > Performance > Observability > Code quality > Testing > Style
 2. **Drop confidence < 70** (BLOCKER 60-69 → re-query once)
