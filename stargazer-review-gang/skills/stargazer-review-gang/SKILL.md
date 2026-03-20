@@ -56,7 +56,7 @@ Do NOT run any git commands. Do NOT analyze files before asking.
 ## Step 2: Spawn Routing Orchestrator
 
 Spawn a **single agent** with this prompt (do NOT read the orchestrator file yourself).
-Use `model: "sonnet"` — the orchestrator reads all diffs and needs reliable pattern matching.
+Use `model: "sonnet"` — the orchestrator interprets the review scope, determines diff refs, reads all diffs, and routes files.
 
 **Pass the user's review scope verbatim** — do NOT interpret it into base/head refs. The
 orchestrator determines the correct git diff strategy itself.
@@ -175,7 +175,7 @@ Count reviewer agents that returned findings (sub-reviewers like 1a, 1b count se
   reviewers together (e.g., FDB + ZIO + Temporal). After all aggregators complete, spawn one
   **final aggregator** to merge their reports and do a cross-group dedup pass.
 
-For each aggregator, spawn an agent with this prompt (do NOT read the aggregator file yourself):
+For each aggregator, spawn an agent with `model: "sonnet"` and this prompt (do NOT read the aggregator file yourself):
 
 ```
 Read your instructions from: agents/aggregator.md (relative to this skill's directory)
