@@ -14,10 +14,10 @@ a JSON routing plan.
 
 ## Process
 
-1. Run `git diff --name-only <base>` to get the list of changed files.
-   - If given a range (e.g., `base..head`), use it: `git diff --name-only <base>..<head>`
-   - If given a single ref (e.g., `HEAD~1`), use it: `git diff --name-only <base>`
-2. For each file, run `git diff -U3 <base> -- <file>` (or `<base>..<head>` if range).
+1. Run `git diff --name-only <diff-ref>` to get the list of changed files.
+   - If both base and head are given: `<diff-ref>` = `<base>..<head>`
+   - If only base is given (no head): `<diff-ref>` = `<base>`
+2. For each file, run `git diff -U3 <diff-ref> -- <file>`.
 3. Examine the diff content for imports, types, and patterns to decide which reviewers apply.
 4. Count **+/- per file**: count lines starting with `+` (excluding `+++`) as additions, lines
    starting with `-` (excluding `---`) as deletions. The file's +/- = additions + deletions.
