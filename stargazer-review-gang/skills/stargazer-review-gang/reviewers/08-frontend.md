@@ -188,6 +188,28 @@ Use a catch-all `handleCase` at the end for exhaustiveness when not all cases ar
   CheckboxL(isChecked = selectedSignal.map(_.contains(item)), onChange = observer)()
   ```
   This avoids unnecessary DOM element recreation and lets the component manage its own reactivity.
+- `child <-- signal.map { value => div(staticStructure, span(value.name), ...) }` when the DOM
+  structure is static and only text/attribute values change — keep the structure stable and use
+  `text <--` or signal-as-prop for the dynamic parts:
+  ```scala
+  // BAD: recreates entire subtree on every emission
+  child <-- itemSignal.map { item =>
+    div(
+      span(tw.fontBold, item.title),
+      p(item.description),
+      span(tw.textGray6, item.status)
+    )
+  }
+  // GOOD: stable structure, only values are reactive
+  div(
+    span(tw.fontBold, text <-- itemSignal.map(_.title)),
+    p(text <-- itemSignal.map(_.description)),
+    span(tw.textGray6, text <-- itemSignal.map(_.status))
+  )
+  ```
+  The `child <-- signal.map { div(...) }` pattern destroys and recreates the entire DOM subtree on
+  every signal emission. If the structure is fixed and only values change, keep the elements stable
+  and bind only the dynamic parts with `text <--` or signal-as-prop.
 
 ## 6. Stream Flattening Strategy
 

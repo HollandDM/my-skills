@@ -143,9 +143,9 @@ From `workload`:
 
 ### Model Override by Depth
 
-- `lite`: `model: "haiku"` for all reviewers
+- `lite`: use roster defaults (all reviewers are standard minimum — no haiku for semantic review)
 - `medium`: use roster defaults
-- `heavy`: `model: "opus"` for standard reviewers; haiku stays haiku
+- `heavy`: `model: "opus"` for all reviewers
 
 ### Reviewer Roster
 
@@ -220,7 +220,7 @@ Count reviewer agents that returned findings (sub-reviewers like 1a, 1b count se
   **final aggregator** to merge their reports and do a cross-group dedup pass.
 
 Use the same depth-based model override as reviewers:
-- `lite`: `model: "haiku"`
+- `lite`: `model: "sonnet"` (aggregator default — no haiku for semantic work)
 - `medium`: `model: "sonnet"` (aggregator default)
 - `heavy`: `model: "opus"`
 

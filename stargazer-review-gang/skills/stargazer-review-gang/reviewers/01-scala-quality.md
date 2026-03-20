@@ -290,6 +290,7 @@ Flag these common pitfalls when spotted.
 | `"a" + "/" + "b"` | `s"$a/$b"` | Clearer, same performance |
 | `.toList` on a `List` | Remove redundant conversion | No-op allocation |
 | `.contains` on `List` in loop | Convert to `Set` first | O(1) vs O(n) lookup |
+| `.sortBy(_.field).reverse` | `.sortBy(v => -v.field)` | Negate in sort key directly — avoids extra list reversal allocation |
 
 **Lazy evaluation:** Use `.view` or `.iterator` when chaining 3+ collection operations on large data
 to avoid intermediate collections.

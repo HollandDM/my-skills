@@ -113,7 +113,38 @@ Flag:
 Always use `getProviderCached` with a `given FDBKeySpaceEnum` in scope (or direct `.Production`/`.Test`).
 Never use `getProvider(keySpace)` which creates a fresh provider each time.
 
+**Read-then-write consistency:** When a value read from FDB is used to make a write decision
+(e.g., reading `latestVersionId` to set `parentVersionIdOpt`), the read **must** happen inside
+`transact`, not `read`/`transactRead`. `read` can return stale data, so a concurrent write between
+the read and the subsequent transact could cause the write to use an outdated value. If the read
+and write are in separate methods, pass the read value as a parameter rather than reading it
+internally — this makes the data flow explicit and lets the caller control the transactional context.
+
+```scala
+// BAD: read can return stale latestVersionId, then transact uses it
+for {
+  latest <- storeOps.read(_.getLatestVersion(docId))        // stale read!
+  _      <- storeOps.transact(_.commitDuplicated(docId, parentOpt = Some(latest.id)))
+} yield ()
+
+// GOOD: read and write in same transaction
+storeOps.transact { ops =>
+  for {
+    latest <- ops.getLatestVersion(docId)
+    _      <- ops.commitDuplicated(docId, parentOpt = Some(latest.id))
+  } yield ()
+}
+
+// GOOD: if methods are separate, parameterize the dependency
+def commitDuplicated(docId: DocId, parentVersionIdOpt: Option[VersionId]): RecordTask[Unit] = ...
+// Caller controls transactional context and passes value explicitly
+```
+
 Flag:
+- `[BLOCKER]` Value read via `read`/`transactRead` used to make a write decision in a subsequent
+  `transact` — stale read risk. Must be in the same `transact` block
+- `[SUGGESTION]` Method internally reading FDB to get a value that drives its own write logic —
+  parameterize it so the caller controls the transactional context
 - `[SUGGESTION]` Read-only operations using `transact` instead of `transactRead`
 - `[SUGGESTION]` `getProvider(keySpace)` instead of `getProviderCached` or `.Production`/`.Test`
 
