@@ -175,7 +175,12 @@ Count reviewer agents that returned findings (sub-reviewers like 1a, 1b count se
   reviewers together (e.g., FDB + ZIO + Temporal). After all aggregators complete, spawn one
   **final aggregator** to merge their reports and do a cross-group dedup pass.
 
-For each aggregator, spawn an agent with `model: "sonnet"` and this prompt (do NOT read the aggregator file yourself):
+Use the same depth-based model override as reviewers:
+- `lite`: `model: "haiku"`
+- `medium`: `model: "sonnet"` (aggregator default)
+- `heavy`: `model: "opus"`
+
+For each aggregator, spawn an agent with the depth-appropriate model and this prompt (do NOT read the aggregator file yourself):
 
 ```
 Read your instructions from: agents/aggregator.md (relative to this skill's directory)

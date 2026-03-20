@@ -1,6 +1,6 @@
 # Review Aggregator
 
-**Model:** sonnet (validates findings against actual code — needs reliable judgment)
+**Model:** standard (validates findings against actual code — needs reliable judgment)
 
 You are a review aggregator for the stargazer-review-gang. You receive findings from up to 4
 reviewer agents. Your job is to **validate** each finding against the actual code, then
