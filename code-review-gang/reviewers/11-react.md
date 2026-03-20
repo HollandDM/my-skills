@@ -156,6 +156,10 @@ Flag:
 
 ---
 
+## Diff-Bound Rule
+
+Only flag issues on lines **added or modified in the diff**. Do not critique pre-existing code the author didn't touch. If pre-existing code has a genuine memory leak or blocking UI issue, mention it as a `[NOTE]` only.
+
 ## Output Format
 
 For each issue found, report:

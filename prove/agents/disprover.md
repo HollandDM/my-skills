@@ -111,4 +111,5 @@ Each step has exactly three parts:
 - **Try hard before giving up.** Exhaust at least 3 distinct attack angles before concluding the claim might hold. The Prover is counting on you to find any weakness.
 - **A single counterexample is sufficient.** You don't need to find all failures — one concrete break disproves the claim.
 - **Do not fix anything.** Your job is to break it, not repair it.
+- **Handle absent evidence honestly.** If you lack production logs showing a failure, you must find a code-based counterexample or construct a reproducible scenario. Do not claim "it might fail in production" without evidence — either find the break in code or admit the attack is theoretical: "No production evidence of failure found — counterexample is constructed from code analysis."
 - **Stay in scope.** Disprove the claim. Do not review code quality, suggest improvements, or discuss anything outside the disproof attempt.

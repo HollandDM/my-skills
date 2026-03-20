@@ -140,6 +140,23 @@ final case class ArchiveFundSubActivityImpl(
 | OCR, AI/ML extraction | 15-30 minutes | 30 seconds-2 minutes | 3-5 |
 | Very large operations (dataroom upload) | up to 12 hours | 2-5 minutes | 1 |
 
+### Activity Companion Completeness Check
+
+For every `extends TemporalActivityCompanion[T]()`, verify these overrides exist:
+
+| Override | Required? | Flag when missing |
+|----------|-----------|-------------------|
+| `startToCloseTimeout` | **Always** | 60-min default is almost never appropriate — `[BLOCKER]` |
+| `maximumRetryAttempts` | When calling external services (OCR, S3, APIs) | Silent permanent failure on transient errors — `[BLOCKER]` |
+| `heartbeatTimeout` | When activity runs > 30 seconds | Dead workers go undetected — `[SUGGESTION]` |
+| `queue` | When activity needs priority processing | Defaults to `TemporalQueue.Default` — `[SUGGESTION]` if wrong queue |
+
+**Quick scan**: For each `extends TemporalActivityCompanion[T]` in the diff:
+1. Check that `startToCloseTimeout` is overridden — report `[BLOCKER]` if missing
+2. Check if any activity method calls external services (HTTP, gRPC, S3, OCR) — if so, `maximumRetryAttempts` must be >= 3
+3. Check if any activity method is long-running (file processing, bulk ops) — if so, `heartbeatTimeout` should be set
+4. Check if the implementation uses `.runActivityWithHeartbeat` — if so, companion must have `heartbeatTimeout`
+
 Flag:
 - **Missing `@activityInterface(namePrefix = "...")` annotation** — without `namePrefix`, activities are hard to identify in Temporal UI
 - **Missing `@activityMethod` on activity methods** — required annotation
@@ -147,6 +164,7 @@ Flag:
 - **Missing `startToCloseTimeout` override** — the 60-minute default is almost never appropriate; activities should declare their expected execution time
 - **Missing `heartbeatTimeout` on long-running activities** — any activity > 30 seconds should heartbeat so Temporal can detect dead workers
 - **Missing `maximumRetryAttempts` on external service calls** — OCR, S3, third-party APIs are inherently unreliable
+- **`heartbeatTimeout` set but implementation not using `.runActivityWithHeartbeat`** — heartbeat config is useless without runtime heartbeating
 - **Activity implementation missing `using val temporalWorkflowService: TemporalWorkflowService`** — required for `.runActivity` extension
 - **Activity implementation not using `.runActivity` or `.runActivityWithHeartbeat`** — misses tracing, logging, and heartbeat support
 - **Activities that catch and swallow exceptions** — breaks Temporal's retry mechanism; let exceptions propagate
@@ -557,6 +575,10 @@ Flag:
 - FDB change reactions implemented as cron/polling instead of CDC listeners
 
 ---
+
+## Diff-Bound Rule
+
+Only flag issues on lines **added or modified in the diff**. Do not critique pre-existing code the author didn't touch. If pre-existing code has a genuine production failure risk (missing activity attributes, idempotency violation), mention it as a `[NOTE]` only.
 
 ## Output Format
 

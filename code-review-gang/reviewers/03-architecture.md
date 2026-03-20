@@ -48,6 +48,10 @@ that the frontend clearly needs.
 
 ---
 
+## Diff-Bound Rule
+
+Only flag issues on lines **added or modified in the diff**. Do not critique pre-existing code the author didn't touch. If a pre-existing architectural violation is genuinely dangerous, mention it as a `[NOTE]` only.
+
 ## Output Format
 
 For each issue found, report:

@@ -455,6 +455,10 @@ Flag endpoints that:
 
 ---
 
+## Diff-Bound Rule
+
+Only flag issues on lines **added or modified in the diff**. Do not critique pre-existing code the author didn't touch. If pre-existing code has a genuine safety issue, mention it as a `[NOTE]` only, not as a blocker or suggestion. If you cannot identify the exact line number from the diff, do not report it.
+
 ## Output Format
 
 For each issue found, report:

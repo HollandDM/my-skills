@@ -6,7 +6,7 @@ Custom Claude Code skills for the Stargazer codebase.
 
 ### [code-review-gang](./code-review-gang/)
 
-Multi-perspective code review swarm. Spawns 15 specialized reviewer agents in parallel — each focused on a different quality dimension — then aggregates findings into one actionable report.
+Multi-perspective code review swarm. A fast router agent reads each file's diff to decide which reviewers are relevant, then spawns up to 15 specialized reviewer agents in parallel — each focused on a different quality dimension — and aggregates findings into one actionable report.
 
 **Reviewers:**
 
@@ -29,7 +29,7 @@ Multi-perspective code review swarm. Spawns 15 specialized reviewer agents in pa
 | 11 | scalajs-react | Legacy flagging, Callback correctness, React-Laminar bridge |
 
 **Features:**
-- Semantic routing — only spawns relevant reviewers based on file paths (frontend/backend/shared)
+- Content-aware routing — a fast router agent reads diffs and spawns only relevant reviewers
 - Diff-bound rule — only flags issues on changed lines, not pre-existing code
 - Triage tags — `[BLOCKER]` / `[SUGGESTION]` / `[NITPICK]`
 - Deduplication and noise filtering in the aggregation step
