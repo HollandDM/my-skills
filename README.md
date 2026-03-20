@@ -4,7 +4,7 @@ Custom Claude Code skills for the Stargazer codebase.
 
 ## Skills
 
-### [code-review-gang](./code-review-gang/)
+### [stargazer-review-gang](./stargazer-review-gang/)
 
 Multi-perspective code review swarm. A fast router agent reads each file's diff to decide which reviewers are relevant, then spawns up to 15 specialized reviewer agents in parallel — each focused on a different quality dimension — and aggregates findings into one actionable report.
 
