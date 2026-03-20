@@ -1,18 +1,17 @@
 ---
 name: stargazer-review-gang
 description: >
-  Multi-perspective code review for the Stargazer codebase. Spawns a gang of specialized
-  reviewer agents in parallel - each focused on a different quality dimension (ZIO patterns,
-  security, performance, FDB, Temporal, Laminar, styling, architecture, etc.). Automatically
-  detects whether code is frontend (js/), backend (jvm/), or shared, and only spawns relevant
-  reviewers. Use this skill whenever the user asks for a thorough code review, says "review my
-  changes", "review this PR", "stargazer review gang", or wants multi-angle feedback on their code.
-  Also trigger when the user wants to check code quality before pushing or submitting a PR.
+  Trigger when user says "stargazer review gang", "review my changes", "review this PR",
+  or wants multi-angle feedback before pushing. Spawns specialized sub-agents for the
+  Stargazer codebase.
 ---
 
 # Stargazer Review Gang
 
-**Announce at start:** "Starting the stargazer-review-gang."
+**Say exactly:** "Starting the stargazer-review-gang."
+
+**Then immediately proceed to Step 1.** Do NOT gather diffs. Do NOT read files. Do NOT do
+anything else before Step 1.
 
 ## Constraints
 
