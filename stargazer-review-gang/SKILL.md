@@ -6,11 +6,11 @@ description: >
   security, performance, FDB, Temporal, Laminar, styling, architecture, etc.). Automatically
   detects whether code is frontend (js/), backend (jvm/), or shared, and only spawns relevant
   reviewers. Use this skill whenever the user asks for a thorough code review, says "review my
-  changes", "review this PR", "code review gang", or wants multi-angle feedback on their code.
+  changes", "review this PR", "stargazer review gang", or wants multi-angle feedback on their code.
   Also trigger when the user wants to check code quality before pushing or submitting a PR.
 ---
 
-# Code Review Gang
+# Stargazer Review Gang
 
 You are orchestrating a **gang of specialized code reviewers** for the Stargazer codebase. Each
 reviewer is an agent that focuses on one quality dimension. Your job is to:
