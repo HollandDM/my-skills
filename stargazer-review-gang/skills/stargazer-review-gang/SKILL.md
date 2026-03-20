@@ -18,9 +18,10 @@ anything else before Step 1.
 1. **NO BUILD COMMANDS.** You and all sub-agents are FORBIDDEN from running `./mill`, `compile`,
    `test`, `checkStyle`, `checkStyleDirty`, `reformat`, `checkUnused`, `WarnUnusedCode`, or any
    build/lint command.
-2. **YOU DO NOT READ DIFFS, SOURCE FILES, OR SUB-AGENT INSTRUCTION FILES.** Do NOT run any
-   `git diff` commands. Do NOT use the Read tool on any `.md` file in this skill. The orchestrator
-   and reviewers read everything they need themselves.
+2. **YOU DO NOT READ DIFFS, SOURCE FILES, OR SUB-AGENT INSTRUCTION FILES.** Do NOT run
+   `git diff` with content output. Do NOT use the Read tool on any `.md` file in this skill.
+   You MAY run `git status`, `git log --oneline`, and `git merge-base` to determine the
+   correct base/head refs. The orchestrator and reviewers read diffs and files themselves.
 3. **NO STOP CONDITION FOR PR SIZE.** Handle all PRs regardless of file count or line count.
 
 ## Workflow
@@ -67,9 +68,18 @@ Base: <base ref>
 Head: <head ref, or omit if HEAD>
 ```
 
-Determine the correct base and head:
+Determine the correct base and head. You MAY run `git status` and `git log --oneline -5`
+to understand the current state before deciding:
+
 - **"review my changes"** / last commit → base: `HEAD~1`
-- **"review this PR"** / branch → base: merge base of current branch and main (`git merge-base main HEAD`), head: `HEAD`
+- **"review this PR"** / branch → base: merge base with main (`git merge-base main HEAD`), head: `HEAD`
+- **"review current changes"** / session work → This may include both commits and uncommitted
+  changes. Check `git status` for uncommitted changes and `git log --oneline` for recent commits.
+  - **Uncommitted only** (dirty working tree, no new commits) → base: `HEAD`, omit head.
+    `git diff HEAD` captures both staged and unstaged against last commit.
+  - **Commits + uncommitted** → base: SHA before the first commit in the session, omit head.
+    `git diff <base>` diffs against working tree, capturing commits AND uncommitted changes.
+  - **Commits only** (clean working tree) → base: `<earliest commit SHA>`, head: `HEAD`
 - **Multiple commits specified** → base: `<earliest commit SHA>`, head: `<latest commit SHA>`.
   Do NOT append `~1` to the base. The orchestrator diffs `base..head` which already excludes base.
 - **User specifies files** → base: `HEAD~1`, but list the specific files
