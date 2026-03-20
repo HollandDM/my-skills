@@ -43,11 +43,26 @@ Each prover/disprover focuses on **at most 2 proof/attack vectors**. This keeps 
 
 Alongside the main agents, spawn a **lightweight vibe check agent** — use a lesser model, lesser reasoning effort, or both (e.g., `model: "haiku"`). Its job is to quickly assess whether the claim is more likely true or false, without rigorous proof. It reads the subject and claim, does a quick scan, and returns a one-line verdict: `LIKELY TRUE` or `LIKELY FALSE` with a 1-2 sentence rationale.
 
+**Important**: The vibe check is NOT a proof — it's a fast heuristic to guide resource allocation. Its verdict does not count toward the judge tally. Judges should ignore the vibe check result when evaluating arguments. The reinforcement agent spawned from the vibe check provides **supporting evidence**, not formal proof — label it accordingly.
+
 Only **1 vibe check agent per round**. It runs concurrently with the main agents and finishes faster. Once it returns, spawn **1 extra agent** to back its view:
-- If vibe says `LIKELY TRUE` → spawn 1 additional prover (with a fresh angle not yet covered)
-- If vibe says `LIKELY FALSE` → spawn 1 additional disprover (with a fresh angle not yet covered)
+- If vibe says `LIKELY TRUE` → spawn 1 additional prover
+- If vibe says `LIKELY FALSE` → spawn 1 additional disprover
 
 This reinforcement agent joins the current round — its results are included in the synthesis.
+
+#### Reinforcement agent vector selection
+
+The reinforcement agent must use a **fresh angle** not already assigned to other agents in this round.
+To select the angle:
+
+1. List all vectors already assigned to agents of the same role (provers or disprovers)
+2. Pick a vector from the claim-type table below that is NOT in that list
+3. If all listed vectors are taken, use a complementary technique: "independent verification via alternative reasoning path" — re-derive the conclusion using a fundamentally different approach than any existing agent
+
+The reinforcement agent is a **supporting evidence** agent, not a formal prover. It should pursue
+its angle quickly and provide additional weight, not attempt a complete standalone proof. Label its
+output as "Reinforcement" so judges can weight it appropriately.
 
 **Vibe check prompt template**:
 ```
@@ -211,6 +226,14 @@ If the user provides more context:
 
 Spawn targeted counter-agents that attack specific arguments from the previous round. **No vibe check agent in battle rounds** — only direct argument combat.
 
+**Identifying "strong" arguments**: An argument is strong if at least one judge cited it as convincing in their rationale. If no judge cited a specific argument, it is not strong enough to warrant a battle agent. Select at most the **top 2** strongest arguments from each side (prover and disprover) — those cited by the most judges.
+
+**Bidirectional attacks**: Battle rounds attack in BOTH directions:
+- For each strong prover argument, spawn a disprover to attack it
+- For each strong disprover argument, spawn a prover to address it
+
+Battle agents must use **different vectors** than agents in the previous round used on the same argument. If a round-1 disprover attacked with "boundary analysis + race condition", the battle disprover must use different techniques (e.g., "assumption violation + type escape").
+
 For each strong prover argument `pA`, spawn a **disprover** that specifically targets `pA` (max 2 vectors):
 ```
 You are a Disprover. Read the file <this-skill-path>/agents/disprover.md for your instructions.
@@ -249,9 +272,7 @@ Subject:
 Your job: Show why THIS attack fails — the counterexample is invalid, the scenario is unreachable, the assumption is wrong. Do not construct a general proof; defeat THIS specific attack.
 ```
 
-After the battle round completes, judge the results (step 3). Then:
-- If judges reach a verdict → step 6 (present verdict)
-- If still UNDECIDED → step 4 again (ask user)
+After the battle round completes, judge the results (step 3). Then go to step 4 (ask user) regardless of verdict — the user always gets the final say.
 
 #### Option 4: End the session
 
@@ -282,6 +303,26 @@ Do not try to draw conclusions or pick a winner. The user chose to end — respe
 | **Battle** | User chooses battle after UNDECIDED | No | Targeted counter-agents only |
 
 Every round (regardless of type) ends with **judge agents** deciding the result.
+
+### Judge rotation across rounds
+
+Spawn **fresh judges** for each round — do not reuse judges from previous rounds. Each new round's
+judges should be assigned **different decision vectors** than the previous round's judges used, when
+possible. This prevents anchoring bias (judges doubling down on their prior verdict) and ensures
+fresh perspectives evaluate each round's arguments.
+
+If there are more rounds than available vectors, it's acceptable to reuse vectors — but never reuse
+the same judge agent instance.
+
+### Round count guidance
+
+After **3 rounds** with an UNDECIDED result, add a note to the user prompt:
+
+> "This claim has been UNDECIDED for 3 rounds. Consider: (a) accepting UNDECIDED as the final
+> result — the claim may be genuinely ambiguous, (b) narrowing the claim to a more provable
+> subset, or (c) providing additional context that could break the deadlock."
+
+There is no hard limit on rounds — the user always controls when to stop.
 
 ### 6. Present the verdict
 

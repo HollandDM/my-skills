@@ -49,6 +49,16 @@ For each changed file:
 Pass both to each reviewer — the diff tells them *what* to review, the full file tells them *how*
 it fits into the surrounding code.
 
+### Diff & File Format
+
+For each changed file, prepare the reviewer input in this format:
+
+1. **File path header**: `## File: path/to/file.scala`
+2. **Unified diff** with 3-line context: `git diff -U3 HEAD~1 -- path/to/file` (or equivalent)
+3. **Full file content** with line numbers for reference (so reviewers can cite exact lines)
+
+When multiple files are reviewed, concatenate them with clear `## File:` separators.
+
 ### The Diff-Bound Rule
 
 Instruct every reviewer: **only flag issues on lines that were added or modified in the diff.**
@@ -65,11 +75,25 @@ Look at each file's path to determine its platform:
 |---|---|---|
 | `/js/` | **Frontend** | `modules/fundsub/fundsub/js/src/...` |
 | `/jvm/` | **Backend** | `modules/fundsub/fundsub/jvm/src/...` |
-| `/shared/` | **Both** | `modules/fundsub/fundsub/shared/src/...` |
-| `.proto` files | **Both** | Protobuf definitions affect both platforms |
+| `/shared/` | **Shared** | `modules/fundsub/fundsub/shared/src/...` |
+| `.proto` files | **Backend** | Protobuf definitions are consumed by backend codegen |
 | `build.mill`, `package.mill` | **Build** | Build config review only |
 
 Compute flags: `hasFrontend`, `hasBackend`, `hasShared`, `hasBuild`.
+
+### Shared Code Routing
+
+Shared code (`/shared/`) contains models, DTOs, and endpoint definitions used by both platforms.
+Route shared code to reviewers based on file content:
+
+- **Scala files** (models, DTOs, codecs): Spawn always-on reviewers (1a–4) + serialization (4).
+  Also spawn backend reviewers if the file imports backend types (`FDB*`, `Temporal*`, `ZStream`),
+  or frontend reviewers if it imports frontend types (`Laminar`, `Airstream`, `scalajs`).
+- **Protobuf files** (`.proto`): Spawn only serialization (4) and architecture (3) reviewers.
+  Backend FDB reviewers (5a, 5b) if the proto file is in an FDB store's directory.
+
+When in doubt, spawn both backend and frontend reviewers for shared Scala files — the reviewers
+will self-report "nothing to review" if their domain isn't present.
 
 ---
 
@@ -162,9 +186,20 @@ Once all reviewer agents complete, apply these filters **before** presenting to 
 
 ### 1. Deduplicate
 
-If multiple reviewers flag the same line for related reasons, merge into one finding. Keep the
-most specific diagnosis. Example: if the ZIO reviewer and the FDB reviewer both flag a `ZIO.foreach`
-inside a transaction, keep the FDB reviewer's finding (more specific context).
+If multiple reviewers flag the same line for related reasons, merge into one finding. Use this
+priority order to decide which reviewer's diagnosis to keep (highest priority wins):
+
+1. **Security** (07-tapir-security) — auth bypass, data leaks
+2. **Data loss / correctness** (05a/05b FDB, 06 Temporal, 02a ZIO, 02b ZStream) — silent failures, data corruption
+3. **Performance** (02c ZIO perf, 05b FDB perf) — thread starvation, OOM, timeout
+4. **Code quality / patterns** (01b Scala code, 02a ZIO patterns, 09 Laminar) — idiom violations, memory leaks
+5. **Style / formatting** (01a Scala style, 04 serialization, 10 UI styling) — mechanical checks
+
+When merging, keep the highest-priority finding and add a cross-reference:
+`Also flagged by: [other reviewer] — [brief reason]`
+
+Example: if the ZIO reviewer and the FDB reviewer both flag a `ZIO.foreach` inside a transaction,
+keep the FDB reviewer's finding (category 2, more specific context) and cross-reference the ZIO reviewer.
 
 ### 2. Drop vague findings
 
@@ -212,7 +247,10 @@ If any reviewer flagged dangerous pre-existing patterns (not in the diff):
 ## Build-Only Changes
 
 If only build files changed (`build.mill`, `package.mill`, `dependency.mill`), spawn only:
-- Architecture & Module Boundaries reviewer (check dependency changes)
-- A brief dependency audit (are new deps justified?)
+- **Architecture & Module Boundaries reviewer (03)** — check dependency direction, `moduleDeps` changes, circular dependency introduction
+- **Serialization & Codecs reviewer (04)** — if protobuf plugin config or codec dependencies changed
 
-Skip all other reviewers.
+Skip all other reviewers. The architecture reviewer should additionally check:
+- Whether new `moduleDeps` match actual imports in the code
+- Whether dependency versions are consistent with other modules
+- Whether any new external dependencies are justified (not duplicating existing functionality)

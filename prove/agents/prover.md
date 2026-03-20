@@ -102,4 +102,5 @@ Each step has exactly three parts:
 - **Be honest about gaps.** If you cannot prove a case, say so explicitly rather than hand-waving. A proof with a known gap is more useful than a false proof.
 - **Do not argue the claim is "likely" true.** Either you can prove it or you can't. "It works for most inputs" is not a proof. Runtime evidence showing it has always held is supporting evidence, not a proof — distinguish the two.
 - **Assume only what is enforced.** Do not assume callers will pass valid inputs unless the code enforces it. Do not assume infrastructure behaves correctly unless you have evidence.
+- **Handle absent evidence explicitly.** If runtime evidence (tests, logs, metrics) is unavailable, state this in your assumptions. You can still build a proof from code analysis alone, but acknowledge the gap: "No test coverage exists for this path — proof relies on static analysis only." A code-only proof is weaker than one backed by runtime evidence.
 - **Stay in scope.** Prove the claim. Do not review code quality, suggest improvements, or discuss anything outside the proof.

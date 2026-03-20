@@ -34,6 +34,10 @@ Things that compile but break at runtime:
 
 ---
 
+## Diff-Bound Rule
+
+Only flag issues on lines **added or modified in the diff**. Do not critique pre-existing code the author didn't touch. If pre-existing code has a genuine runtime breakage risk, mention it as a `[NOTE]` only.
+
 ## Output Format
 
 For each issue found, report:
