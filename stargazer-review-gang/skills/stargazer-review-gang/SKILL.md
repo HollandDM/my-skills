@@ -12,102 +12,37 @@ description: >
 
 # Stargazer Review Gang
 
-> **CRITICAL CONSTRAINT — READ-ONLY REVIEW**
-> You and ALL reviewer agents are FORBIDDEN from running `./mill`, `mill`, `compile`, `test`,
-> `checkStyle`, `checkStyleDirty`, `reformat`, `checkUnused`, `WarnUnusedCode`, or ANY build/lint/compile
-> command. This applies to the Bash tool — do NOT use it for compilation or linting. Reviewers
-> analyze code **by reading files only**. Violation of this rule wastes significant time and resources.
-
-> **CRITICAL CONSTRAINT — ROUTER IS MANDATORY FOR DEEP REVIEWS**
-> For `deep` (>500 lines) reviews, you MUST spawn the router agent (Step 2). Do NOT skip the
-> router and assign reviewers yourself. For `lite` and `standard` reviews, you MAY route files
-> yourself if the change is small enough to classify at a glance.
-
-> **CRITICAL CONSTRAINT — USE THE REVIEW TOOL, NOT RAW GIT COMMANDS**
-> All git operations go through the review tool. Do NOT run raw `git diff`, `git blame`, `git log`,
-> or `git show` commands. The tool handles all git interactions and returns structured JSON.
-> ```
-> TOOL=${CLAUDE_PLUGIN_ROOT}/skills/stargazer-review-gang/scripts/review-init.py
-> python3 $TOOL init                    # first action — get files, depth, router decision
-> python3 $TOOL diff HEAD~1 path/to/f   # get diff for one file (for routing when spawn_router=false)
-> python3 $TOOL diff-all                # get all diffs (router/reviewer use only)
-> python3 $TOOL log path/to/f           # recent commits for a file
-> python3 $TOOL blame path/to/f 10 20   # blame a line range
-> ```
-> Sub-agents (router, reviewers, validators) also use this tool instead of raw git commands.
-
 **Announce at start:** "I'm using the stargazer-review-gang skill to review your code."
 
-You are orchestrating a **gang of specialized code reviewers** for the Stargazer codebase. Each
-reviewer is an agent that focuses on one quality dimension. Your job is to:
+## Constraints
 
-1. Run the init script and ask user for change intent
-2. Determine review depth (lite/standard/deep) and spawn the **router agent**
-3. Spawn the right **reviewer agents** in parallel based on the router's output
-4. **Validate** blocker/suggestion findings with independent haiku agents
-5. Aggregate, deduplicate, and filter into one actionable report
-6. Offer to **auto-fix** blockers and suggestions
+1. **NO BUILD COMMANDS.** You and all sub-agents are FORBIDDEN from running `./mill`, `compile`,
+   `test`, `checkStyle`, `checkStyleDirty`, `reformat`, `checkUnused`, `WarnUnusedCode`, or any
+   build/lint command.
+2. **YOU DO NOT READ DIFFS OR SOURCE FILES.** You get file list from `git diff --name-only` and
+   line count from `git diff --stat`. The routing orchestrator and reviewers read diffs themselves.
+3. **NO STOP CONDITION FOR PR SIZE.** Handle all PRs regardless of file count or line count.
+
+## Workflow
+
+1. Get changed file list → ask user for context
+2. Spawn **routing orchestrator** → get back routing plan (JSON)
+3. Spawn **reviewer agents** in parallel based on routing plan
+4. **Validate** blocker/suggestion findings
+5. **Aggregate** and present report
+6. Offer **auto-fix**
 
 ---
 
-## Step 1: Identify the Code and Gather Context
+## Step 1: Get File List and Ask for Context
 
-### Run the init script
-
-Run `init` as your **first and only** action:
-
+Run these two commands:
 ```bash
-python3 $TOOL init              # default: diff against HEAD~1
-python3 $TOOL init HEAD~3       # custom base
-python3 $TOOL init main         # diff against branch
+git diff --name-only HEAD~1
+git diff --stat HEAD~1
 ```
 
-Where `TOOL=${CLAUDE_PLUGIN_ROOT}/skills/stargazer-review-gang/scripts/review-init.py`.
-
-The tool outputs JSON:
-
-```json
-{
-  "total_files": 12,
-  "total_lines": 320,
-  "depth": "standard",
-  "spawn_router": false,
-  "base": "HEAD~1",
-  "files": [
-    {"path": "path/to/File.scala", "lines": 45},
-    {"path": "build.mill", "lines": 2}
-  ]
-}
-```
-
-- `spawn_router: true` → Spawn the router agent (Step 2) to assign reviewers.
-- `spawn_router: false` → You route files yourself using the file paths and the reviewer
-  reference table in Step 2. You may read diffs for routing purposes only in this case.
-
-This is the ONLY command you run to gather initial context.
-
-### The Diff-Bound Rule
-
-Instruct every reviewer: **only flag issues on lines that were added or modified in the diff.**
-Do not critique pre-existing code that the author didn't touch. If a pre-existing pattern is
-genuinely dangerous (security hole, data loss risk), mention it as a `[NOTE]` but not as a blocker.
-
-### The No-Compile Rule (MANDATORY)
-
-**Reviewers must NEVER run build commands.** This includes but is not limited to: `./mill compile`,
-`./mill checkStyle`, `./mill checkStyleDirty`, `./mill reformat`, `./mill checkUnused`,
-`./mill WarnUnusedCode`, `./mill test`, or **any** `./mill` command whatsoever. Do NOT use the Bash
-tool for any compilation, linting, formatting, or style-checking purpose.
-
-Compilation and linting are the programmer's responsibility and are always done before review.
-Reviewers analyze code **by reading files only** — no compilation, no execution, no build tools.
-
-If a reviewer is **unsure** whether something compiles or is correct, it should report the finding
-as a `[NITPICK]`, not a `[BLOCKER]` or `[SUGGESTION]`. Uncertainty is not grounds for blocking.
-
-### Ask for Change Context
-
-Present the script output summary and ask **exactly this prompt** (do NOT add or modify options):
+Then present **exactly this prompt** (do NOT add or modify options):
 
 > "Found N files, M lines. Depth: [lite/standard/deep].
 >
@@ -118,145 +53,92 @@ Present the script output summary and ask **exactly this prompt** (do NOT add or
 
 Do NOT add extra options. Do NOT analyze or categorize files before asking.
 
-- **User replies 1 or skips:** Proceed immediately without context.
-- **User replies 2:** **Stop and wait.** Do NOT proceed until the user provides their context in a
-  follow-up message. Once received, continue from Step 2.
-- **User types context directly:** Use it and proceed.
+- **User replies 1:** Proceed to Step 2.
+- **User replies 2:** Stop and wait for context. Then proceed.
+- **User types context:** Use it and proceed.
 
-Include user-provided context in every reviewer's prompt as a `## Change Context` section (see Step 3)
-— helps reviewers skip false flags on refactors, focus on correctness for bugfixes, and understand
-domain intent.
+### Depth Calculation
 
-### Stop Conditions
-
-**Stop and ask the user** instead of proceeding when:
-- **No diff found** — no unstaged, staged, or committed changes to review
-- **Unclear scope** — user said "review my changes" but there are changes across unrelated branches
-- **Non-Scala files only** — if all changed files are config, docs, or non-code, skip the gang and
-  review manually (the reviewers are Scala-specific)
-
-There is **no stop condition for PR size**. Large PRs are handled by the depth/router/split system.
-
-### Determine Review Depth
-
-The init script provides `depth` and `total_lines`. The depth controls model strength for each reviewer:
-
-| Total changed lines | Depth | Reviewer model override | Rationale |
-|---------------------|-------|------------------------|-----------|
-| **< 50 lines** | `lite` | All reviewers use **haiku** (including those normally on standard) | Small change — a fast pass catches obvious issues without burning tokens on deep analysis |
-| **50–500 lines** | `standard` | Use each reviewer's **default model** from the roster table | Normal review — balanced cost vs thoroughness |
-| **> 500 lines** | `deep` | All standard reviewers upgrade to **opus** | Large/complex change — worth the extra cost for deeper reasoning and fewer false negatives |
-
-When spawning reviewer agents in Step 3, use the `model` parameter on the Agent tool to override:
-- `lite` depth: `model: "haiku"` for every reviewer
-- `standard` depth: omit model override (use roster defaults)
-- `deep` depth: `model: "opus"` for reviewers that are normally `standard`; haiku reviewers stay haiku
-
-**Announce the depth:** After Step 1, tell the user: *"Found N changed files (M lines). Review depth: [lite/standard/deep]."*
+| Total changed lines | Depth | Reviewer model |
+|---------------------|-------|---------------|
+| < 50 | lite | All haiku |
+| 50–500 | standard | Roster defaults |
+| > 500 | deep | Standard → opus, haiku stays haiku |
 
 ---
 
-## Step 2: Route Files to Reviewers
+## Step 2: Spawn Routing Orchestrator
 
-> **MANDATORY for deep depth (>500 lines):** You MUST spawn the router agent for `deep` reviews.
-> Do NOT route files yourself — large PRs require content-aware routing across every diff, which
-> the main agent must not shortcut. Skipping the router on large PRs leads to wrong reviewer
-> assignments and wasted work.
->
-> For `lite` and `standard` reviews, you MAY route files yourself without spawning the router,
-> since the change is small enough to classify at a glance.
-
-Spawn a **single haiku agent** with the contents of `reviewers/00-router.md` as its prompt,
-followed by the file list. The router reads diffs itself — you only pass file paths.
+Read `agents/orchestrator.md` and spawn a **single haiku agent** with its contents, followed by
+the file list and base ref. Pass NOTHING else — no diffs, no file contents.
 
 ```
-[Contents of reviewers/00-router.md]
+[Contents of agents/orchestrator.md]
 
 ---
+
+## Base
+
+<base ref, e.g. HEAD~1>
 
 ## Files to Route
 
-[List of changed file paths ONLY — one per line]
+[file paths from git diff --name-only, one per line]
 ```
 
-**You pass NOTHING else to the router.** No diffs, no file contents, no blame. The router has
-Bash and Read tools and gathers what it needs.
-
-The router returns a JSON object with `routing` (file → reviewer IDs) and `workload` (reviewer ID →
-line count + optional split info):
+The orchestrator reads diffs itself, routes files, tracks workload, and returns JSON:
 
 ```json
 {
-  "routing": {
-    "path/to/Service.scala": ["1", "2", "3", "5"],
-    "path/to/Page.scala": ["1", "3", "8"]
-  },
-  "workload": {
-    "1": {"lines": 850},
-    "2": {"lines": 3200, "split": [
-      {"id": "2a", "focus": "Sections 1-9: Error handling, resources, parallelism, state, composition, fibers, caching, rate limiting, ZIOUtils"},
-      {"id": "2b", "focus": "Sections 10-18: Layer & runtime, endpoint errors, chunking, collections, parallel streams, backpressure, retry, resource-safe, construction"}
-    ]},
-    "3": {"lines": 900}
-  }
+  "total_files": 12,
+  "total_lines": 2982,
+  "routing": {"path/to/File.scala": ["1", "2", "3"]},
+  "workload": {"1": {"lines": 850}, "2": {"lines": 3200, "split": [...]}}
 }
 ```
 
-**Wait for the router to complete before proceeding to Step 3.**
+**Wait for the orchestrator to complete before proceeding.**
 
 ---
 
 ## Step 3: Spawn Reviewer Agents
 
-> **ROUTER DECISIONS ARE FINAL.** Spawn exactly the reviewers the router assigned — no more, no less.
-> Do NOT add reviewers you think are relevant. Do NOT skip reviewers the router included. The router
-> made content-aware decisions by reading every diff. Trust its output. If you bypassed the router
-> (lite/standard depth), your own routing decisions are final — same rule applies, don't second-guess.
+> **ROUTING IS FINAL.** Spawn exactly the reviewers the orchestrator assigned — no more, no less.
 
-Using the router's output, determine the **union of all reviewer IDs** across all files.
+Using the routing output, determine the **union of all reviewer IDs** across all files.
 
-### Handling Workload Splits
+### Workload Splits
 
-Check the `workload` object from the router. For each reviewer:
+From `workload`:
+- **≤2000 lines:** One reviewer agent per ID.
+- **>2000 lines with split:** Spawn sub-reviewers (2a, 2b, etc.) with focused scope.
+  Prepend: `> FOCUSED REVIEW: You are sub-reviewer {id}. Review ONLY: {focus}`
+- **Max 5 sub-reviewers per scope.**
 
-- **No split** (≤2000 lines): Spawn **one** reviewer agent that reviews all files assigned to it.
-- **Split present** (>2000 lines): Spawn **multiple sub-reviewer agents** (e.g., `2a`, `2b`, `2c`),
-  each getting the **same files** but with an additional instruction to focus only on specific sections
-  of the checklist. The router provides the `focus` field for each sub-reviewer.
-  Scale: ~2000–3000 lines per sub-reviewer, **maximum 5 sub-reviewers per scope**.
+### Model Override by Depth
 
-When spawning a split sub-reviewer, prepend this to the reviewer's checklist in the prompt:
-
-```
-> **FOCUSED REVIEW:** You are sub-reviewer {id}. Review ONLY the following sections from your
-> checklist: {focus}. Skip all other sections — another sub-reviewer handles them.
-```
-
-Each sub-reviewer runs as a fully independent agent with the same files and diff. They gather their
-own full file contents and blame context (same as regular reviewers). The only difference is the
-narrowed checklist scope.
-
-Each reviewer has a dedicated checklist in the `reviewers/` directory relative to this skill.
+- `lite`: `model: "haiku"` for all reviewers
+- `standard`: use roster defaults
+- `deep`: `model: "opus"` for standard reviewers; haiku stays haiku
 
 ### Reviewer Roster
 
-| ID | Reviewer | Checklist file | Model | Focus |
-|----|----------|---------------|-------|-------|
-| 1 | Scala Quality | `reviewers/01-scala-quality.md` | standard | Banned syntax, Scala 3 idioms, type design, opaque types, given/using, performance patterns |
-| 2 | ZIO Patterns, Perf & Streams | `reviewers/02-zio-patterns.md` | standard | Effects, error handling, retry, resources, parallelism, fibers, caching, ZStream chunking/backpressure |
-| 3 | Architecture & Serialization | `reviewers/03-foundations.md` | **haiku** | Module deps, layer violations, code placement, custom codec detection, runtime-breaking codec issues |
-| 5 | FDB Patterns & Performance | `reviewers/05-fdb-patterns.md` | standard | Store providers, operations, RecordIO, N+1 queries, unbounded scans, tx splitting, timeout risks |
-| 6 | Temporal Workflows | `reviewers/06-temporal.md` | standard | Activity attributes, CDC, async endpoints, batch actions, pattern selection |
-| 7 | Tapir Endpoints | `reviewers/07-tapir-endpoints.md` | standard | Server auth/security, client error handling, loading state, base class bypass |
-| 8 | Frontend | `reviewers/08-frontend.md` | standard | Laminar/Airstream reactivity, split operators, memory leaks, Tailwind DSL, design system components |
-| 9 | scalajs-react | `reviewers/11-react.md` | standard | Legacy framework flagging, Callback correctness, React-Laminar bridge, lifecycle cleanup |
-| 10 | Observability & Logging | `reviewers/12-observability.md` | **haiku** | Structured logging, metrics, tracing, sensitive data, action logging |
-| 11 | Testing Quality | `reviewers/13-testing.md` | standard | Assertions, test isolation, cleanup, flakiness, shared state, negative tests |
+| ID | Reviewer | Checklist | Default Model |
+|----|----------|-----------|---------------|
+| 1 | Scala Quality | `reviewers/01-scala-quality.md` | standard |
+| 2 | ZIO Patterns | `reviewers/02-zio-patterns.md` | standard |
+| 3 | Architecture | `reviewers/03-foundations.md` | haiku |
+| 5 | FDB Patterns | `reviewers/05-fdb-patterns.md` | standard |
+| 6 | Temporal | `reviewers/06-temporal.md` | standard |
+| 7 | Tapir | `reviewers/07-tapir-endpoints.md` | standard |
+| 8 | Frontend | `reviewers/08-frontend.md` | standard |
+| 9 | scalajs-react | `reviewers/11-react.md` | standard |
+| 10 | Observability | `reviewers/12-observability.md` | haiku |
+| 11 | Testing | `reviewers/13-testing.md` | standard |
 
-### How to Spawn Each Reviewer
+### Reviewer Prompt Template
 
-For each reviewer ID in the router's output, collect the file paths assigned to it.
-Spawn an agent with the reviewer's checklist file contents and the file list:
+For each reviewer, read its checklist file and spawn an agent with:
 
 ```
 [Contents of the reviewer's checklist file]
@@ -265,142 +147,40 @@ Spawn an agent with the reviewer's checklist file contents and the file list:
 
 ## Review Rules
 
-1. **Diff-bound**: Only flag issues on lines added or modified in the diff. Do NOT critique
-   pre-existing code the author didn't touch. If pre-existing code has a genuine safety issue,
-   mention it as a [NOTE] only.
-
-2. **FORBIDDEN — No compiling or running tools**: Do NOT run `./mill`, `compile`, `test`, `checkStyle`,
-   `checkStyleDirty`, `reformat`, `checkUnused`, `WarnUnusedCode`, or ANY build/lint/compile command.
-   Do NOT use the Bash tool for compilation or linting. Analyze code by reading files only. If you are
-   unsure whether something is correct, report it as a [NITPICK], not a [BLOCKER].
-
-3. **Triage every finding** into exactly one category:
-   - `[BLOCKER]` — Must fix before merge. Security holes, data loss, crash bugs, broken contracts.
-   - `[SUGGESTION]` — Should fix. Pattern violations, missing error handling, performance issues.
-   - `[NITPICK]` — Nice to have. Style, naming, minor convention deviations.
-
-4. **Score confidence 0–100 for every finding.** Ask yourself: how sure am I this is a real bug
-   and not a false positive?
-   - **90–100**: You see the exact broken pattern in the diff. No ambiguity.
-   - **70–89**: Strong signal but you can't see the full picture (e.g., missing callers, unclear intent).
-   - **50–69**: Suspicious but could be intentional. You'd want to ask the author.
-   - **< 50**: Gut feeling only. Do not report.
-
-   Use git blame context to calibrate: if the same author wrote it 2 days ago, lower your
-   confidence that it's unintentional. If untouched code from 2 years ago is now being modified,
-   raise your confidence that context may be misunderstood.
-
-   Format: `[BLOCKER] (confidence: 85) Brief title — file:line`
-
-5. **Do NOT report these — they are false positives:**
-   - Pre-existing issues not introduced in this diff (use `[NOTE]` only if dangerous)
-   - Code that looks wrong but is intentional (check git blame — same author, recent commit = deliberate)
-   - Issues that scalafix, scalafmt, or the compiler will already catch
-   - Pedantic style preferences not explicitly in your checklist
-   - Issues that require context outside the diff + full file to validate
-   - Code with `// scalafix:off` suppression comments that includes an explanation
-
-6. **Every finding MUST include**: file path, line number, confidence score, what's wrong,
-   a fenced code block showing the **current code**, and a fenced code block showing the **suggested fix**.
-   If you cannot provide a specific fix with code, do not report the finding.
-
-7. If you find nothing wrong, report: "Clean — no issues found."
-
----
+1. **Diff-bound**: Only flag issues on changed lines. Pre-existing issues → [NOTE] only.
+2. **FORBIDDEN**: No ./mill, compile, test, checkStyle, or any build command. Read only.
+3. **Triage**: [BLOCKER] (must fix) / [SUGGESTION] (should fix) / [NITPICK] (nice to have)
+4. **Confidence 0–100**: 90+ certain, 70-89 strong signal, 50-69 suspicious, <50 don't report.
+5. **False positives**: Skip pre-existing, intentional (same author), compiler-caught, pedantic.
+6. **Every finding MUST include**: file:line, confidence, current code block, suggested fix block.
+7. Clean → report "Clean — no issues found."
 
 ## Change Context
-
-[If the user provided context, include it here. Otherwise omit this section entirely.]
-
----
+[user context if provided, otherwise omit]
 
 ## Your Files
+[file paths assigned to this reviewer]
 
-[List of file paths assigned to this reviewer]
-
-## Instructions: Gather Your Own Context
-
-TOOL=${CLAUDE_PLUGIN_ROOT}/skills/stargazer-review-gang/scripts/review-init.py
-
-For each file listed above, gather context yourself before reviewing:
-1. **Get the diff**: `python3 $TOOL diff <base> <file>`
-2. **Read the full file** with line numbers (use the Read tool)
-3. **Get git blame on changed lines**: `python3 $TOOL blame <file> <start> <end>` for each hunk
-4. **Get recent file history**: `python3 $TOOL log <file>`
-
-Use blame to calibrate confidence: same author + recent commit = likely intentional. Old untouched
-code being modified = higher risk of misunderstanding context.
-
-Then review ONLY the changed lines from the diff.
+## Gather Your Own Context
+For each file above:
+1. Get diff: git diff -U3 <base> -- <file>
+2. Read full file (Read tool)
+3. Blame changed lines: git blame -L <start>,<end> HEAD -- <file>
+4. Recent history: git log --oneline -3 -- <file>
+Then review ONLY changed lines.
 ```
 
-Spawn all applicable reviewers in a single message to maximize parallelism.
-
-### Progress Updates
-
-Keep the user informed as the review progresses:
-
-1. After Step 1: **"Found N changed files (M lines). Review depth: [lite/standard/deep]. Sending to router..."**
-2. After Step 2: **"Router assigned N reviewers. Spawning: [list of reviewer names]..."**
-3. As reviewers complete: **"N/M reviewers done."** (update at natural milestones, not every single one)
-4. After all complete: **"All reviewers done. Aggregating findings..."**
+Spawn all reviewers in a **single message** for maximum parallelism.
 
 ---
 
 ## Step 3.5: Validate Findings
 
-After all reviewers complete, validate `[BLOCKER]` and `[SUGGESTION]` findings to eliminate
-false positives. Nitpicks skip validation — they're informational and not worth the cost.
+After all reviewers complete, validate BLOCKER and SUGGESTION findings to eliminate false positives.
 
-### How Validation Works
-
-1. **Collect** all `[BLOCKER]` and `[SUGGESTION]` findings from all reviewers.
-2. **Group** findings by file (so each validator reads a file once).
-3. **Spawn haiku validation agents** in parallel — one per file that has findings.
-4. Each validator independently checks every finding against the actual code.
-5. Findings that fail validation are dropped before the report.
-
-### Validator Prompt
-
-For each file with findings, spawn a **haiku** agent with:
-
-```
-You are a code review validator. Verify whether each finding is real by reading the code fresh.
-
-## Findings to Validate
-[For each: ID, Severity (confidence), Reviewer, Claim, Line, Suggested fix]
-
-## The Code
-[unified diff for this file, change context if any]
-
-Read the full file contents and run git blame yourself to verify each claim.
-
-## Instructions
-For EACH finding, return CONFIRMED or FALSE_POSITIVE. False positive categories:
-- Pre-existing (not introduced in this diff)
-- Intentional (git blame: same author, recent commit)
-- Compiler/linter already catches it
-- Requires context outside provided code
-- Style preference, not correctness
-- Has suppression comment with explanation
-
-Return JSON: [{"id": 1, "verdict": "CONFIRMED"}, {"id": 2, "verdict": "FALSE_POSITIVE", "reason": "..."}]
-```
-
-### After Validation
-
-- **Drop all `FALSE_POSITIVE` findings** — they don't appear in the report.
-- **Keep all `CONFIRMED` findings** — proceed to Step 4.
-- If a validator fails to return valid JSON or doesn't cover all findings, **keep those findings**
-  (fail-open — better to show a potential false positive than hide a real bug).
-
-### When to Skip Validation
-
-Skip the validation step entirely when:
-- There are 0 `[BLOCKER]` and 0 `[SUGGESTION]` findings (only nitpicks)
-- Review depth is `lite` (small change — validation cost exceeds review value)
-
-**Progress update:** After validation: *"Validated N findings — kept X, dropped Y false positives."*
+- **Skip if**: only nitpicks, or depth is lite.
+- Spawn **haiku validation agents** per file — they read code fresh and return CONFIRMED or FALSE_POSITIVE.
+- Drop FALSE_POSITIVE. Keep CONFIRMED. Fail-open on validator errors.
 
 ---
 
@@ -408,175 +188,60 @@ Skip the validation step entirely when:
 
 ### Sub-Aggregator Scaling
 
-Count the total number of reviewer agents that returned findings (including sub-reviewers from
-workload splits, e.g., `2a`, `2b` each count as one).
+- **≤6 reviewer outputs:** Aggregate directly.
+- **>6:** Spawn sub-aggregators (max 6 outputs each). They dedup, filter, drop vague.
+  Main agent does final cross-group dedup + re-queries.
 
-- **≤6 reviewer agents:** The main agent aggregates directly — proceed to the filtering steps below.
-- **>6 reviewer agents:** Spawn **sub-aggregator agents** to distribute the load. Each sub-aggregator
-  handles **at most 6** reviewer outputs and applies steps 1–3 (deduplicate, filter confidence, drop
-  vague). The main agent then merges across sub-aggregator results.
+### Filters
 
-**How to split into sub-aggregators:**
+1. **Deduplicate** same-line findings. Priority: Security > Data loss > Performance > Observability > Code quality > Testing > Style
+2. **Drop confidence < 70** (BLOCKER 60-69 → re-query once)
+3. **Drop vague** (no line, no fix, not in diff)
+4. **Re-query** borderline findings once max per reviewer
 
-1. Group reviewer outputs into batches of ≤6. Try to keep related reviewers together (e.g., group
-   FDB + ZIO + Temporal since they share data-correctness concerns and dedup well against each other).
-2. Spawn one **sub-aggregator agent** per batch with this prompt:
+### Report
 
-```
-You are a code review sub-aggregator. Apply these steps to the findings below:
-1. **Deduplicate** — merge same-line findings using priority: Security > Data loss > Performance > Observability > Code quality > Testing > Style
-2. **Filter** — drop confidence < 70 (keep borderline BLOCKER 60-69 marked for re-query)
-3. **Drop vague** — no line number, no concrete fix, or not in diff
-
-## Reviewer Findings
-[Paste findings from assigned reviewers]
-
-## Output
-Return JSON array of surviving findings: {severity, confidence, reviewer, file, line, issue, current_code, suggested_fix, cross_references?, borderline_requery?}
-```
-
-3. After all sub-aggregators complete, the main agent:
-   - Collects all surviving findings across sub-aggregators
-   - Runs a **final cross-group dedup pass** (different sub-aggregators may have flagged the same line)
-   - Handles re-queries (step 4 below) for any `borderline_requery` findings
-   - Presents the report (step 5)
-
-**Progress update:** When using sub-aggregators: *"Spawning N sub-aggregators to process M reviewer outputs..."*
-
----
-
-Once validation is complete (or sub-aggregators have returned), apply these filters **before**
-presenting to the user:
-
-### 1. Deduplicate
-
-If multiple reviewers flag the same line for related reasons, merge into one finding. Use this
-priority order to decide which reviewer's diagnosis to keep (highest priority wins):
-
-1. **Security** (7 Tapir) — auth bypass, data leaks
-2. **Data loss / correctness** (5 FDB, 6 Temporal, 2 ZIO) — silent failures, data corruption
-3. **Performance** (2 ZIO perf, 5 FDB perf) — thread starvation, OOM, timeout
-4. **Observability** (10 Observability) — secrets in logs, silent error swallowing, missing tracing
-5. **Code quality / patterns** (1 Scala, 2 ZIO, 8 Frontend) — idiom violations, memory leaks
-6. **Testing** (11 Testing) — flaky tests, missing assertions, isolation bugs
-7. **Style / formatting** (3 Architecture & Serialization) — mechanical checks
-
-When merging, keep the highest-priority finding and add a cross-reference:
-`Also flagged by: [other reviewer] — [brief reason]`
-
-Example: if the ZIO reviewer and the FDB reviewer both flag a `ZIO.foreach` inside a transaction,
-keep the FDB reviewer's finding (category 2, more specific context) and cross-reference the ZIO reviewer.
-
-### 2. Filter by confidence threshold
-
-Drop any finding with **confidence < 70**. Exceptions:
-- `[BLOCKER]` findings with confidence 60–69: **re-query the reviewer once** (use the re-query
-  mechanism in step 4 below) to ask for clarification. If confidence stays < 70, drop it.
-- Findings with confidence < 50 should never appear (reviewers are instructed not to report them),
-  but drop them if they do.
-
-### 3. Drop vague findings
-
-Remove any finding that:
-- Has no specific line number
-- Has no concrete fix (just says "consider" or "be careful")
-- Flags code that wasn't in the diff (unless marked as `[NOTE]`)
-- Has no confidence score (reviewer didn't follow the format — treat as low confidence)
-
-### 4. Re-query borderline findings (once only)
-
-If a reviewer returned a finding that is **high-severity but vague** (e.g., flags a security issue
-but doesn't provide a concrete fix, or cites the wrong line number), you may re-query that
-**single reviewer** once with the specific finding and ask for clarification:
-
-```
-Your finding on `file:line` — "[original finding]" — needs a concrete fix.
-Please provide the exact current code and a drop-in replacement, or withdraw the finding.
-```
-
-Rules:
-- **One re-query per reviewer, max.** Do not loop.
-- Only re-query for `[BLOCKER]` or `[SUGGESTION]` findings — never nitpicks.
-- If the re-query still returns a vague answer, drop the finding.
-
-### 5. Present the report
-
-> **MANDATORY:** Every single finding (BLOCKER, SUGGESTION, and NITPICK) **MUST** include fenced code
-> blocks showing both the **current code** and the **suggested fix**. A finding without code blocks is
-> incomplete and useless — the user must be able to see exactly what to change without jumping to files.
-> Never summarize a finding as just a text description. Always show the code.
-
-Use this template:
+> **MANDATORY:** Every finding MUST include current code + suggested fix as fenced code blocks.
 
 ````markdown
 # Code Review Report
 
 ## Files Reviewed
-- list of files with their platform classification
+- file list with platform classification
 
-## Blockers (must fix before merge)
-
-### [BLOCKER] (confidence: N) Brief title — `file:line`
-**Reviewer:** [Reviewer Name]
-**Issue:** Explanation of what's wrong and why it matters.
+## Blockers (must fix)
+### [BLOCKER] (confidence: N) Title — `file:line`
+**Reviewer:** Name
+**Issue:** Explanation
 **Current code:**
 ```scala
-// the offending code
+// code
 ```
 **Suggested fix:**
 ```scala
-// drop-in replacement
+// fix
 ```
-Also flagged by: [other reviewer] — [reason] *(only if deduplicated)*
 
 ## Suggestions (should fix)
-Same format as blockers — each with current code + suggested fix.
+Same format as blockers.
 
 ## Nitpicks
-- **`file:line`** — issue description
-  **Current:** `code` → **Fix:** `code` *(or use fenced blocks for multi-line)*
-
-## Notes on Pre-existing Code
-- **`file:line`** — what's concerning and the pre-existing code
+- **`file:line`** — description. Current: `code` → Fix: `code`
 
 ## Summary
 - X blockers, Y suggestions, Z nitpicks across N reviewers
-- Which reviewers found no issues
 ````
 
-**If there are 0 blockers and 0 suggestions**, keep the report brief — just list the nitpicks
-(if any) and confirm the code looks good.
+If 0 blockers and 0 suggestions, keep brief.
 
 ---
 
-## Step 5: Auto-Fix Handoff
+## Step 5: Auto-Fix
 
-After presenting the report, **offer to fix** the findings:
+Offer if blockers or suggestions exist:
+1. **Fix all**
+2. **Fix blockers only**
+3. **Skip**
 
-- **If blockers or suggestions exist:**
-  > "Found X blockers and Y suggestions. Want me to auto-fix them?"
-  >
-  > Options:
-  > 1. **Fix all** — apply all blocker and suggestion fixes
-  > 2. **Fix blockers only** — apply only blocker fixes, leave suggestions for manual review
-  > 3. **Skip** — just use the report as-is
-
-- **If only nitpicks:** Do not offer auto-fix — nitpicks are informational.
-
-When applying fixes:
-- Use the **suggested fix** code from each finding as the replacement
-- Apply fixes file-by-file, in order of severity (blockers first)
-- After all fixes are applied, inform the user to run `checkStyleDirty` on affected modules
-- Present a summary of what was changed
-
----
-
-## Build-Only Changes
-
-The router agent handles build files — it will route `build.mill`, `package.mill`, and
-`dependency.mill` to only the architecture & serialization reviewer (3).
-
-The architecture reviewer should additionally check for build-only changes:
-- Whether new `moduleDeps` match actual imports in the code
-- Whether dependency versions are consistent with other modules
-- Whether any new external dependencies are justified (not duplicating existing functionality)
+If only nitpicks, do not offer. Apply fixes file-by-file, blockers first.
+After fixing, tell user to run `checkStyleDirty` on affected modules.
