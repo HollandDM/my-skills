@@ -194,6 +194,11 @@ line count + optional split info):
 
 ## Step 3: Spawn Reviewer Agents
 
+> **ROUTER DECISIONS ARE FINAL.** Spawn exactly the reviewers the router assigned — no more, no less.
+> Do NOT add reviewers you think are relevant. Do NOT skip reviewers the router included. The router
+> made content-aware decisions by reading every diff. Trust its output. If you bypassed the router
+> (lite/standard depth), your own routing decisions are final — same rule applies, don't second-guess.
+
 Using the router's output, determine the **union of all reviewer IDs** across all files.
 
 ### Handling Workload Splits
