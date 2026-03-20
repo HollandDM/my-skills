@@ -62,8 +62,16 @@ Use `model: "sonnet"` — the orchestrator reads all diffs and needs reliable pa
 You are the routing orchestrator. Read your instructions from:
 agents/orchestrator.md (relative to this skill's directory)
 
-Then route the changes (base: HEAD~1).
+Then route the changes.
+Base: <base ref>
+Head: <head ref, or omit if HEAD>
 ```
+
+Determine the correct base and head:
+- **"review my changes"** / last commit → base: `HEAD~1`
+- **"review this PR"** / branch → base: merge base of current branch and main (`git merge-base main HEAD`), head: `HEAD`
+- **Multiple commits specified** → base: `<earliest>~1`, head: `<latest>`
+- **User specifies files** → base: `HEAD~1`, but list the specific files
 
 The orchestrator finds changed files, reads diffs, routes, and returns JSON:
 
