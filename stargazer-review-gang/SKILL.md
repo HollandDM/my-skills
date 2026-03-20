@@ -1,5 +1,5 @@
 ---
-name: code-review-gang
+name: stargazer-review-gang
 description: >
   Multi-perspective code review for the Stargazer codebase. Spawns a gang of specialized
   reviewer agents in parallel - each focused on a different quality dimension (ZIO patterns,
@@ -37,27 +37,14 @@ Determine what changed. In order of preference:
   ```
 - If unclear, ask the user
 
-### Gather full context for reviewers
+### Gather context for each changed file
 
-Reviewers need **both** the diff and the full file to make good judgments. A 50-line diff without
-surrounding context leads to false positives and missed issues.
+Reviewers need **both** the diff and the full file to make good judgments. For each changed file:
+1. **Get the unified diff**: `git diff -U3 HEAD~1 -- <file>` (or `git diff -U3 -- <file>`)
+2. **Read the full file content** with line numbers (so reviewers can cite exact lines)
 
-For each changed file:
-1. **Get the diff** (what changed): `git diff HEAD~1 -- <file>` or `git diff -- <file>`
-2. **Read the full file** (surrounding context): read the entire file content
-
-Pass both to each reviewer — the diff tells them *what* to review, the full file tells them *how*
-it fits into the surrounding code.
-
-### Diff & File Format
-
-For each changed file, prepare the reviewer input in this format:
-
-1. **File path header**: `## File: path/to/file.scala`
-2. **Unified diff** with 3-line context: `git diff -U3 HEAD~1 -- path/to/file` (or equivalent)
-3. **Full file content** with line numbers for reference (so reviewers can cite exact lines)
-
-When multiple files are reviewed, concatenate them with clear `## File:` separators.
+The diff goes to both the **router** (Step 2) and the **reviewers** (Step 3). The full file goes
+only to reviewers — the router only needs diffs to classify files.
 
 ### The Diff-Bound Rule
 
@@ -69,24 +56,33 @@ genuinely dangerous (security hole, data loss risk), mention it as a `[NOTE]` bu
 
 ## Step 2: Route Files to Reviewers
 
-Spawn the **router agent** to decide which reviewers each file needs. The router is a fast, lean
-agent (haiku model) that reads each file's diff and classifies it based on actual content — not
-just file path.
+Spawn the **router agent** (haiku model) to decide which reviewers each file needs. The router
+classifies files based on **actual diff content** — not just file path. A `/shared/` file with
+only case classes gets different reviewers than one importing `ZStream`.
 
-Read `reviewers/00-router.md` for the router's instructions, then spawn it with:
+Read `reviewers/00-router.md` for the router's full instructions. Spawn a **single haiku agent**
+with this prompt:
 
 ```
-[Contents of reviewers/00-router.md]
+[Full contents of reviewers/00-router.md]
 
 ---
 
 ## Files to Route
 
-[For each changed file: file path + its unified diff]
+[For each changed file: file path + its unified diff (NOT full file — keep payload small)]
 ```
 
-The router returns a JSON mapping of file → reviewer IDs. Wait for it to complete before
-proceeding to Step 3.
+The router returns a JSON object mapping each file to a list of reviewer IDs:
+
+```json
+{
+  "path/to/Service.scala": ["1a", "1b", "2a", "3", "5a"],
+  "path/to/Page.scala": ["1a", "1b", "3", "9", "10"]
+}
+```
+
+**Wait for the router to complete before proceeding to Step 3.**
 
 ---
 
@@ -190,34 +186,81 @@ Remove any finding that:
 
 ### 3. Present the report
 
-```markdown
+Every finding **must** include the current code and the suggested fix as fenced code blocks so
+the user can see exactly what to change without jumping to files. Use this template:
+
+````markdown
 # Code Review Report
 
 ## Files Reviewed
 - list of files with their platform classification
 
 ## Blockers (must fix before merge)
-For each:
-- **[Reviewer Name]** `file:line` — Issue description
-  **Fix:** concrete code change
+
+For each finding:
+
+### [BLOCKER] Brief title — `file:line`
+**Reviewer:** [Reviewer Name]
+
+**Issue:** Explanation of what's wrong and why it matters.
+
+**Current code:**
+```scala
+// the offending code from the diff (include enough surrounding lines for context)
+```
+
+**Suggested fix:**
+```scala
+// the corrected code — a drop-in replacement the user can copy-paste
+```
+
+Also flagged by: [other reviewer] — [brief reason] *(only if deduplicated)*
+
+---
 
 ## Suggestions (should fix)
-For each:
-- **[Reviewer Name]** `file:line` — Issue description
-  **Fix:** concrete code change
+
+Same format as blockers — each with current code + suggested fix:
+
+### [SUGGESTION] Brief title — `file:line`
+**Reviewer:** [Reviewer Name]
+
+**Issue:** Explanation.
+
+**Current code:**
+```scala
+...
+```
+
+**Suggested fix:**
+```scala
+...
+```
+
+---
 
 ## Nitpicks
-Collapsed/brief list:
-- `file:line` — issue (fix)
+
+Nitpicks use a compact format — code blocks only when the fix isn't obvious:
+
+- **`file:line`** — issue description
+  ```scala
+  // current → suggested (one-liner or short snippet)
+  ```
 
 ## Notes on Pre-existing Code
+
 If any reviewer flagged dangerous pre-existing patterns (not in the diff):
-- `file:line` — what's concerning and why
+
+- **`file:line`** — what's concerning and why
+  ```scala
+  // the pre-existing code in question
+  ```
 
 ## Summary
 - X blockers, Y suggestions, Z nitpicks across N reviewers
 - Which reviewers found no issues (clean bill of health)
-```
+````
 
 **If there are 0 blockers and 0 suggestions**, keep the report brief — just list the nitpicks
 (if any) and confirm the code looks good.
