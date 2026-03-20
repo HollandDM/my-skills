@@ -29,7 +29,7 @@ description: >
 You are orchestrating a **gang of specialized code reviewers** for the Stargazer codebase. Each
 reviewer is an agent that focuses on one quality dimension. Your job is to:
 
-1. Gather context (diff, full files, git blame) and ask user for change intent
+1. Gather diffs and ask user for change intent
 2. Determine review depth (lite/standard/deep) and spawn the **router agent**
 3. Spawn the right **reviewer agents** in parallel based on the router's output
 4. **Validate** blocker/suggestion findings with independent haiku agents
@@ -53,25 +53,19 @@ Determine what changed. In order of preference:
   ```
 - If unclear, ask the user
 
-### Gather context for each changed file
+### Gather diffs only — delegate the rest to reviewers
 
-Reviewers need the **diff**, the **full file**, and **git blame context** to make good judgments.
-For each changed file:
+The main agent should stay lightweight. Only gather what **you** need:
 
-1. **Get the unified diff**: `git diff -U3 HEAD~1 -- <file>` (or `git diff -U3 -- <file>`)
-2. **Read the full file content** with line numbers (so reviewers can cite exact lines)
-3. **Get git blame on changed lines**: For each hunk in the diff, run
-   `git blame -L <start>,<end> HEAD -- <file>` to get authorship and recency of surrounding code.
-   Also run `git log --oneline -3 -- <file>` for recent file history.
+1. **Get the unified diff** for each changed file: `git diff -U3 HEAD~1 -- <file>`
+2. **Get the list of changed file paths**: `git diff --name-only HEAD~1`
 
-The diff goes to both the **router** (Step 2) and the **reviewers** (Step 3). The full file and
-blame context go only to reviewers — the router only needs diffs to classify files.
+That's it. The diffs go to the **router** (Step 2) and to **reviewers** (Step 3). Do NOT read full
+file contents or git blame yourself — reviewers gather their own context (see reviewer prompt below).
 
-### Git Blame Context
-
-Include blame output in a `## Git Context` section when sending files to reviewers (recent history +
-blame on changed lines). This helps reviewers avoid false positives on intentional patterns, calibrate
-confidence based on code age, and spot risky modifications to old code.
+**Why:** Reading full files and blame for every changed file bloats the main agent's context and
+wastes tokens. Reviewers are the ones who need that detail, and they can fetch it themselves in
+parallel — which is faster and keeps the orchestrator lean.
 
 ### The Diff-Bound Rule
 
@@ -218,8 +212,9 @@ When spawning a split sub-reviewer, prepend this to the reviewer's checklist in 
 > checklist: {focus}. Skip all other sections — another sub-reviewer handles them.
 ```
 
-Each sub-reviewer runs as a fully independent agent with the same files, diff, blame context, and
-review rules — the only difference is the narrowed scope.
+Each sub-reviewer runs as a fully independent agent with the same files and diff. They gather their
+own full file contents and blame context (same as regular reviewers). The only difference is the
+narrowed checklist scope.
 
 Each reviewer has a dedicated checklist in the `reviewers/` directory relative to this skill.
 
@@ -299,15 +294,25 @@ Read the reviewer's checklist file, then spawn an agent with this prompt structu
 
 ---
 
+## Your Files
+
+[List of file paths assigned to this reviewer]
+
 ## Diff
 
-[git diff output for the files under review]
+[git diff output for the files under review — provided by the main agent]
 
----
+## Instructions: Gather Your Own Context
 
-## Full File Contents
+For each file listed above, you MUST gather context yourself before reviewing:
+1. **Read the full file** with line numbers (use the Read tool)
+2. **Get git blame on changed lines**: `git blame -L <start>,<end> HEAD -- <file>` for each hunk
+3. **Get recent file history**: `git log --oneline -3 -- <file>`
 
-[Full file contents for context — review ONLY the changed lines above]
+Use blame to calibrate confidence: same author + recent commit = likely intentional. Old untouched
+code being modified = higher risk of misunderstanding context.
+
+Then review ONLY the changed lines from the diff above.
 ```
 
 Spawn all applicable reviewers in a single message to maximize parallelism.
@@ -347,7 +352,9 @@ You are a code review validator. Verify whether each finding is real by reading 
 [For each: ID, Severity (confidence), Reviewer, Claim, Line, Suggested fix]
 
 ## The Code
-[unified diff, full file contents, git blame context, change context if any]
+[unified diff for this file, change context if any]
+
+Read the full file contents and run git blame yourself to verify each claim.
 
 ## Instructions
 For EACH finding, return CONFIRMED or FALSE_POSITIVE. False positive categories:
