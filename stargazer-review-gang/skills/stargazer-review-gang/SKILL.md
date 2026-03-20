@@ -23,12 +23,11 @@ description: >
 > router and assign reviewers yourself. For `lite` and `standard` reviews, you MAY route files
 > yourself if the change is small enough to classify at a glance.
 
-> **CRITICAL CONSTRAINT — MAIN AGENT NEVER READS DIFFS OR FILE CONTENTS**
-> The ONLY git commands you run are `git diff --name-only` and `git diff --stat`. You NEVER run
-> `git diff -U3`, `git diff -p`, `git diff HEAD~1` (without --name-only or --stat), `git show`,
-> or any command that outputs diff content or file contents. You NEVER use the Read tool on source
-> files. The router, reviewers, and validators are sub-agents with their own tools — they read
-> diffs and files themselves. Your job is orchestration only.
+> **CRITICAL CONSTRAINT — MAIN AGENT STAYS LEAN**
+> Run `scripts/review-init.py` once to get file list and metadata. Do NOT run `git diff`, `git show`,
+> or read source files UNLESS `spawn_router` is `false` and you need diffs for routing decisions.
+> When `spawn_router` is `true`, the router agent gathers its own diffs — you pass only file paths.
+> Reviewers and validators always gather their own diffs, files, and blame. Never read code for them.
 
 **Announce at start:** "I'm using the stargazer-review-gang skill to review your code."
 
@@ -46,20 +45,37 @@ reviewer is an agent that focuses on one quality dimension. Your job is to:
 
 ## Step 1: Identify the Code and Gather Context
 
-### Get the changed file list
+### Run the init script
 
-Determine what changed. Run these two commands only:
+Run the init script to get file list, line counts, depth, and routing decisions:
 
 ```bash
-git diff --name-only HEAD~1    # file paths
-git diff --stat HEAD~1         # line count summary
+python3 scripts/review-init.py           # default: diff against HEAD~1
+python3 scripts/review-init.py HEAD~3    # or specify a custom base
+python3 scripts/review-init.py main      # or diff against a branch
 ```
 
-Adjust for unstaged (`git diff --name-only`) or staged (`git diff --name-only --cached`) as needed.
-If the user specified files, use those instead. If unclear, ask the user.
+The script path is relative to this skill's directory. The script outputs JSON:
 
-These two commands are the ONLY git commands you run in the entire workflow. Everything else
-(reading diffs, file contents, git blame) is done by sub-agents. You are an orchestrator.
+```json
+{
+  "total_files": 12,
+  "total_lines": 320,
+  "depth": "standard",
+  "spawn_router": false,
+  "base": "HEAD~1",
+  "files": [
+    {"path": "path/to/File.scala", "lines": 45},
+    {"path": "build.mill", "lines": 2}
+  ]
+}
+```
+
+- `spawn_router: true` → Spawn the router agent (Step 2) to assign reviewers.
+- `spawn_router: false` → You route files yourself using the file paths and the reviewer
+  reference table in Step 2. You may read diffs for routing purposes only in this case.
+
+This is the ONLY command you run to gather initial context.
 
 ### The Diff-Bound Rule
 
@@ -111,8 +127,7 @@ domain intent.
 
 ### Determine Review Depth
 
-From `git diff --stat`, count **total changed lines** (additions + deletions across all files).
-This determines the **depth level**, which controls the model strength for each reviewer:
+The init script provides `depth` and `total_lines`. The depth controls model strength for each reviewer:
 
 | Total changed lines | Depth | Reviewer model override | Rationale |
 |---------------------|-------|------------------------|-----------|
