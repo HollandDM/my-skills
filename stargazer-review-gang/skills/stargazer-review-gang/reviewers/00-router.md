@@ -11,9 +11,11 @@ You receive a list of changed file paths.
 
 ## Gather Diffs
 
-For each file path, read its diff yourself:
+Use the review tool to read diffs:
 ```bash
-git diff -U3 HEAD~1 -- <file>
+TOOL=${CLAUDE_PLUGIN_ROOT}/skills/stargazer-review-gang/scripts/review-init.py
+python3 $TOOL diff-all          # get all diffs at once
+python3 $TOOL diff HEAD~1 <file>  # or one file at a time
 ```
 Do NOT read full file contents — diffs are enough for routing.
 

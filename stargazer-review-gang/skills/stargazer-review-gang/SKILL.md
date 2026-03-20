@@ -23,15 +23,18 @@ description: >
 > router and assign reviewers yourself. For `lite` and `standard` reviews, you MAY route files
 > yourself if the change is small enough to classify at a glance.
 
-> **CRITICAL CONSTRAINT — USE THE INIT SCRIPT, NOT GIT COMMANDS**
-> Your FIRST action must be running the init script. Do NOT run `git diff`, `git diff --name-only`,
-> `git diff --stat`, or any git command to gather changes. The script does all of that for you.
+> **CRITICAL CONSTRAINT — USE THE REVIEW TOOL, NOT RAW GIT COMMANDS**
+> All git operations go through the review tool. Do NOT run raw `git diff`, `git blame`, `git log`,
+> or `git show` commands. The tool handles all git interactions and returns structured JSON.
 > ```
-> python3 ${CLAUDE_PLUGIN_ROOT}/skills/stargazer-review-gang/scripts/review-init.py
+> TOOL=${CLAUDE_PLUGIN_ROOT}/skills/stargazer-review-gang/scripts/review-init.py
+> python3 $TOOL init                    # first action — get files, depth, router decision
+> python3 $TOOL diff HEAD~1 path/to/f   # get diff for one file (for routing when spawn_router=false)
+> python3 $TOOL diff-all                # get all diffs (router/reviewer use only)
+> python3 $TOOL log path/to/f           # recent commits for a file
+> python3 $TOOL blame path/to/f 10 20   # blame a line range
 > ```
-> After the script, you may read diffs ONLY if `spawn_router` is `false` (for routing).
-> When `spawn_router` is `true`, pass only file paths to the router — it gathers its own diffs.
-> Reviewers and validators always gather their own diffs, files, and blame. Never read code for them.
+> Sub-agents (router, reviewers, validators) also use this tool instead of raw git commands.
 
 **Announce at start:** "I'm using the stargazer-review-gang skill to review your code."
 
@@ -51,15 +54,17 @@ reviewer is an agent that focuses on one quality dimension. Your job is to:
 
 ### Run the init script
 
-Run the init script as your **first and only** action to gather context:
+Run `init` as your **first and only** action:
 
 ```bash
-python3 ${CLAUDE_PLUGIN_ROOT}/skills/stargazer-review-gang/scripts/review-init.py           # default: diff against HEAD~1
-python3 ${CLAUDE_PLUGIN_ROOT}/skills/stargazer-review-gang/scripts/review-init.py HEAD~3    # custom base
-python3 ${CLAUDE_PLUGIN_ROOT}/skills/stargazer-review-gang/scripts/review-init.py main      # diff against branch
+python3 $TOOL init              # default: diff against HEAD~1
+python3 $TOOL init HEAD~3       # custom base
+python3 $TOOL init main         # diff against branch
 ```
 
-The script outputs JSON:
+Where `TOOL=${CLAUDE_PLUGIN_ROOT}/skills/stargazer-review-gang/scripts/review-init.py`.
+
+The tool outputs JSON:
 
 ```json
 {
@@ -315,11 +320,13 @@ Spawn an agent with the reviewer's checklist file contents and the file list:
 
 ## Instructions: Gather Your Own Context
 
-For each file listed above, you MUST gather context yourself before reviewing:
-1. **Get the diff**: `git diff -U3 HEAD~1 -- <file>`
+TOOL=${CLAUDE_PLUGIN_ROOT}/skills/stargazer-review-gang/scripts/review-init.py
+
+For each file listed above, gather context yourself before reviewing:
+1. **Get the diff**: `python3 $TOOL diff <base> <file>`
 2. **Read the full file** with line numbers (use the Read tool)
-3. **Get git blame on changed lines**: `git blame -L <start>,<end> HEAD -- <file>` for each hunk
-4. **Get recent file history**: `git log --oneline -3 -- <file>`
+3. **Get git blame on changed lines**: `python3 $TOOL blame <file> <start> <end>` for each hunk
+4. **Get recent file history**: `python3 $TOOL log <file>`
 
 Use blame to calibrate confidence: same author + recent commit = likely intentional. Old untouched
 code being modified = higher risk of misunderstanding context.
