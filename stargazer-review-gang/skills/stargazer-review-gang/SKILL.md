@@ -90,8 +90,8 @@ Using the routing output, determine the **union of all reviewer IDs** across all
 ### Workload Splits
 
 From `workload`:
-- **≤2000 +/-:** One reviewer agent per ID.
-- **>2000 +/- with split:** Spawn sub-reviewers (2a, 2b, etc.) with focused scope.
+- **≤4000 +/-:** One reviewer agent per ID.
+- **>4000 +/- with split:** Spawn sub-reviewers (2a, 2b, etc.) with focused scope.
   Prepend: `> FOCUSED REVIEW: You are sub-reviewer {id}. Review ONLY: {focus}`
 
 ### Model Override by Depth

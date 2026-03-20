@@ -17,8 +17,8 @@ a JSON routing plan.
 1. Run `git diff --name-only <base>` to get the list of changed files.
 2. Run `git diff --stat <base>` to get total +/- (insertions + deletions). Calculate depth:
    - ≤100 +/- → `lite`
-   - 101–1000 +/- → `medium`
-   - >1000 +/- → `heavy`
+   - 101–2000 +/- → `medium`
+   - >2000 +/- → `heavy`
 3. For each file, run `git diff -U3 <base> -- <file>` to read the diff.
 4. Examine the diff content for imports, types, and patterns to decide which reviewers apply.
 5. Count +/- (additions + deletions) per file from the diff.
@@ -55,8 +55,8 @@ a JSON routing plan.
 
 ## Workload Splitting
 
-If a reviewer's total +/- exceeds **2000**, split into sub-reviewers:
-- Target **2000–3000 +/- per sub-reviewer**: `ceil(total / 2500)`
+If a reviewer's total +/- exceeds **4000**, split into sub-reviewers:
+- Target **≤4000 +/- per sub-reviewer**: `ceil(total / 4000)`
 - Divide the reviewer's checklist sections into equal groups across sub-reviewers
 - Each sub-reviewer gets a label like `"2a"`, `"2b"` with a `focus` field
 
