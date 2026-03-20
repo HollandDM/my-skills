@@ -19,9 +19,9 @@ anything else before Step 1.
    `test`, `checkStyle`, `checkStyleDirty`, `reformat`, `checkUnused`, `WarnUnusedCode`, or any
    build/lint command.
 2. **YOU DO NOT READ DIFFS, SOURCE FILES, OR SUB-AGENT INSTRUCTION FILES.** Do NOT run
-   `git diff` with content output. Do NOT use the Read tool on any `.md` file in this skill.
-   You MAY run `git status`, `git log --oneline`, and `git merge-base` to determine the
-   correct base/head refs. The orchestrator and reviewers read diffs and files themselves.
+   `git diff`, `git status`, `git log`, `git merge-base`, or any git content commands.
+   Do NOT use the Read tool on any `.md` file in this skill.
+   The orchestrator determines the diff ref itself from the user's review scope.
 3. **NO STOP CONDITION FOR PR SIZE.** Handle all PRs regardless of file count or line count.
 
 ## Workflow
@@ -29,9 +29,8 @@ anything else before Step 1.
 1. Ask user for context
 2. Spawn **routing orchestrator** → get back file list, depth, and routing plan (JSON)
 3. Spawn **reviewer agents** in parallel based on routing plan
-4. **Validate** blocker/suggestion findings
-5. **Aggregate** and present report
-6. Offer **auto-fix**
+4. **Aggregate** (validates + deduplicates + filters) and present report
+5. Offer **auto-fix**
 
 ---
 
@@ -57,37 +56,27 @@ Do NOT run any git commands. Do NOT analyze files before asking.
 ## Step 2: Spawn Routing Orchestrator
 
 Spawn a **single agent** with this prompt (do NOT read the orchestrator file yourself).
-Use `model: "sonnet"` — the orchestrator reads all diffs and needs reliable pattern matching.
+Use `model: "sonnet"` — the orchestrator interprets the review scope, determines diff refs, reads all diffs, and routes files.
+
+**Pass the user's review scope verbatim** — do NOT interpret it into base/head refs. The
+orchestrator determines the correct git diff strategy itself.
 
 ```
 You are the routing orchestrator. Read your instructions from:
 agents/orchestrator.md (relative to this skill's directory)
 
-Then route the changes.
-Base: <base ref>
-Head: <head ref, or omit if HEAD>
+## Review Scope
+<user's exact words describing what to review, word for word>
+
+## Context
+<user-provided context from Step 1, or "None">
 ```
 
-Determine the correct base and head. You MAY run `git status` and `git log --oneline -5`
-to understand the current state before deciding:
-
-- **"review my changes"** / last commit → base: `HEAD~1`
-- **"review this PR"** / branch → base: merge base with main (`git merge-base main HEAD`), head: `HEAD`
-- **"review current changes"** / session work → This may include both commits and uncommitted
-  changes. Check `git status` for uncommitted changes and `git log --oneline` for recent commits.
-  - **Uncommitted only** (dirty working tree, no new commits) → base: `HEAD`, omit head.
-    `git diff HEAD` captures both staged and unstaged against last commit.
-  - **Commits + uncommitted** → base: SHA before the first commit in the session, omit head.
-    `git diff <base>` diffs against working tree, capturing commits AND uncommitted changes.
-  - **Commits only** (clean working tree) → base: `<earliest commit SHA>`, head: `HEAD`
-- **Multiple commits specified** → base: `<earliest commit SHA>`, head: `<latest commit SHA>`.
-  Do NOT append `~1` to the base. The orchestrator diffs `base..head` which already excludes base.
-- **User specifies files** → base: `HEAD~1`, but list the specific files
-
-The orchestrator finds changed files, reads diffs, routes, and returns JSON:
+The orchestrator determines the diff ref, finds changed files, reads diffs, routes, and returns JSON:
 
 ```json
 {
+  "diff_ref": "abc123..def456",
   "total_files": 12,
   "total_changes": 2982,
   "depth": "heavy",
@@ -95,6 +84,8 @@ The orchestrator finds changed files, reads diffs, routes, and returns JSON:
   "workload": {"1": {"changes": 850}, "2": {"changes": 3200, "split": [...]}}
 }
 ```
+
+Use the returned `diff_ref` when spawning reviewers and aggregators.
 
 **Wait for the orchestrator to complete before proceeding.**
 
@@ -130,9 +121,9 @@ From `workload`:
 | 6 | Temporal | `reviewers/06-temporal.md` | standard |
 | 7 | Tapir | `reviewers/07-tapir-endpoints.md` | standard |
 | 8 | Frontend | `reviewers/08-frontend.md` | standard |
-| 9 | scalajs-react | `reviewers/11-react.md` | standard |
-| 10 | Observability | `reviewers/12-observability.md` | haiku |
-| 11 | Testing | `reviewers/13-testing.md` | standard |
+| 9 | scalajs-react | `reviewers/09-react.md` | standard |
+| 10 | Observability | `reviewers/10-observability.md` | haiku |
+| 11 | Testing | `reviewers/11-testing.md` | standard |
 
 ### Reviewer Prompt Template
 
@@ -161,7 +152,7 @@ Read your checklist from: [checklist file path from roster table]
 
 ## Gather Your Own Context
 For each file above:
-1. Get diff: git diff -U3 <base> -- <file>
+1. Get diff: git diff -U3 <diff_ref> -- <file>
 2. Read full file (Read tool)
 3. Blame changed lines: git blame -L <start>,<end> HEAD -- <file>
 4. Recent history: git log --oneline -3 -- <file>
@@ -172,33 +163,35 @@ Spawn all reviewers in a **single message** for maximum parallelism.
 
 ---
 
-## Step 3.5: Validate Findings
+## Step 4: Aggregate, Validate, and Filter
 
-After all reviewers complete, validate BLOCKER and SUGGESTION findings to eliminate false positives.
-
-- **Skip if**: only nitpicks, or depth is `lite`.
-- Spawn **haiku validation agents** per file — they read code fresh and return CONFIRMED or FALSE_POSITIVE.
-- Drop FALSE_POSITIVE. Keep CONFIRMED. Fail-open on validator errors.
-
----
-
-## Step 4: Aggregate and Filter
+Each aggregator now **validates** BLOCKER/SUGGESTION findings against actual code before
+deduplicating. No separate validation step needed.
 
 Count reviewer agents that returned findings (sub-reviewers like 1a, 1b count separately).
 
-- **≤6 outputs:** Spawn **one aggregator agent**.
-- **>6 outputs:** Split into batches of ≤6 and spawn **one aggregator per batch**. Group related
+- **≤4 outputs:** Spawn **one aggregator agent**.
+- **>4 outputs:** Split into batches of ≤4 and spawn **one aggregator per batch**. Group related
   reviewers together (e.g., FDB + ZIO + Temporal). After all aggregators complete, spawn one
   **final aggregator** to merge their reports and do a cross-group dedup pass.
 
-For each aggregator, spawn an agent with this prompt (do NOT read the aggregator file yourself):
+Use the same depth-based model override as reviewers:
+- `lite`: `model: "haiku"`
+- `medium`: `model: "sonnet"` (aggregator default)
+- `heavy`: `model: "opus"`
+
+For each aggregator, spawn an agent with the depth-appropriate model and this prompt (do NOT read the aggregator file yourself):
 
 ```
 Read your instructions from: agents/aggregator.md (relative to this skill's directory)
 
+Diff ref: <diff_ref from orchestrator output>
+
 ## Findings to Aggregate
 [paste all findings from the assigned reviewer batch]
 ```
+
+Pass the `diff_ref` so the aggregator can check diffs during validation.
 
 The aggregator returns the final report. Present it to the user as-is.
 

@@ -8,13 +8,31 @@ a JSON routing plan.
 
 ## Input
 
-You receive `Base` and optionally `Head` refs from the main agent:
+You receive the **review scope** — the user's exact words describing what to review, passed
+verbatim by the main agent. Examples:
+- "review my changes"
+- "review this PR"
+- "review current changes"
+- "review the last 3 commits"
+- "review files X, Y, Z"
 
-- **Base + Head** (e.g., `Base: abc123`, `Head: def456`): Review committed changes only.
-  Use `git diff <base>..<head>` for all commands.
-- **Base only** (e.g., `Base: HEAD~1`, no Head): Review changes against working tree, which
-  includes both committed and uncommitted changes. Use `git diff <base>` for all commands.
-- **Base: HEAD** (no Head): Review uncommitted changes only (staged + unstaged).
+You may also receive optional user-provided context about the changes.
+
+## Determine the Diff Ref
+
+Based on the review scope, run `git status` and `git log --oneline -10` to understand the
+current state, then determine the correct diff strategy:
+
+- **"my changes"** / "last commit" → `git diff HEAD~1`
+- **"this PR"** / "branch" → find merge base: `git merge-base main HEAD`, then `git diff <merge-base>..HEAD`
+- **"current changes"** / "session work" → check for uncommitted and recent commits:
+  - **Uncommitted only** (dirty working tree, no new commits) → `git diff HEAD`
+  - **Commits + uncommitted** → `git diff <earliest-commit-SHA>` (against working tree)
+  - **Commits only** (clean working tree) → `git diff <earliest-commit-SHA>..HEAD`
+- **Multiple commits specified** → `git diff <earliest-SHA>..<latest-SHA>`.
+  Do NOT append `~1` to the base — `base..head` already excludes base.
+- **Specific files** → `git diff HEAD~1 -- <files>`
+- **Unclear** → default to `git diff HEAD~1` (last commit)
 
 ## Constraints
 
@@ -24,7 +42,7 @@ You receive `Base` and optionally `Head` refs from the main agent:
 
 ## Process
 
-1. Construct `<diff-ref>` from the input (see Input section above).
+1. Determine the diff ref from the review scope (see "Determine the Diff Ref" above).
 2. Run `git diff --name-only <diff-ref>` to get the list of changed files.
 3. For each file, run `git diff -U3 <diff-ref> -- <file>`.
 4. Examine the diff content for imports, types, and patterns to decide which reviewers apply.
@@ -78,6 +96,7 @@ Return JSON only:
 
 ```json
 {
+  "diff_ref": "abc123..def456",
   "total_files": 12,
   "total_changes": 2982,
   "depth": "deep",
@@ -98,3 +117,6 @@ Return JSON only:
   }
 }
 ```
+
+The `diff_ref` field is the exact git diff argument you used (e.g., `HEAD~1`, `abc123..def456`,
+`HEAD`). The main agent passes this to reviewers and aggregators.
