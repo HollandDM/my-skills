@@ -7,7 +7,15 @@ diff and decide which reviewers should run on it. You do NOT review the code —
 
 ## Input
 
-You receive a list of changed files with their diffs.
+You receive a list of changed file paths.
+
+## Gather Diffs
+
+For each file path, read its diff yourself:
+```bash
+git diff -U3 HEAD~1 -- <file>
+```
+Do NOT read full file contents — diffs are enough for routing.
 
 ## How to Route
 

@@ -53,19 +53,19 @@ Determine what changed. In order of preference:
   ```
 - If unclear, ask the user
 
-### Gather diffs only — delegate the rest to reviewers
+### Stay lightweight — delegate reads to sub-agents
 
-The main agent should stay lightweight. Only gather what **you** need:
+The main agent only needs the **list of changed file paths** and the **total changed line count**
+(for determining review depth). Do NOT read diffs, full files, or git blame yourself.
 
-1. **Get the unified diff** for each changed file: `git diff -U3 HEAD~1 -- <file>`
-2. **Get the list of changed file paths**: `git diff --name-only HEAD~1`
+1. **Get changed file paths**: `git diff --name-only HEAD~1` (or unstaged/staged as appropriate)
+2. **Get total changed line count**: `git diff --stat HEAD~1` (for depth calculation)
 
-That's it. The diffs go to the **router** (Step 2) and to **reviewers** (Step 3). Do NOT read full
-file contents or git blame yourself — reviewers gather their own context (see reviewer prompt below).
+That's it. The **router** reads diffs itself. **Reviewers** read diffs, full files, and git blame
+themselves. All sub-agents gather their own context in parallel.
 
-**Why:** Reading full files and blame for every changed file bloats the main agent's context and
-wastes tokens. Reviewers are the ones who need that detail, and they can fetch it themselves in
-parallel — which is faster and keeps the orchestrator lean.
+**Why:** Reading diffs for every changed file bloats the main agent's context and wastes tokens.
+Sub-agents need that detail, not you — and they fetch it in parallel, which is faster.
 
 ### The Diff-Bound Rule
 
@@ -159,7 +159,7 @@ with this prompt:
 
 ## Files to Route
 
-[For each changed file: file path + its unified diff (NOT full file — keep payload small)]
+[List of changed file paths — one per line. The router reads diffs itself.]
 ```
 
 The router returns a JSON object with `routing` (file → reviewer IDs) and `workload` (reviewer ID →
@@ -298,21 +298,18 @@ Read the reviewer's checklist file, then spawn an agent with this prompt structu
 
 [List of file paths assigned to this reviewer]
 
-## Diff
-
-[git diff output for the files under review — provided by the main agent]
-
 ## Instructions: Gather Your Own Context
 
 For each file listed above, you MUST gather context yourself before reviewing:
-1. **Read the full file** with line numbers (use the Read tool)
-2. **Get git blame on changed lines**: `git blame -L <start>,<end> HEAD -- <file>` for each hunk
-3. **Get recent file history**: `git log --oneline -3 -- <file>`
+1. **Get the diff**: `git diff -U3 HEAD~1 -- <file>`
+2. **Read the full file** with line numbers (use the Read tool)
+3. **Get git blame on changed lines**: `git blame -L <start>,<end> HEAD -- <file>` for each hunk
+4. **Get recent file history**: `git log --oneline -3 -- <file>`
 
 Use blame to calibrate confidence: same author + recent commit = likely intentional. Old untouched
 code being modified = higher risk of misunderstanding context.
 
-Then review ONLY the changed lines from the diff above.
+Then review ONLY the changed lines from the diff.
 ```
 
 Spawn all applicable reviewers in a single message to maximize parallelism.
