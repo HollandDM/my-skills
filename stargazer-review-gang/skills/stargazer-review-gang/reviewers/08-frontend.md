@@ -177,6 +177,17 @@ Use a catch-all `handleCase` at the end for exhaustiveness when not all cases ar
   — use `Var.splitSeq` when child needs to write back
 - Nested `.splitSeq` creating subscriptions (see Section 2) — inner split on a `.map()` derived
   signal is fine, but `-->` bindings inside split callbacks need careful lifecycle scoping
+- `child <-- signal.map { ... => Component(isChecked = Val(derived), ...)() }` when the component
+  accepts `Signal[A]` props — pass the derived signal directly into the prop instead:
+  ```scala
+  // BAD: recreates Component DOM element on every signal emission
+  child <-- selectedSignal.map { selected =>
+    CheckboxL(isChecked = Val(selected.contains(item)), onChange = observer)()
+  }
+  // GOOD: pass derived signal directly — component handles reactivity internally
+  CheckboxL(isChecked = selectedSignal.map(_.contains(item)), onChange = observer)()
+  ```
+  This avoids unnecessary DOM element recreation and lets the component manage its own reactivity.
 
 ## 6. Stream Flattening Strategy
 
