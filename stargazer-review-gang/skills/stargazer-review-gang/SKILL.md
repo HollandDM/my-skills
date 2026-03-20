@@ -19,9 +19,9 @@ anything else before Step 1.
    `test`, `checkStyle`, `checkStyleDirty`, `reformat`, `checkUnused`, `WarnUnusedCode`, or any
    build/lint command.
 2. **YOU DO NOT READ DIFFS, SOURCE FILES, OR SUB-AGENT INSTRUCTION FILES.** Do NOT run
-   `git diff` with content output. Do NOT use the Read tool on any `.md` file in this skill.
-   You MAY run `git status`, `git log --oneline`, and `git merge-base` to determine the
-   correct base/head refs. The orchestrator and reviewers read diffs and files themselves.
+   `git diff`, `git status`, `git log`, `git merge-base`, or any git content commands.
+   Do NOT use the Read tool on any `.md` file in this skill.
+   The orchestrator determines the diff ref itself from the user's review scope.
 3. **NO STOP CONDITION FOR PR SIZE.** Handle all PRs regardless of file count or line count.
 
 ## Workflow
@@ -58,35 +58,25 @@ Do NOT run any git commands. Do NOT analyze files before asking.
 Spawn a **single agent** with this prompt (do NOT read the orchestrator file yourself).
 Use `model: "sonnet"` — the orchestrator reads all diffs and needs reliable pattern matching.
 
+**Pass the user's review scope verbatim** — do NOT interpret it into base/head refs. The
+orchestrator determines the correct git diff strategy itself.
+
 ```
 You are the routing orchestrator. Read your instructions from:
 agents/orchestrator.md (relative to this skill's directory)
 
-Then route the changes.
-Base: <base ref>
-Head: <head ref, or omit if HEAD>
+## Review Scope
+<user's exact words describing what to review, word for word>
+
+## Context
+<user-provided context from Step 1, or "None">
 ```
 
-Determine the correct base and head. You MAY run `git status` and `git log --oneline -5`
-to understand the current state before deciding:
-
-- **"review my changes"** / last commit → base: `HEAD~1`
-- **"review this PR"** / branch → base: merge base with main (`git merge-base main HEAD`), head: `HEAD`
-- **"review current changes"** / session work → This may include both commits and uncommitted
-  changes. Check `git status` for uncommitted changes and `git log --oneline` for recent commits.
-  - **Uncommitted only** (dirty working tree, no new commits) → base: `HEAD`, omit head.
-    `git diff HEAD` captures both staged and unstaged against last commit.
-  - **Commits + uncommitted** → base: SHA before the first commit in the session, omit head.
-    `git diff <base>` diffs against working tree, capturing commits AND uncommitted changes.
-  - **Commits only** (clean working tree) → base: `<earliest commit SHA>`, head: `HEAD`
-- **Multiple commits specified** → base: `<earliest commit SHA>`, head: `<latest commit SHA>`.
-  Do NOT append `~1` to the base. The orchestrator diffs `base..head` which already excludes base.
-- **User specifies files** → base: `HEAD~1`, but list the specific files
-
-The orchestrator finds changed files, reads diffs, routes, and returns JSON:
+The orchestrator determines the diff ref, finds changed files, reads diffs, routes, and returns JSON:
 
 ```json
 {
+  "diff_ref": "abc123..def456",
   "total_files": 12,
   "total_changes": 2982,
   "depth": "heavy",
@@ -94,6 +84,8 @@ The orchestrator finds changed files, reads diffs, routes, and returns JSON:
   "workload": {"1": {"changes": 850}, "2": {"changes": 3200, "split": [...]}}
 }
 ```
+
+Use the returned `diff_ref` when spawning reviewers and aggregators.
 
 **Wait for the orchestrator to complete before proceeding.**
 
@@ -160,7 +152,7 @@ Read your checklist from: [checklist file path from roster table]
 
 ## Gather Your Own Context
 For each file above:
-1. Get diff: git diff -U3 <base> -- <file>
+1. Get diff: git diff -U3 <diff_ref> -- <file>
 2. Read full file (Read tool)
 3. Blame changed lines: git blame -L <start>,<end> HEAD -- <file>
 4. Recent history: git log --oneline -3 -- <file>
@@ -188,13 +180,13 @@ For each aggregator, spawn an agent with this prompt (do NOT read the aggregator
 ```
 Read your instructions from: agents/aggregator.md (relative to this skill's directory)
 
-Base: <base ref>
+Diff ref: <diff_ref from orchestrator output>
 
 ## Findings to Aggregate
 [paste all findings from the assigned reviewer batch]
 ```
 
-Pass the base ref so the aggregator can check diffs during validation.
+Pass the `diff_ref` so the aggregator can check diffs during validation.
 
 The aggregator returns the final report. Present it to the user as-is.
 

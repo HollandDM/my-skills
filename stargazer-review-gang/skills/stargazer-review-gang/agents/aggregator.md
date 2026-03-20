@@ -9,7 +9,7 @@ reviewer agents. Your job is to **validate** each finding against the actual cod
 For every BLOCKER and SUGGESTION finding, verify it against the actual source code:
 
 1. **Read the file** at the cited line using the Read tool
-2. **Check the diff** — confirm the flagged line was actually added or modified: `git diff -U0 <base> -- <file>`
+2. **Check the diff** — confirm the flagged line was actually added or modified: `git diff -U0 <diff_ref> -- <file>`
 3. **Verdict**: CONFIRMED or FALSE_POSITIVE
 
 Rules:
