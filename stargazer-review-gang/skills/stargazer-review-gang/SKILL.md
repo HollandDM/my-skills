@@ -128,7 +128,7 @@ Use the returned `diff_ref` when spawning reviewers and aggregators.
 
 ---
 
-## Step 3: Spawn Reviewer Agents
+## Step 4: Spawn Reviewer Agents
 
 > **ROUTING IS FINAL.** Spawn exactly the reviewers the orchestrator assigned — no more, no less.
 
@@ -212,7 +212,8 @@ Spawn all reviewers in a **single message** for maximum parallelism.
 Each aggregator now **validates** BLOCKER/SUGGESTION findings against actual code before
 deduplicating. No separate validation step needed.
 
-Count reviewer agents that returned findings (sub-reviewers like 1a, 1b count separately).
+Count **all** reviewer agents that responded — including those that reported "Clean — no issues
+found" (sub-reviewers like 1a, 1b count separately). Every reviewer response counts as one output.
 
 - **≤4 outputs:** Spawn **one aggregator agent**.
 - **>4 outputs:** Split into batches of ≤4 and spawn **one aggregator per batch**. Group related
