@@ -166,75 +166,23 @@ After all reviewers complete, validate BLOCKER and SUGGESTION findings to elimin
 
 ## Step 4: Aggregate and Filter
 
-### Sub-Aggregator Scaling
+Count reviewer agents that returned findings (sub-reviewers like 1a, 1b count separately).
 
-> **MANDATORY.** Count the reviewer agents that returned findings (sub-reviewers like 1a, 1b count
-> separately). If >6, you MUST spawn sub-aggregators. Do NOT aggregate >6 outputs yourself.
+- **≤6 outputs:** Spawn **one aggregator agent**.
+- **>6 outputs:** Split into batches of ≤6 and spawn **one aggregator per batch**. Group related
+  reviewers together (e.g., FDB + ZIO + Temporal). After all aggregators complete, spawn one
+  **final aggregator** to merge their reports and do a cross-group dedup pass.
 
-- **≤6 reviewer outputs:** Aggregate directly using the filters below.
-- **>6 reviewer outputs:** Split into batches of ≤6. Group related reviewers together (e.g.,
-  FDB + ZIO + Temporal share data-correctness concerns). Spawn one sub-aggregator per batch:
+For each aggregator, spawn an agent with this prompt (do NOT read the aggregator file yourself):
 
 ```
-You are a sub-aggregator. Apply these filters to the findings below:
-1. Deduplicate same-line findings. Priority: Security > Data loss > Performance > Observability > Code quality > Testing > Style
-2. Drop confidence < 70 (keep BLOCKER 60-69 marked as borderline_requery)
-3. Drop vague findings (no line number, no concrete fix, not in diff)
+Read your instructions from: agents/aggregator.md (relative to this skill's directory)
 
-## Findings
-[paste findings from assigned reviewers]
-
-## Output
-Return JSON array: [{severity, confidence, reviewer, file, line, issue, current_code, suggested_fix, cross_references?, borderline_requery?}]
+## Findings to Aggregate
+[paste all findings from the assigned reviewer batch]
 ```
 
-After all sub-aggregators complete:
-1. Collect all surviving findings
-2. Run a **final cross-group dedup pass** (same line flagged by different batches)
-3. Handle re-queries for `borderline_requery` findings
-4. Present the report
-
-### Filters (for direct aggregation or final pass)
-
-1. **Deduplicate** same-line findings. Priority: Security > Data loss > Performance > Observability > Code quality > Testing > Style
-2. **Drop confidence < 70** (BLOCKER 60-69 → re-query once)
-3. **Drop vague** (no line, no fix, not in diff)
-4. **Re-query** borderline findings once max per reviewer
-
-### Report
-
-> **MANDATORY:** Every finding MUST include current code + suggested fix as fenced code blocks.
-
-````markdown
-# Code Review Report
-
-## Files Reviewed
-- file list with platform classification
-
-## Blockers (must fix)
-### [BLOCKER] (confidence: N) Title — `file:line`
-**Reviewer:** Name
-**Issue:** Explanation
-**Current code:**
-```scala
-// code
-```
-**Suggested fix:**
-```scala
-// fix
-```
-
-## Suggestions (should fix)
-Same format as blockers.
-
-## Nitpicks
-- **`file:line`** — description. Current: `code` → Fix: `code`
-
-## Summary
-- X blockers, Y suggestions, Z nitpicks across N reviewers
-````
-
-If 0 blockers and 0 suggestions, keep brief.
+The aggregator returns the final report. Present it to the user as-is.
 
 ---
 

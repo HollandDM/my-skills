@@ -1,0 +1,11 @@
+{
+  "name": "local-review-gang",
+  "description": "Local development marketplace for stargazer-review-gang plugin",
+  "plugins": [
+    {
+      "name": "stargazer-review-gang",
+      "source": "./..",
+      "description": "Multi-perspective code review with specialized reviewer agents for the Stargazer codebase"
+    }
+  ]
+}
