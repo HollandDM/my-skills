@@ -4,7 +4,8 @@
     "name": "HollandDM"
   },
   "metadata": {
-    "description": "Stargazer-specific skills: multi-perspective code review and adversarial claim verification"
+    "description": "Stargazer-specific skills: multi-perspective code review and adversarial claim verification",
+    "sha": "4a9bf4a0b0c7215fed6876148584656b629a2c34"
   },
   "plugins": [
     {
