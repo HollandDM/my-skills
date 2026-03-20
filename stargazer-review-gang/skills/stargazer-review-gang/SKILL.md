@@ -20,16 +20,22 @@ description: >
 
 > **CRITICAL CONSTRAINT — ROUTER IS MANDATORY FOR DEEP REVIEWS**
 > For `deep` (>500 lines) reviews, you MUST spawn the router agent (Step 2). Do NOT skip the
-> router and assign reviewers yourself. The router reads every diff for content-aware classification
-> — you cannot replicate this by glancing at file paths on large PRs. For `lite` and `standard`
-> reviews, you MAY route files yourself if the change is small enough to classify at a glance.
+> router and assign reviewers yourself. For `lite` and `standard` reviews, you MAY route files
+> yourself if the change is small enough to classify at a glance.
+
+> **CRITICAL CONSTRAINT — MAIN AGENT NEVER READS DIFFS OR FILE CONTENTS**
+> The ONLY git commands you run are `git diff --name-only` and `git diff --stat`. You NEVER run
+> `git diff -U3`, `git diff -p`, `git diff HEAD~1` (without --name-only or --stat), `git show`,
+> or any command that outputs diff content or file contents. You NEVER use the Read tool on source
+> files. The router, reviewers, and validators are sub-agents with their own tools — they read
+> diffs and files themselves. Your job is orchestration only.
 
 **Announce at start:** "I'm using the stargazer-review-gang skill to review your code."
 
 You are orchestrating a **gang of specialized code reviewers** for the Stargazer codebase. Each
 reviewer is an agent that focuses on one quality dimension. Your job is to:
 
-1. Gather diffs and ask user for change intent
+1. Get changed file list and ask user for change intent
 2. Determine review depth (lite/standard/deep) and spawn the **router agent**
 3. Spawn the right **reviewer agents** in parallel based on the router's output
 4. **Validate** blocker/suggestion findings with independent haiku agents
@@ -40,31 +46,20 @@ reviewer is an agent that focuses on one quality dimension. Your job is to:
 
 ## Step 1: Identify the Code and Gather Context
 
-### Get the diff
+### Get the changed file list
 
-Determine what changed. In order of preference:
+Determine what changed. Run these two commands only:
 
-- If the user specified files, use those
-- If the user said "my changes" or "this PR", get the diff:
-  ```bash
-  git diff --name-only HEAD~1   # last commit
-  git diff --name-only          # unstaged changes
-  git diff --name-only --cached # staged changes
-  ```
-- If unclear, ask the user
+```bash
+git diff --name-only HEAD~1    # file paths
+git diff --stat HEAD~1         # line count summary
+```
 
-### Stay lightweight — delegate reads to sub-agents
+Adjust for unstaged (`git diff --name-only`) or staged (`git diff --name-only --cached`) as needed.
+If the user specified files, use those instead. If unclear, ask the user.
 
-The main agent only needs the **list of changed file paths** and the **total changed line count**
-(for determining review depth). Do NOT run `git diff -U3`, `git diff -p`, or any command that
-outputs diff content. You do not need diffs — sub-agents read them.
-
-1. **Get changed file paths**: `git diff --name-only HEAD~1` (or unstaged/staged as appropriate)
-2. **Get total changed line count**: `git diff --stat HEAD~1` (for depth calculation)
-
-**Stop. That is all you read.** The router, reviewers, and validators each gather their own diffs,
-full files, and git blame in parallel. Do NOT read diffs "to pass to the router" — the router runs
-`git diff` itself.
+These two commands are the ONLY git commands you run in the entire workflow. Everything else
+(reading diffs, file contents, git blame) is done by sub-agents. You are an orchestrator.
 
 ### The Diff-Bound Rule
 
@@ -116,7 +111,7 @@ domain intent.
 
 ### Determine Review Depth
 
-After gathering diffs, count **total changed lines** (additions + deletions across all files).
+From `git diff --stat`, count **total changed lines** (additions + deletions across all files).
 This determines the **depth level**, which controls the model strength for each reviewer:
 
 | Total changed lines | Depth | Reviewer model override | Rationale |
@@ -144,22 +139,21 @@ When spawning reviewer agents in Step 3, use the `model` parameter on the Agent 
 > For `lite` and `standard` reviews, you MAY route files yourself without spawning the router,
 > since the change is small enough to classify at a glance.
 
-Spawn the **router agent** (haiku model) to decide which reviewers each file needs. The router
-reads diffs itself — do NOT read or pass diffs to it. Only pass the file paths.
-
-Read `reviewers/00-router.md` for the router's full instructions. Spawn a **single haiku agent**
-with this prompt:
+Spawn a **single haiku agent** with the contents of `reviewers/00-router.md` as its prompt,
+followed by the file list. The router reads diffs itself — you only pass file paths.
 
 ```
-[Full contents of reviewers/00-router.md]
+[Contents of reviewers/00-router.md]
 
 ---
 
 ## Files to Route
 
-[List of changed file paths ONLY — one per line. Do NOT include diffs here. The router runs
-git diff on each file itself.]
+[List of changed file paths ONLY — one per line]
 ```
+
+**You pass NOTHING else to the router.** No diffs, no file contents, no blame. The router has
+Bash and Read tools and gathers what it needs.
 
 The router returns a JSON object with `routing` (file → reviewer IDs) and `workload` (reviewer ID →
 line count + optional split info):
@@ -234,8 +228,8 @@ Each reviewer has a dedicated checklist in the `reviewers/` directory relative t
 
 ### How to Spawn Each Reviewer
 
-For each reviewer ID present in the router's output, collect all files assigned to that reviewer.
-Read the reviewer's checklist file, then spawn an agent with this prompt structure:
+For each reviewer ID in the router's output, collect the file paths assigned to it.
+Spawn an agent with the reviewer's checklist file contents and the file list:
 
 ```
 [Contents of the reviewer's checklist file]
@@ -244,7 +238,7 @@ Read the reviewer's checklist file, then spawn an agent with this prompt structu
 
 ## Review Rules
 
-1. **Diff-bound**: Only flag issues on lines added or modified in the diff below. Do NOT critique
+1. **Diff-bound**: Only flag issues on lines added or modified in the diff. Do NOT critique
    pre-existing code the author didn't touch. If pre-existing code has a genuine safety issue,
    mention it as a [NOTE] only.
 
