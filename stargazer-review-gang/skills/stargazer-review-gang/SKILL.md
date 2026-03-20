@@ -19,8 +19,9 @@ description: >
 1. **NO BUILD COMMANDS.** You and all sub-agents are FORBIDDEN from running `./mill`, `compile`,
    `test`, `checkStyle`, `checkStyleDirty`, `reformat`, `checkUnused`, `WarnUnusedCode`, or any
    build/lint command.
-2. **YOU DO NOT READ DIFFS OR SOURCE FILES.** You get file list from `git diff --name-only` and
-   line count from `git diff --stat`. The routing orchestrator and reviewers read diffs themselves.
+2. **YOU DO NOT READ DIFFS, SOURCE FILES, OR SUB-AGENT INSTRUCTION FILES.** You get file list
+   from `git diff --name-only` and line count from `git diff --stat`. Sub-agents read their own
+   instructions, diffs, and files. Do NOT use the Read tool on any `.md` file in this skill.
 3. **NO STOP CONDITION FOR PR SIZE.** Handle all PRs regardless of file count or line count.
 
 ## Workflow
@@ -69,25 +70,21 @@ Do NOT add extra options. Do NOT analyze or categorize files before asking.
 
 ## Step 2: Spawn Routing Orchestrator
 
-Read `agents/orchestrator.md` and spawn a **single haiku agent** with its contents, followed by
-the file list and base ref. Pass NOTHING else — no diffs, no file contents.
+Spawn a **single haiku agent** with this prompt (do NOT read the orchestrator file yourself):
 
 ```
-[Contents of agents/orchestrator.md]
+You are the routing orchestrator. Read your instructions from:
+agents/orchestrator.md (relative to this skill's directory)
 
----
-
-## Base
-
-<base ref, e.g. HEAD~1>
-
-## Files to Route
+Then route these files (base: HEAD~1):
 
 [file paths from git diff --name-only, one per line]
 ```
 
-The orchestrator reads diffs itself, routes files, tracks workload, and returns JSON:
+That's it. The orchestrator reads its own instructions, reads diffs, and returns JSON.
+Do NOT read `agents/orchestrator.md` yourself. Do NOT read any diffs.
 
+**Wait for the orchestrator to complete.** It returns:
 ```json
 {
   "total_files": 12,
@@ -96,8 +93,6 @@ The orchestrator reads diffs itself, routes files, tracks workload, and returns 
   "workload": {"1": {"lines": 850}, "2": {"lines": 3200, "split": [...]}}
 }
 ```
-
-**Wait for the orchestrator to complete before proceeding.**
 
 ---
 
@@ -138,10 +133,10 @@ From `workload`:
 
 ### Reviewer Prompt Template
 
-For each reviewer, read its checklist file and spawn an agent with:
+For each reviewer, spawn an agent with this prompt (do NOT read checklist files yourself):
 
 ```
-[Contents of the reviewer's checklist file]
+Read your checklist from: [checklist file path from roster table]
 
 ---
 
