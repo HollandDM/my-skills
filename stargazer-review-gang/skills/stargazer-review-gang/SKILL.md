@@ -130,9 +130,9 @@ From `workload`:
 | 6 | Temporal | `reviewers/06-temporal.md` | standard |
 | 7 | Tapir | `reviewers/07-tapir-endpoints.md` | standard |
 | 8 | Frontend | `reviewers/08-frontend.md` | standard |
-| 9 | scalajs-react | `reviewers/11-react.md` | standard |
-| 10 | Observability | `reviewers/12-observability.md` | haiku |
-| 11 | Testing | `reviewers/13-testing.md` | standard |
+| 9 | scalajs-react | `reviewers/09-react.md` | standard |
+| 10 | Observability | `reviewers/10-observability.md` | haiku |
+| 11 | Testing | `reviewers/11-testing.md` | standard |
 
 ### Reviewer Prompt Template
 
