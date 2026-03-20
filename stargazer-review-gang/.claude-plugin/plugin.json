@@ -1,0 +1,5 @@
+{
+  "name": "stargazer-review-gang",
+  "description": "Multi-perspective code review with 15 specialized reviewer agents for the Stargazer codebase",
+  "version": "1.0.0"
+}

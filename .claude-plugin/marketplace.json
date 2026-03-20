@@ -1,0 +1,31 @@
+{
+  "name": "HollandDM-Skills",
+  "owner": {
+    "name": "HollandDM"
+  },
+  "metadata": {
+    "description": "Stargazer-specific skills: multi-perspective code review and adversarial claim verification"
+  },
+  "plugins": [
+    {
+      "name": "stargazer-review-gang",
+      "source": "./stargazer-review-gang",
+      "description": "Multi-perspective code review with 15 specialized reviewer agents for the Stargazer codebase",
+      "version": "1.0.0",
+      "author": {
+        "name": "HollandDM"
+      },
+      "keywords": ["code-review", "scala", "zio", "stargazer"]
+    },
+    {
+      "name": "prove",
+      "source": "./prove",
+      "description": "Adversarial verification skill: prover vs disprover agents argue, then a judge synthesizes a verdict",
+      "version": "1.0.0",
+      "author": {
+        "name": "HollandDM"
+      },
+      "keywords": ["verification", "adversarial", "reasoning"]
+    }
+  ]
+}

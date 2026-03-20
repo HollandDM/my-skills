@@ -40,12 +40,10 @@ Adversarial verification skill. Spawns prover and disprover agents that argue fr
 
 ## Installation
 
-Add to your Claude Code settings (`~/.claude/settings.json`):
+Add the marketplace, then install individual plugins:
 
-```json
-{
-  "skills": [
-    "git@github.com:HollandDM/my-skills.git"
-  ]
-}
+```
+/plugin marketplace add git@github.com:HollandDM/my-skills.git
+/plugin install stargazer-review-gang@HollandDM-Skills
+/plugin install prove@HollandDM-Skills
 ```
