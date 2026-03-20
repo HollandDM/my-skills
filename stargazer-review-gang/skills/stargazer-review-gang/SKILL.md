@@ -29,9 +29,8 @@ anything else before Step 1.
 1. Ask user for context
 2. Spawn **routing orchestrator** → get back file list, depth, and routing plan (JSON)
 3. Spawn **reviewer agents** in parallel based on routing plan
-4. **Validate** blocker/suggestion findings
-5. **Aggregate** and present report
-6. Offer **auto-fix**
+4. **Aggregate** (validates + deduplicates + filters) and present report
+5. Offer **auto-fix**
 
 ---
 
@@ -172,22 +171,15 @@ Spawn all reviewers in a **single message** for maximum parallelism.
 
 ---
 
-## Step 3.5: Validate Findings
+## Step 4: Aggregate, Validate, and Filter
 
-After all reviewers complete, validate BLOCKER and SUGGESTION findings to eliminate false positives.
-
-- **Skip if**: only nitpicks, or depth is `lite`.
-- Spawn **haiku validation agents** per file — they read code fresh and return CONFIRMED or FALSE_POSITIVE.
-- Drop FALSE_POSITIVE. Keep CONFIRMED. Fail-open on validator errors.
-
----
-
-## Step 4: Aggregate and Filter
+Each aggregator now **validates** BLOCKER/SUGGESTION findings against actual code before
+deduplicating. No separate validation step needed.
 
 Count reviewer agents that returned findings (sub-reviewers like 1a, 1b count separately).
 
-- **≤6 outputs:** Spawn **one aggregator agent**.
-- **>6 outputs:** Split into batches of ≤6 and spawn **one aggregator per batch**. Group related
+- **≤4 outputs:** Spawn **one aggregator agent**.
+- **>4 outputs:** Split into batches of ≤4 and spawn **one aggregator per batch**. Group related
   reviewers together (e.g., FDB + ZIO + Temporal). After all aggregators complete, spawn one
   **final aggregator** to merge their reports and do a cross-group dedup pass.
 
@@ -196,9 +188,13 @@ For each aggregator, spawn an agent with this prompt (do NOT read the aggregator
 ```
 Read your instructions from: agents/aggregator.md (relative to this skill's directory)
 
+Base: <base ref>
+
 ## Findings to Aggregate
 [paste all findings from the assigned reviewer batch]
 ```
+
+Pass the base ref so the aggregator can check diffs during validation.
 
 The aggregator returns the final report. Present it to the user as-is.
 

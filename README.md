@@ -27,7 +27,7 @@ Multi-perspective code review swarm. A fast router agent reads each file's diff 
 - Content-aware routing — a fast router agent reads diffs and spawns only relevant reviewers
 - Adaptive depth — model strength scales with PR size (lite=haiku, standard=default, deep=opus)
 - Confidence scoring — every finding self-assessed 0–100, filtered at threshold 70
-- Validation layer — independent haiku agents verify each blocker/suggestion against actual code
+- Built-in validation — aggregators verify each blocker/suggestion against actual code before reporting
 - Git blame context — authorship and recency data for smarter false positive filtering
 - Change context — optional user-provided intent ("refactor", "bugfix") shapes reviewer focus
 - Explicit false positive categories — concrete negative constraints reduce noise
