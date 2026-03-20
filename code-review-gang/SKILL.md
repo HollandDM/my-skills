@@ -16,8 +16,8 @@ You are orchestrating a **gang of specialized code reviewers** for the Stargazer
 reviewer is an agent that focuses on one quality dimension. Your job is to:
 
 1. Figure out what code needs reviewing and gather context
-2. Classify it as frontend, backend, or shared
-3. Spawn the right reviewers in parallel
+2. Spawn the **router agent** to classify each file and decide which reviewers to run
+3. Spawn the right reviewers in parallel based on the router's output
 4. Aggregate, deduplicate, and filter their findings into one actionable report
 
 ---
@@ -67,51 +67,40 @@ genuinely dangerous (security hole, data loss risk), mention it as a `[NOTE]` bu
 
 ---
 
-## Step 2: Classify Code by Platform
+## Step 2: Route Files to Reviewers
 
-Look at each file's path to determine its platform:
+Spawn the **router agent** to decide which reviewers each file needs. The router is a fast, lean
+agent (haiku model) that reads each file's diff and classifies it based on actual content — not
+just file path.
 
-| Path contains | Platform | Example |
-|---|---|---|
-| `/js/` | **Frontend** | `modules/fundsub/fundsub/js/src/...` |
-| `/jvm/` | **Backend** | `modules/fundsub/fundsub/jvm/src/...` |
-| `/shared/` | **Shared** | `modules/fundsub/fundsub/shared/src/...` |
-| `.proto` files | **Backend** | Protobuf definitions are consumed by backend codegen |
-| `build.mill`, `package.mill` | **Build** | Build config review only |
+Read `reviewers/00-router.md` for the router's instructions, then spawn it with:
 
-Compute flags: `hasFrontend`, `hasBackend`, `hasShared`, `hasBuild`.
+```
+[Contents of reviewers/00-router.md]
 
-### Shared Code Routing
+---
 
-Shared code (`/shared/`) contains models, DTOs, and endpoint definitions used by both platforms.
-Route shared code to reviewers based on file content:
+## Files to Route
 
-- **Scala files** (models, DTOs, codecs): Spawn always-on reviewers (1a–4) + serialization (4).
-  Also spawn backend reviewers if the file imports backend types (`FDB*`, `Temporal*`, `ZStream`),
-  or frontend reviewers if it imports frontend types (`Laminar`, `Airstream`, `scalajs`).
-- **Protobuf files** (`.proto`): Spawn only serialization (4) and architecture (3) reviewers.
-  Backend FDB reviewers (5a, 5b) if the proto file is in an FDB store's directory.
+[For each changed file: file path + its unified diff]
+```
 
-When in doubt, spawn both backend and frontend reviewers for shared Scala files — the reviewers
-will self-report "nothing to review" if their domain isn't present.
+The router returns a JSON mapping of file → reviewer IDs. Wait for it to complete before
+proceeding to Step 3.
 
 ---
 
 ## Step 3: Spawn Reviewer Agents
 
-Spawn all applicable reviewers **in parallel** using the Agent tool. For each reviewer:
-1. Read the reviewer's checklist file from `reviewers/`
-2. Pass the checklist along with both the **diff** and **full file contents**
-3. Include the diff-bound rule and output format instructions
-
-### Reviewer Roster
+Using the router's output, determine the **union of all reviewer IDs** across all files. For each
+unique reviewer ID, spawn one reviewer agent that reviews **all files assigned to it**.
 
 Each reviewer has a dedicated checklist in the `reviewers/` directory relative to this skill.
 
-#### Always-On Reviewers (spawn for ALL code)
+### Reviewer Roster
 
-| # | Reviewer | Checklist file | Model | Focus |
-|---|----------|---------------|-------|-------|
+| ID | Reviewer | Checklist file | Model | Focus |
+|----|----------|---------------|-------|-------|
 | 1a | Scala Style & Formatting | `reviewers/01a-scala-style.md` | **haiku** | Banned syntax, formatting, naming, imports (mechanical) |
 | 1b | Scala 3 Code Quality | `reviewers/01b-scala-code.md` | **standard** | Scala 3 idioms, service patterns, error design (semantic) |
 | 2a | ZIO & Async Patterns | `reviewers/02-zio-async.md` | standard | Effects, error handling, retry, resources |
@@ -119,20 +108,10 @@ Each reviewer has a dedicated checklist in the `reviewers/` directory relative t
 | 2c | ZIO Performance | `reviewers/02c-zio-performance.md` | standard | Blocking, parallelism, Ref, caching, fibers |
 | 3 | Architecture & Boundaries | `reviewers/03-architecture.md` | **haiku** | Module deps, layer violations, code placement (lightweight) |
 | 4 | Serialization & Codecs | `reviewers/04-serialization.md` | **haiku** | Custom codec detection, runtime-breaking codec issues |
-
-#### Backend-Only Reviewers (spawn when `hasBackend || hasShared`)
-
-| # | Reviewer | Checklist file | Model | Focus |
-|---|----------|---------------|-------|-------|
 | 5a | FDB Coding Patterns | `reviewers/05a-fdb-coding.md` | standard | Store providers, operations, IDs, transaction types, RecordIO |
 | 5b | FDB Performance | `reviewers/05b-fdb-performance.md` | standard | N+1 queries, unbounded scans, tx splitting, timeout risks |
 | 6 | Temporal Workflows | `reviewers/06-temporal.md` | standard | Activity attributes, CDC, async endpoints, batch actions, pattern selection |
 | 7 | Tapir Server Security | `reviewers/07-tapir-security.md` | standard | Unconventional server patterns, auth bypass, handler selection |
-
-#### Frontend-Only Reviewers (spawn when `hasFrontend || hasShared`)
-
-| # | Reviewer | Checklist file | Model | Focus |
-|---|----------|---------------|-------|-------|
 | 8 | Tapir Client Patterns | `reviewers/08-tapir-client.md` | standard | Unconventional client patterns, base class bypass, error/loading gaps |
 | 9 | Laminar & Airstream | `reviewers/09-laminar-airstream.md` | standard | Framework choice, split operators, stream flattening, memory leaks, reactivity |
 | 10 | UI & Styling | `reviewers/10-ui-styling.md` | **haiku** | Tailwind DSL, design system components, layout |
@@ -140,7 +119,8 @@ Each reviewer has a dedicated checklist in the `reviewers/` directory relative t
 
 ### How to Spawn Each Reviewer
 
-For each applicable reviewer, read its checklist file, then spawn an agent with this prompt structure:
+For each reviewer ID present in the router's output, collect all files assigned to that reviewer.
+Read the reviewer's checklist file, then spawn an agent with this prompt structure:
 
 ```
 [Contents of the reviewer's checklist file]
@@ -246,11 +226,11 @@ If any reviewer flagged dangerous pre-existing patterns (not in the diff):
 
 ## Build-Only Changes
 
-If only build files changed (`build.mill`, `package.mill`, `dependency.mill`), spawn only:
-- **Architecture & Module Boundaries reviewer (03)** — check dependency direction, `moduleDeps` changes, circular dependency introduction
-- **Serialization & Codecs reviewer (04)** — if protobuf plugin config or codec dependencies changed
+The router agent handles build files — it will route `build.mill`, `package.mill`, and
+`dependency.mill` to only the architecture reviewer (3). If the build file changes protobuf
+plugin config or codec dependencies, the router may also include the serialization reviewer (4).
 
-Skip all other reviewers. The architecture reviewer should additionally check:
+The architecture reviewer should additionally check for build-only changes:
 - Whether new `moduleDeps` match actual imports in the code
 - Whether dependency versions are consistent with other modules
 - Whether any new external dependencies are justified (not duplicating existing functionality)
