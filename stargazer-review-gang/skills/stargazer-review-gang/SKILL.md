@@ -37,20 +37,22 @@ anything else before Step 1.
 
 ## Step 1: Ask for Context
 
-Present **exactly this prompt** as your first action (do NOT add or modify options):
+Use the **AskUserQuestion** tool as your first action (do NOT run any git commands or analyze
+files before this):
 
-> "I'm about to review your latest changes. Want to add context first?
->
-> 1. **Skip** — start reviewing now
-> 2. **Add context** — tell me what these changes are about
->
-> Reply 1 or 2 (or type context directly):"
+```
+question: "I'm about to review your latest changes. Want to add context first?"
+header: "Context"
+options:
+  - label: "Skip"
+    description: "Start reviewing now without additional context"
+  - label: "Add context"
+    description: "Tell me what these changes are about before I start"
+```
 
-Do NOT run any git commands. Do NOT analyze files before asking.
-
-- **User replies 1:** Proceed to Step 2.
-- **User replies 2:** Stop and wait for context. Then proceed to Step 2.
-- **User types context:** Use it and proceed to Step 2.
+- **User selects "Skip":** Proceed to Step 2.
+- **User selects "Add context":** Stop and wait for their context. Then proceed to Step 2.
+- **User selects "Other" and types context:** Use it and proceed to Step 2.
 
 ---
 
@@ -128,7 +130,7 @@ Use the returned `diff_ref` when spawning reviewers and aggregators.
 
 ---
 
-## Step 3: Spawn Reviewer Agents
+## Step 4: Spawn Reviewer Agents
 
 > **ROUTING IS FINAL.** Spawn exactly the reviewers the orchestrator assigned — no more, no less.
 
@@ -212,7 +214,8 @@ Spawn all reviewers in a **single message** for maximum parallelism.
 Each aggregator now **validates** BLOCKER/SUGGESTION findings against actual code before
 deduplicating. No separate validation step needed.
 
-Count reviewer agents that returned findings (sub-reviewers like 1a, 1b count separately).
+Count **all** reviewer agents that responded — including those that reported "Clean — no issues
+found" (sub-reviewers like 1a, 1b count separately). Every reviewer response counts as one output.
 
 - **≤4 outputs:** Spawn **one aggregator agent**.
 - **>4 outputs:** Split into batches of ≤4 and spawn **one aggregator per batch**. Group related
@@ -243,10 +246,19 @@ The aggregator returns the final report. Present it to the user as-is.
 
 ## Step 6: Auto-Fix
 
-Offer if blockers or suggestions exist:
-1. **Fix all**
-2. **Fix blockers only**
-3. **Skip**
+If only nitpicks, skip this step entirely. Otherwise, use the **AskUserQuestion** tool:
 
-If only nitpicks, do not offer. Apply fixes file-by-file, blockers first.
+```
+question: "Would you like me to auto-fix the findings?"
+header: "Auto-fix"
+options:
+  - label: "Fix all"
+    description: "Apply fixes for all blockers and suggestions"
+  - label: "Fix blockers only"
+    description: "Apply fixes for blockers, skip suggestions"
+  - label: "Skip"
+    description: "Do not apply any fixes"
+```
+
+Apply fixes file-by-file, blockers first.
 After fixing, tell user to run `checkStyleDirty` on affected modules.
