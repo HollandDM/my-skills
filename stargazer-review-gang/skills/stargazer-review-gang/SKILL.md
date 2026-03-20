@@ -23,10 +23,14 @@ description: >
 > router and assign reviewers yourself. For `lite` and `standard` reviews, you MAY route files
 > yourself if the change is small enough to classify at a glance.
 
-> **CRITICAL CONSTRAINT — MAIN AGENT STAYS LEAN**
-> Run `scripts/review-init.py` once to get file list and metadata. Do NOT run `git diff`, `git show`,
-> or read source files UNLESS `spawn_router` is `false` and you need diffs for routing decisions.
-> When `spawn_router` is `true`, the router agent gathers its own diffs — you pass only file paths.
+> **CRITICAL CONSTRAINT — USE THE INIT SCRIPT, NOT GIT COMMANDS**
+> Your FIRST action must be running the init script. Do NOT run `git diff`, `git diff --name-only`,
+> `git diff --stat`, or any git command to gather changes. The script does all of that for you.
+> ```
+> python3 ${CLAUDE_PLUGIN_ROOT}/skills/stargazer-review-gang/scripts/review-init.py
+> ```
+> After the script, you may read diffs ONLY if `spawn_router` is `false` (for routing).
+> When `spawn_router` is `true`, pass only file paths to the router — it gathers its own diffs.
 > Reviewers and validators always gather their own diffs, files, and blame. Never read code for them.
 
 **Announce at start:** "I'm using the stargazer-review-gang skill to review your code."
@@ -34,7 +38,7 @@ description: >
 You are orchestrating a **gang of specialized code reviewers** for the Stargazer codebase. Each
 reviewer is an agent that focuses on one quality dimension. Your job is to:
 
-1. Get changed file list and ask user for change intent
+1. Run the init script and ask user for change intent
 2. Determine review depth (lite/standard/deep) and spawn the **router agent**
 3. Spawn the right **reviewer agents** in parallel based on the router's output
 4. **Validate** blocker/suggestion findings with independent haiku agents
@@ -47,15 +51,15 @@ reviewer is an agent that focuses on one quality dimension. Your job is to:
 
 ### Run the init script
 
-Run the init script to get file list, line counts, depth, and routing decisions:
+Run the init script as your **first and only** action to gather context:
 
 ```bash
-python3 scripts/review-init.py           # default: diff against HEAD~1
-python3 scripts/review-init.py HEAD~3    # or specify a custom base
-python3 scripts/review-init.py main      # or diff against a branch
+python3 ${CLAUDE_PLUGIN_ROOT}/skills/stargazer-review-gang/scripts/review-init.py           # default: diff against HEAD~1
+python3 ${CLAUDE_PLUGIN_ROOT}/skills/stargazer-review-gang/scripts/review-init.py HEAD~3    # custom base
+python3 ${CLAUDE_PLUGIN_ROOT}/skills/stargazer-review-gang/scripts/review-init.py main      # diff against branch
 ```
 
-The script path is relative to this skill's directory. The script outputs JSON:
+The script outputs JSON:
 
 ```json
 {
@@ -98,14 +102,16 @@ as a `[NITPICK]`, not a `[BLOCKER]` or `[SUGGESTION]`. Uncertainty is not ground
 
 ### Ask for Change Context
 
-Before proceeding, **ask the user** for optional context about the changes:
+Present the script output summary and ask **exactly this prompt** (do NOT add or modify options):
 
-> "I found N changed files. Want to add context before I review?
+> "Found N files, M lines. Depth: [lite/standard/deep].
 >
 > 1. **Skip** — start reviewing now
-> 2. **Add context** — tell me what these changes are about (e.g., refactor, bugfix, new feature)
+> 2. **Add context** — tell me what these changes are about
 >
-> Reply 1 or 2 (or just type your context directly):"
+> Reply 1 or 2 (or type context directly):"
+
+Do NOT add extra options. Do NOT analyze or categorize files before asking.
 
 - **User replies 1 or skips:** Proceed immediately without context.
 - **User replies 2:** **Stop and wait.** Do NOT proceed until the user provides their context in a
