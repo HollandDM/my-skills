@@ -27,10 +27,11 @@ anything else before Step 1.
 ## Workflow
 
 1. Ask user for context
-2. Spawn **routing orchestrator** → get back file list, depth, and routing plan (JSON)
-3. Spawn **reviewer agents** in parallel based on routing plan
-4. **Aggregate** (validates + deduplicates + filters) and present report
-5. Offer **auto-fix**
+2. **Discover tools** — scan available plugins for tools reviewers can use (e.g. LSP for Scala)
+3. Spawn **routing orchestrator** → get back file list, depth, and routing plan (JSON)
+4. Spawn **reviewer agents** in parallel based on routing plan
+5. **Aggregate** (validates + deduplicates + filters) and present report
+6. Offer **auto-fix**
 
 ---
 
@@ -48,12 +49,45 @@ Present **exactly this prompt** as your first action (do NOT add or modify optio
 Do NOT run any git commands. Do NOT analyze files before asking.
 
 - **User replies 1:** Proceed to Step 2.
-- **User replies 2:** Stop and wait for context. Then proceed.
-- **User types context:** Use it and proceed.
+- **User replies 2:** Stop and wait for context. Then proceed to Step 2.
+- **User types context:** Use it and proceed to Step 2.
 
 ---
 
-## Step 2: Spawn Routing Orchestrator
+## Step 2: Discover Available Tools
+
+Before spawning sub-agents, scan available plugins/skills for tools that reviewers can leverage
+(e.g. an LSP server with Scala support for go-to-definition, find-references, type info).
+
+### Discovery Process
+
+1. **Read the root marketplace file** at `../../.claude-plugin/marketplace.json` (relative to this
+   skill's directory) to get the list of installed plugins.
+2. **For each plugin**, read its `plugin.json` (at `<source>/.claude-plugin/plugin.json`) and look
+   for a `tools` array. Each tool entry should have at minimum `name` and `description`.
+3. **Filter for relevant tools**: keep tools whose `keywords` or `description` mention any of:
+   `lsp`, `language-server`, `scala`, `metals`, `goto-definition`, `find-references`, `type-info`,
+   `diagnostics`, `completions`.
+4. **Build a tool manifest** — a JSON array of discovered tools:
+
+```json
+[
+  {
+    "plugin": "<plugin name>",
+    "tool": "<tool name>",
+    "description": "<what the tool does>",
+    "capabilities": ["<matched keywords>"]
+  }
+]
+```
+
+5. If **no tools are found**, set the manifest to `[]` and proceed — tool availability is optional.
+
+Store the manifest as `discovered_tools` for use in subsequent steps.
+
+---
+
+## Step 3: Spawn Routing Orchestrator
 
 Spawn a **single agent** with this prompt (do NOT read the orchestrator file yourself).
 Use `model: "sonnet"` — the orchestrator interprets the review scope, determines diff refs, reads all diffs, and routes files.
@@ -70,6 +104,9 @@ agents/orchestrator.md (relative to this skill's directory)
 
 ## Context
 <user-provided context from Step 1, or "None">
+
+## Available Tools
+<discovered_tools JSON from Step 2, or "[]" if none found>
 ```
 
 The orchestrator determines the diff ref, finds changed files, reads diffs, routes, and returns JSON:
@@ -150,12 +187,19 @@ Read your checklist from: [checklist file path from roster table]
 ## Your Files
 [file paths assigned to this reviewer]
 
+## Available Tools
+<discovered_tools JSON from Step 2, or "[]" if none found>
+If tools are available, use them to enrich your review (e.g. LSP for type checking,
+go-to-definition, find-references). Tools are optional — proceed without them if empty.
+
 ## Gather Your Own Context
 For each file above:
 1. Get diff: git diff -U3 <diff_ref> -- <file>
 2. Read full file (Read tool)
 3. Blame changed lines: git blame -L <start>,<end> HEAD -- <file>
 4. Recent history: git log --oneline -3 -- <file>
+5. If LSP or similar tools are available: use them for type info, references, or diagnostics
+   on changed lines to strengthen your findings.
 Then review ONLY changed lines.
 ```
 
@@ -163,7 +207,7 @@ Spawn all reviewers in a **single message** for maximum parallelism.
 
 ---
 
-## Step 4: Aggregate, Validate, and Filter
+## Step 5: Aggregate, Validate, and Filter
 
 Each aggregator now **validates** BLOCKER/SUGGESTION findings against actual code before
 deduplicating. No separate validation step needed.
@@ -197,7 +241,7 @@ The aggregator returns the final report. Present it to the user as-is.
 
 ---
 
-## Step 5: Auto-Fix
+## Step 6: Auto-Fix
 
 Offer if blockers or suggestions exist:
 1. **Fix all**
