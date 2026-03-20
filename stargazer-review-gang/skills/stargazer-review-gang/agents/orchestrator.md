@@ -56,7 +56,7 @@ a JSON routing plan.
 ## Workload Splitting
 
 If a reviewer's total +/- exceeds **2000**, split into sub-reviewers:
-- Target **2000–3000 +/- per sub-reviewer**: `min(ceil(total / 2500), 5)`
+- Target **2000–3000 +/- per sub-reviewer**: `ceil(total / 2500)`
 - Divide the reviewer's checklist sections into equal groups across sub-reviewers
 - Each sub-reviewer gets a label like `"2a"`, `"2b"` with a `focus` field
 
