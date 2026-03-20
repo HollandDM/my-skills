@@ -15,15 +15,16 @@ a JSON routing plan.
 ## Process
 
 1. Run `git diff --name-only <base>` to get the list of changed files.
-2. Run `git diff --stat <base>` to get total +/- (insertions + deletions). Calculate depth:
+2. For each file, run `git diff -U3 <base> -- <file>` to read the diff.
+3. Examine the diff content for imports, types, and patterns to decide which reviewers apply.
+4. Count **+/- per file**: count lines starting with `+` (excluding `+++`) as additions, lines
+   starting with `-` (excluding `---`) as deletions. The file's +/- = additions + deletions.
+5. Sum all file +/- to get `total_changes`. Calculate depth:
    - ≤100 +/- → `lite`
    - 101–2000 +/- → `medium`
    - >2000 +/- → `heavy`
-3. For each file, run `git diff -U3 <base> -- <file>` to read the diff.
-4. Examine the diff content for imports, types, and patterns to decide which reviewers apply.
-5. Count +/- (additions + deletions) per file from the diff.
 6. Sum +/- per reviewer across all assigned files.
-7. If a reviewer's total exceeds 2000 +/-, split into sub-reviewers.
+7. If a reviewer's total exceeds 4000 +/-, split into sub-reviewers.
 
 ## Reviewer Reference
 
