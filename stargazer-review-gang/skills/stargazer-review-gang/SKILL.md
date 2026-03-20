@@ -96,14 +96,21 @@ as a `[NITPICK]`, not a `[BLOCKER]` or `[SUGGESTION]`. Uncertainty is not ground
 
 Before proceeding, **ask the user** for optional context about the changes:
 
-> "I found N changed files. Before I start the review, any context you'd like to share?
-> (e.g., 'this is a refactor', 'fixing a bug in subscription flow', 'new FDB store for X')
+> "I found N changed files. Want to add context before I review?
 >
-> Press Enter to skip, or type a brief description."
+> 1. **Skip** — start reviewing now
+> 2. **Add context** — tell me what these changes are about (e.g., refactor, bugfix, new feature)
+>
+> Reply 1 or 2 (or just type your context directly):"
 
-**If the user provides context**, include it in every reviewer's prompt as a `## Change Context`
-section (see Step 3) — helps reviewers skip false flags on refactors, focus on correctness for bugfixes,
-and understand domain intent. **If the user skips**, proceed without it.
+- **User replies 1 or skips:** Proceed immediately without context.
+- **User replies 2:** **Stop and wait.** Do NOT proceed until the user provides their context in a
+  follow-up message. Once received, continue from Step 2.
+- **User types context directly:** Use it and proceed.
+
+Include user-provided context in every reviewer's prompt as a `## Change Context` section (see Step 3)
+— helps reviewers skip false flags on refactors, focus on correctness for bugfixes, and understand
+domain intent.
 
 ### Stop Conditions
 
