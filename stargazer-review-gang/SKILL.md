@@ -12,6 +12,8 @@ description: >
 
 # Stargazer Review Gang
 
+**Announce at start:** "I'm using the stargazer-review-gang skill to review your code."
+
 You are orchestrating a **gang of specialized code reviewers** for the Stargazer codebase. Each
 reviewer is an agent that focuses on one quality dimension. Your job is to:
 
@@ -19,6 +21,7 @@ reviewer is an agent that focuses on one quality dimension. Your job is to:
 2. Spawn the **router agent** to classify each file and decide which reviewers to run
 3. Spawn the right reviewers in parallel based on the router's output
 4. Aggregate, deduplicate, and filter their findings into one actionable report
+5. Offer to **auto-fix** blockers and suggestions
 
 ---
 
@@ -51,6 +54,15 @@ only to reviewers — the router only needs diffs to classify files.
 Instruct every reviewer: **only flag issues on lines that were added or modified in the diff.**
 Do not critique pre-existing code that the author didn't touch. If a pre-existing pattern is
 genuinely dangerous (security hole, data loss risk), mention it as a `[NOTE]` but not as a blocker.
+
+### Stop Conditions
+
+**Stop and ask the user** instead of proceeding when:
+- **Too many files (>20)** — ask which files to prioritize, or whether to review all
+- **No diff found** — no unstaged, staged, or committed changes to review
+- **Unclear scope** — user said "review my changes" but there are changes across unrelated branches
+- **Non-Scala files only** — if all changed files are config, docs, or non-code, skip the gang and
+  review manually (the reviewers are Scala-specific)
 
 ---
 
@@ -154,6 +166,15 @@ Read the reviewer's checklist file, then spawn an agent with this prompt structu
 
 Spawn all applicable reviewers in a single message to maximize parallelism.
 
+### Progress Updates
+
+Keep the user informed as the review progresses:
+
+1. After Step 1: **"Found N changed files. Sending to router..."**
+2. After Step 2: **"Router assigned N reviewers. Spawning: [list of reviewer names]..."**
+3. As reviewers complete: **"N/M reviewers done."** (update at natural milestones, not every single one)
+4. After all complete: **"All reviewers done. Aggregating findings..."**
+
 ---
 
 ## Step 4: Aggregate and Filter
@@ -184,7 +205,23 @@ Remove any finding that:
 - Has no concrete fix (just says "consider" or "be careful")
 - Flags code that wasn't in the diff (unless marked as `[NOTE]`)
 
-### 3. Present the report
+### 3. Re-query borderline findings (once only)
+
+If a reviewer returned a finding that is **high-severity but vague** (e.g., flags a security issue
+but doesn't provide a concrete fix, or cites the wrong line number), you may re-query that
+**single reviewer** once with the specific finding and ask for clarification:
+
+```
+Your finding on `file:line` — "[original finding]" — needs a concrete fix.
+Please provide the exact current code and a drop-in replacement, or withdraw the finding.
+```
+
+Rules:
+- **One re-query per reviewer, max.** Do not loop.
+- Only re-query for `[BLOCKER]` or `[SUGGESTION]` findings — never nitpicks.
+- If the re-query still returns a vague answer, drop the finding.
+
+### 4. Present the report
 
 Every finding **must** include the current code and the suggested fix as fenced code blocks so
 the user can see exactly what to change without jumping to files. Use this template:
@@ -264,6 +301,29 @@ If any reviewer flagged dangerous pre-existing patterns (not in the diff):
 
 **If there are 0 blockers and 0 suggestions**, keep the report brief — just list the nitpicks
 (if any) and confirm the code looks good.
+
+---
+
+## Step 5: Auto-Fix Handoff
+
+After presenting the report, **offer to fix** the findings:
+
+- **If blockers or suggestions exist:**
+  > "Found X blockers and Y suggestions. Want me to auto-fix them?"
+  >
+  > Options:
+  > 1. **Fix all** — apply all blocker and suggestion fixes
+  > 2. **Fix blockers only** — apply only blocker fixes, leave suggestions for manual review
+  > 3. **Skip** — just use the report as-is
+
+- **If only nitpicks:** Do not offer auto-fix — nitpicks are informational.
+
+When applying fixes:
+- Use the **suggested fix** code from each finding as the replacement
+- Apply fixes file-by-file, in order of severity (blockers first)
+- After all fixes are applied, run `checkStyleDirty` on affected modules to verify no lint issues
+  were introduced
+- Present a summary of what was changed
 
 ---
 
