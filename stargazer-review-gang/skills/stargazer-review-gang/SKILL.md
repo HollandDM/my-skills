@@ -19,9 +19,11 @@ anything else before Step 1.
    `test`, `checkStyle`, `checkStyleDirty`, `reformat`, `checkUnused`, `WarnUnusedCode`, or any
    build/lint command.
 2. **YOU DO NOT READ DIFFS, SOURCE FILES, OR SUB-AGENT INSTRUCTION FILES.** Do NOT run
-   `git diff`, `git status`, `git log`, `git merge-base`, or any git content commands.
-   Do NOT use the Read tool on any `.md` file in this skill.
+   `git diff` or `git merge-base`. Do NOT use the Read tool on any `.md` file in this skill.
    The orchestrator determines the diff ref itself from the user's review scope.
+   **Exception:** You MAY run `git log --oneline` and `git status` (short form) in Step 3 to
+   gather branch/history context for the orchestrator prompt — but do NOT analyze the output
+   yourself; just pass it to the orchestrator.
 3. **NO STOP CONDITION FOR PR SIZE.** Handle all PRs regardless of file count or line count.
 
 ## Workflow
@@ -95,14 +97,25 @@ Spawn a **single agent** with this prompt (do NOT read the orchestrator file you
 Use `model: "sonnet"` — the orchestrator interprets the review scope, determines diff refs, reads all diffs, and routes files.
 
 **Pass the user's review scope verbatim** — do NOT interpret it into base/head refs. The
-orchestrator determines the correct git diff strategy itself.
+orchestrator determines the correct git diff strategy itself. **Add surrounding context** (branch
+name, recent commit summaries, number of files) to help the orchestrator orient quickly, but keep
+the user's words intact as the primary scope.
 
 ```
-You are the routing orchestrator. Read your instructions from:
-agents/orchestrator.md (relative to this skill's directory)
+You are the routing orchestrator for the stargazer-review-gang code review system.
+Your ONLY job is to classify changed files and produce a JSON routing plan.
+
+CRITICAL: Do NOT invoke the Skill tool — you are already inside the stargazer-review-gang
+workflow. Re-triggering it would cause infinite recursion.
+
+Read your full instructions from: agents/orchestrator.md (relative to this skill's directory)
 
 ## Review Scope
 <user's exact words describing what to review, word for word>
+
+## Branch & Recent History
+<current branch name, last 3-5 commit summaries, dirty/clean status — gathered by the main agent
+from git log/status BEFORE spawning this orchestrator>
 
 ## Context
 <user-provided context from Step 1, or "None">
@@ -169,6 +182,7 @@ From `workload`:
 For each reviewer, spawn an agent with this prompt (do NOT read checklist files yourself):
 
 ```
+You are a code reviewer sub-agent. Do NOT invoke any skills or the Skill tool.
 Read your checklist from: [checklist file path from roster table]
 
 ---
@@ -230,6 +244,7 @@ Use the same depth-based model override as reviewers:
 For each aggregator, spawn an agent with the depth-appropriate model and this prompt (do NOT read the aggregator file yourself):
 
 ```
+You are a review aggregator sub-agent. Do NOT invoke any skills or the Skill tool.
 Read your instructions from: agents/aggregator.md (relative to this skill's directory)
 
 Diff ref: <diff_ref from orchestrator output>

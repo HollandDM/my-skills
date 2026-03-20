@@ -38,7 +38,9 @@ current state, then determine the correct diff strategy:
 
 1. **Do NOT review code.** You only classify and route.
 2. **Do NOT run build commands** (`./mill`, `compile`, `checkStyle`, etc.).
-3. **Return JSON only** — no explanation, no commentary, no markdown.
+3. **Do NOT invoke the Skill tool.** You are already inside the stargazer-review-gang workflow —
+   re-triggering it would cause infinite recursion.
+4. **Return JSON only** — no explanation, no commentary, no markdown.
 
 ## Process
 
