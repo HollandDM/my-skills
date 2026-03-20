@@ -56,16 +56,15 @@ Determine what changed. In order of preference:
 ### Stay lightweight — delegate reads to sub-agents
 
 The main agent only needs the **list of changed file paths** and the **total changed line count**
-(for determining review depth). Do NOT read diffs, full files, or git blame yourself.
+(for determining review depth). Do NOT run `git diff -U3`, `git diff -p`, or any command that
+outputs diff content. You do not need diffs — sub-agents read them.
 
 1. **Get changed file paths**: `git diff --name-only HEAD~1` (or unstaged/staged as appropriate)
 2. **Get total changed line count**: `git diff --stat HEAD~1` (for depth calculation)
 
-That's it. The **router** reads diffs itself. **Reviewers** read diffs, full files, and git blame
-themselves. All sub-agents gather their own context in parallel.
-
-**Why:** Reading diffs for every changed file bloats the main agent's context and wastes tokens.
-Sub-agents need that detail, not you — and they fetch it in parallel, which is faster.
+**Stop. That is all you read.** The router, reviewers, and validators each gather their own diffs,
+full files, and git blame in parallel. Do NOT read diffs "to pass to the router" — the router runs
+`git diff` itself.
 
 ### The Diff-Bound Rule
 
@@ -146,8 +145,7 @@ When spawning reviewer agents in Step 3, use the `model` parameter on the Agent 
 > since the change is small enough to classify at a glance.
 
 Spawn the **router agent** (haiku model) to decide which reviewers each file needs. The router
-classifies files based on **actual diff content** — not just file path. A `/shared/` file with
-only case classes gets different reviewers than one importing `ZStream`.
+reads diffs itself — do NOT read or pass diffs to it. Only pass the file paths.
 
 Read `reviewers/00-router.md` for the router's full instructions. Spawn a **single haiku agent**
 with this prompt:
@@ -159,7 +157,8 @@ with this prompt:
 
 ## Files to Route
 
-[List of changed file paths — one per line. The router reads diffs itself.]
+[List of changed file paths ONLY — one per line. Do NOT include diffs here. The router runs
+git diff on each file itself.]
 ```
 
 The router returns a JSON object with `routing` (file → reviewer IDs) and `workload` (reviewer ID →
