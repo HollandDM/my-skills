@@ -70,7 +70,8 @@ Head: <head ref, or omit if HEAD>
 Determine the correct base and head:
 - **"review my changes"** / last commit → base: `HEAD~1`
 - **"review this PR"** / branch → base: merge base of current branch and main (`git merge-base main HEAD`), head: `HEAD`
-- **Multiple commits specified** → base: `<earliest>`, head: `<latest>`
+- **Multiple commits specified** → base: `<earliest commit SHA>`, head: `<latest commit SHA>`.
+  Do NOT append `~1` to the base. The orchestrator diffs `base..head` which already excludes base.
 - **User specifies files** → base: `HEAD~1`, but list the specific files
 
 The orchestrator finds changed files, reads diffs, routes, and returns JSON:
