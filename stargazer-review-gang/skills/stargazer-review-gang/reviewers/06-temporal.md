@@ -8,6 +8,9 @@ with a custom framework layer (`anduin.workflow.*`) that provides typed workflow
 effect types. Your job is to ensure Temporal code follows the established patterns for definitions,
 activity attributes, registrations, and framework usage.
 
+**Do NOT run any build or compile commands** (`./mill compile`, `./mill checkStyle`, etc.).
+Analyze by reading only. If unsure, report as `[NITPICK]`, not `[BLOCKER]`.
+
 Only review if the code contains Temporal workflows or activities (imports from `anduin.workflow`,
 annotations like `@workflowInterface`, `@activityInterface`). If no Temporal code is present,
 report "No Temporal code found — nothing to review."
@@ -20,31 +23,22 @@ Every workflow follows a three-part pattern: annotated trait extending `Temporal
 a companion extending `TemporalWorkflowCompanion[T]`, and an implementation class.
 
 ```scala
-// Part 1: Interface trait
 @workflowInterface
 trait MyWorkflow extends TemporalWorkflow[MyInput, MyOutput] {
   @workflowMethod
   override def run(input: MyInput): MyOutput
 }
 
-// Part 2: Companion — configuration
 object MyWorkflow extends TemporalWorkflowCompanion[MyWorkflow] {
   override def queue: TemporalQueue = TemporalQueue.Default
   override val workflowRunTimeout: Option[Duration] = Some(Duration.ofHours(4))
-  override val workflowTaskTimeout: Option[Duration] = Some(Duration.ofSeconds(30))
   override val maximumRetryAttempts: Int = 1
 }
 
-// Part 3: Implementation
 class MyWorkflowImpl extends MyWorkflow {
   private val activities = newActivityStub[MyActivities]
-
-  override protected def runAsync(input: MyInput): WorkflowTask[MyOutput] = {
-    for {
-      result <- WorkflowTask.executeActivity(activities.process(input))
-    } yield result
-  }
-
+  override protected def runAsync(input: MyInput): WorkflowTask[MyOutput] =
+    for { result <- WorkflowTask.executeActivity(activities.process(input)) } yield result
   override def run(input: MyInput): MyOutput = runAsync(input).getOrThrow
 }
 ```
@@ -84,15 +78,10 @@ Missing or wrong attributes cause silent production failures.
 trait ArchiveFundSubActivity extends TemporalActivity {
   @activityMethod
   def archive(input: ArchiveInput): Empty
-
-  @activityMethod
-  def cleanup(input: CleanupInput): Empty
 }
 ```
 
 ### Activity Companion — Attributes
-
-The companion extends `TemporalActivityCompanion[T]` and configures three critical attributes:
 
 ```scala
 object ArchiveFundSubActivity extends TemporalActivityCompanion[ArchiveFundSubActivity]() {
@@ -115,20 +104,12 @@ object ArchiveFundSubActivity extends TemporalActivityCompanion[ArchiveFundSubAc
 final case class ArchiveFundSubActivityImpl(
   archiveService: ArchiveService
 )(using val temporalWorkflowService: TemporalWorkflowService) extends ArchiveFundSubActivity {
-
-  override def archive(input: ArchiveInput): Empty = {
-    archiveService.archive(input.id)
-      .as(Empty())
-      .runActivity   // Extension method: converts ZIO Task → synchronous return with tracing
-  }
-
-  override def cleanup(input: CleanupInput): Empty = {
-    archiveService.cleanup(input.id)
-      .as(Empty())
-      .runActivityWithHeartbeat(zio.Duration.fromSeconds(30))  // For long-running operations
-  }
+  override def archive(input: ArchiveInput): Empty =
+    archiveService.archive(input.id).as(Empty()).runActivity
 }
 ```
+
+Use `.runActivity` for standard operations and `.runActivityWithHeartbeat(duration)` for long-running ones.
 
 ### Common Timeout Patterns from the Codebase
 
@@ -239,17 +220,10 @@ Flag:
 Activities execute **at-least-once**. They must be safe to retry.
 
 ```scala
-// GOOD: upsert pattern (safe to retry)
-storeOps.upsert(id, data)
-
-// GOOD: dedup key prevents duplicate creation
-storeOps.createIfNotExists(workflowId, data)
-
-// BAD: insert without dedup (duplicate on retry)
-storeOps.insert(data)  // Creates duplicate if activity retries
-
-// BAD: non-idempotent side effect
-emailService.send(email)  // Sends duplicate email on retry
+storeOps.upsert(id, data)                   // GOOD: safe to retry
+storeOps.createIfNotExists(workflowId, data) // GOOD: dedup key
+storeOps.insert(data)                        // BAD: duplicate on retry
+emailService.send(email)                     // BAD: duplicate side effect
 ```
 
 Flag:
@@ -262,7 +236,7 @@ Flag:
 ## 6. Error Handling
 
 ```scala
-// GOOD: explicit error handling in workflow
+// Explicit error handling with .either
 for {
   result <- WorkflowTask.executeActivity(activities.riskyStep(input)).either
   _ <- result match {
@@ -271,18 +245,9 @@ for {
   }
 } yield ()
 
-// GOOD: non-critical vs critical activity distinction
-private def executeNonCriticalActivity[A](
-  activityName: String,
-  activity: => WorkflowTask[A]
-): WorkflowTask[Option[A]] = {
-  activity.map(Some(_)).catchAll { error =>
-    WorkflowTask.succeed {
-      scribe.error(s"Non-critical activity '$activityName' failed: ${error.getMessage}")
-      None
-    }
-  }
-}
+// Non-critical activity helper — swallows failure with logging
+private def executeNonCriticalActivity[A](name: String, activity: => WorkflowTask[A]): WorkflowTask[Option[A]] =
+  activity.map(Some(_)).catchAll(e => WorkflowTask.succeed { scribe.error(s"'$name' failed: ${e.getMessage}"); None })
 ```
 
 Flag:
@@ -301,58 +266,33 @@ new events from a checkpoint, and continue-as-new to avoid history growth.
 
 ### When to Use CDC
 
-Use CDC workflows when:
-- You need to react to FDB record changes (inserts, updates, deletes)
-- The reaction is asynchronous (doesn't need to happen in the same transaction)
-- You're syncing data to another system (Doris, search index, cache)
-- You need exactly-once processing with checkpoint-based deduplication
-
-Do NOT use CDC when:
-- You need synchronous side effects in the same transaction
-- The data change doesn't come from FDB
-- Simple event publishing would suffice (use NATS directly)
+Use CDC workflows when you need to react to FDB record changes asynchronously (syncing to Doris,
+search index, cache) with exactly-once checkpoint-based processing. Do NOT use when you need
+synchronous side effects, the change doesn't come from FDB, or simple NATS publishing suffices.
 
 ### CDC Pattern
 
 ```scala
-// 1. Workflow interface — extends FDBCdcEventListener
+// 1. Workflow — extends FDBCdcEventListener with companion
 @workflowInterface
 trait DorisContactLoader
     extends FDBCdcEventListener[FDBRecordEnum.Contact.type, FDBCdcEventListenerEnum.DorisContact.type]
 
 object DorisContactLoader
     extends FDBCdcEventListenerCompanion[
-      FDBRecordEnum.Contact.type,
-      FDBCdcEventListenerEnum.DorisContact.type,
-      DorisContactLoader
+      FDBRecordEnum.Contact.type, FDBCdcEventListenerEnum.DorisContact.type, DorisContactLoader
     ] {
   override val subspaceEnum = FDBRecordEnum.Contact
   override val listenerEnum = FDBCdcEventListenerEnum.DorisContact
   override val pollInterval: Option[Duration] = Some(Duration.ofSeconds(30))
 }
 
-// 2. Implementation — extends FDBCdcEventListenerImpl and implements handle()
-class DorisContactLoaderImpl
-    extends DorisContactLoader
-    with FDBCdcEventListenerImpl[...] {
-  // handle() processes batches of CDC events
-}
-
-// 3. Activity — extends FDBCdcEventListenerActivity for checkpoint ops
-@activityInterface(namePrefix = "DorisContactLoader")
-trait DorisContactLoaderActivity extends FDBCdcEventListenerActivity {
-  @activityMethod
-  def loadContacts(input: LoadContactsInput): Empty
-}
-
-// 4. Registration in StoreProvider
-override protected val cdcEventListeners = Seq(DorisContactLoader)
+// 2. Implementation — extends FDBCdcEventListenerImpl, implements handle()
+// 3. Activity — extends FDBCdcEventListenerActivity with @activityInterface(namePrefix = "...")
+// 4. Registration: override protected val cdcEventListeners = Seq(DorisContactLoader)
 ```
 
-### CDC Event Listener Enum
-
-New CDC listeners must be registered in `FDBCdcEventListenerEnum`. Each listener gets a unique
-enum value that serves as the checkpoint key.
+New CDC listeners must be registered in `FDBCdcEventListenerEnum` (unique checkpoint key).
 
 Flag:
 - CDC workflow not extending `FDBCdcEventListener[S, L]`
@@ -369,50 +309,28 @@ Flag:
 ## 8. Async API Workflows
 
 The codebase provides an async endpoint framework that wraps Temporal workflows behind standard
-HTTP endpoints. It creates 4 endpoints automatically: synchronous, async-create, async-run, and
-async-fetch. Use this when an HTTP endpoint's work takes more than a few seconds.
+HTTP endpoints (synchronous, async-create, async-run, async-fetch). Use when an HTTP endpoint's
+work takes more than a few seconds.
 
-### When to Use Async Endpoints
-
-Use `AsyncEndpoint` when:
-- An HTTP request triggers work that takes 5+ seconds (file operations, exports, AI/OCR processing)
-- The client needs to poll for results rather than wait synchronously
-- You want automatic progress tracking and NATS notification to the frontend
-- The operation needs Temporal's durability guarantees (survives server restarts)
-
-Do NOT use async endpoints when:
-- The operation completes in < 5 seconds (use a regular endpoint)
-- You're processing multiple items in batch (use BatchAction instead)
-- You need to react to FDB changes (use CDC instead)
+Use `AsyncEndpoint` when an HTTP request triggers 5+ second work (file ops, exports, AI/OCR)
+and the client needs polling with NATS notification. Do NOT use for <5s operations (regular
+endpoint), batch items (BatchAction), or FDB reactions (CDC).
 
 ### Async Endpoint Pattern
 
 ```scala
-// 1. Shared endpoint definition — picks a queue based on expected duration
 object FileMoveCopyEndpoints extends AuthenticatedEndpoints with AsyncEndpoint {
   val copyFileFolders: AsyncAuthenticatedEndpoint[
-    MoveCopyFileFolderParams,
-    DataRoomFileMoveCopyException,
-    UploadDataRoomFileResponse
+    MoveCopyFileFolderParams, DataRoomFileMoveCopyException, UploadDataRoomFileResponse
   ] = asyncEndpoint[
-    MoveCopyFileFolderParams,
-    DataRoomFileMoveCopyException,
-    UploadDataRoomFileResponse
+    MoveCopyFileFolderParams, DataRoomFileMoveCopyException, UploadDataRoomFileResponse
   ](files / "copy", AsyncApiTemporalQueue.Heavy)
 }
-
-// 2. Server implementation — uses AsyncEnvironmentValidationEndpointServer
-final class FileMoveCopyServer(...)
-    extends EnvironmentValidationEndpointServer
-    with AsyncEnvironmentValidationEndpointServer {
-
-  val asyncServices: List[AsyncTapirServerService] = List(
-    validateAsyncEnvironmentRoute(copyFileFolders, validator) { (params, ctx) =>
-      fileMoveCopyService.copyItems(params, ctx)
-    }
-  )
-}
 ```
+
+Server implementation: extend `EnvironmentValidationEndpointServer` with
+`AsyncEnvironmentValidationEndpointServer`, register handlers via `validateAsyncEnvironmentRoute`
+in the `asyncServices` list.
 
 ### Queue Selection
 
@@ -422,10 +340,8 @@ final class FileMoveCopyServer(...)
 | `AsyncApiTemporalQueue.Heavy` | 15 minutes | Document processing, exports |
 | `AsyncApiTemporalQueue.ExtraHeavy` | 30 minutes | Large imports, complex transformations |
 
-The queue timeout propagates to:
-- Activity `startToCloseTimeout`
-- Client polling timeout
-- Temporal workflow selection (`AsyncApiTemporalWorkflow.Fast/Heavy/ExtraHeavy`)
+The queue timeout propagates to activity `startToCloseTimeout`, client polling timeout,
+and Temporal workflow selection (`AsyncApiTemporalWorkflow.Fast/Heavy/ExtraHeavy`).
 
 Flag:
 - Long-running endpoint logic (>5s) without async endpoint wrapper
@@ -439,110 +355,50 @@ Flag:
 ## 9. Batch Action Workflows
 
 The codebase provides a BatchAction framework for processing multiple items using parent/child
-Temporal workflows. The parent workflow orchestrates item processing (sequential or parallel),
-and each item gets its own child workflow with dedicated activities.
+Temporal workflows. The parent orchestrates item processing (sequential or parallel), each item
+gets its own child workflow with dedicated activities.
 
 ### When to Use Batch Actions
 
-Use `BatchActionService` when:
-- Processing multiple items (fund profiles, contacts, documents, evaluations)
-- Each item needs independent success/failure tracking
-- You need progress reporting to the frontend (item-by-item status)
-- Items can be processed in parallel for better performance
-- There's optional post-processing after all items complete
-
-Do NOT use batch actions when:
-- Processing a single item (use AsyncEndpoint or a direct workflow)
-- Items don't need individual tracking (use a simple workflow with `WorkflowTask.foreachPar`)
-- The batch size is unbounded and discovered dynamically with cursor pagination (use unbounded batch action variant)
+Use `BatchActionService` when processing multiple items needing independent success/failure
+tracking, progress reporting, and optional parallel execution with post-processing. Do NOT use
+for single items (AsyncEndpoint/direct workflow), items without tracking (simple `foreachPar`),
+or unbounded cursor-based discovery (use unbounded variant).
 
 ### Bounded Batch Action Pattern
 
 ```scala
-// 1. Workflow — extends BatchActionWorkflow
+// 1. Workflow — extends BatchActionWorkflow / BatchActionWorkflowImpl
 @workflowInterface
 trait FundDataBatchActionWorkflow extends BatchActionWorkflow
-
-class FundDataBatchActionWorkflowImpl
-    extends FundDataBatchActionWorkflow
-    with BatchActionWorkflowImpl[
-      FundDataBatchActionItemWorkflow,
-      FundDataBatchActionActivities
-    ] {
+class FundDataBatchActionWorkflowImpl extends FundDataBatchActionWorkflow
+    with BatchActionWorkflowImpl[FundDataBatchActionItemWorkflow, FundDataBatchActionActivities] {
   override def parallelExecution: Boolean = true
   override def childWorkflowRunTimeout: Duration = Duration.ofMinutes(35)
 }
 
-// 2. Item Workflow — extends BatchActionItemWorkflow
+// 2. Item Workflow — extends BatchActionItemWorkflow / BatchActionItemWorkflowImpl
 @workflowInterface
 trait FundDataBatchActionItemWorkflow extends BatchActionItemWorkflow
-
-class FundDataBatchActionItemWorkflowImpl
-    extends FundDataBatchActionItemWorkflow
+class FundDataBatchActionItemWorkflowImpl extends FundDataBatchActionItemWorkflow
     with BatchActionItemWorkflowImpl[FundDataBatchActionActivities]
 
-// 3. Activities — extends BatchActionActivities
+// 3. Activities — extends BatchActionActivities / BatchActionActivitiesImpl
 @activityInterface(namePrefix = "FundDataBatchAction")
 trait FundDataBatchActionActivities extends BatchActionActivities
-
 case class FundDataBatchActionActivitiesImpl(
   fundDataService: FundDataService,
   override val batchActionService: BatchActionService
 )(using override val temporalWorkflowService: TemporalWorkflowService)
-    extends FundDataBatchActionActivities
-    with BatchActionActivitiesImpl {
-
-  override def processItem(
-    actionType: BatchActionType,
-    data: RawJson,
-    actor: UserId,
-    commonDataOpt: Option[RawJson]
-  )(using environmentContext: EnvironmentContext): Task[Option[RawJson]] = {
-    // Domain-specific item processing logic
-    for {
-      params <- ZIOUtils.fromOption(data.as[FundDataItemData].toOption, ...)
-      result <- fundDataService.processItem(params)
-    } yield Some(RawJson(result))
-  }
-
-  override def processPostExecute(data: BatchActionInfo): Task[Option[RawJson]] = {
-    // Optional: aggregate results after all items complete
-    ZIO.succeed(None)
-  }
+    extends FundDataBatchActionActivities with BatchActionActivitiesImpl {
+  override def processItem(...)(using EnvironmentContext): Task[Option[RawJson]] = { /* domain logic */ }
+  override def processPostExecute(data: BatchActionInfo): Task[Option[RawJson]] = ZIO.succeed(None)
 }
-
-// 4. Starting the batch action
-batchActionService.startBatchActionInternal(
-  parent = workspaceId.parent,
-  actor = actor,
-  actionType = BatchActionType.FundDataImport,
-  batchActionItemsData = items.map(item => RawJson(item)).toList,
-  frontendTracking = BatchActionFrontendTracking.ACTOR_TRACKING,
-  startWorkflow = workflowParams => {
-    FundDataBatchActionWorkflowImpl.instance
-      .getWorkflowStub()
-      .flatMap(stub => ZWorkflowStub.start(stub.execute(workflowParams)))
-  }
-)
 ```
 
-### Unbounded Batch Action
-
-For batches where items are discovered dynamically via cursor-based pagination, use
-`BatchActionUnboundWorkflow` / `BatchActionUnboundItemWorkflow`:
-
-```scala
-batchActionService.startUnboundBatchAction(
-  parent = parentId,
-  actor = actor,
-  actionType = BatchActionType.BulkExport,
-  initialCursor = None,  // Start from beginning
-  startWorkflow = input => { ... }
-)
-```
-
-The unbounded variant loops: each child item workflow returns a `nextCursor`, and the parent
-continues until cursor is exhausted or the 1000-item limit is reached.
+Start via `batchActionService.startBatchActionInternal(...)` with `BatchActionType`, items as
+`List[RawJson]`, and `BatchActionFrontendTracking`. For cursor-based pagination with dynamic
+item discovery, use `BatchActionUnboundWorkflow` / `startUnboundBatchAction` instead.
 
 Flag:
 - Multi-item processing without using BatchAction framework (reinventing progress tracking)

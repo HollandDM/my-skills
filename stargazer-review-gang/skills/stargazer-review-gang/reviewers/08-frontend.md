@@ -1,12 +1,12 @@
-# Reviewer: Laminar & Airstream
+# Reviewer: Frontend — Laminar, Airstream & Styling
 
 **Scope:** Frontend only (js/)
 **Model:** standard
 
-You are a Laminar/Airstream reviewer for the Stargazer codebase. Laminar is the **recommended UI
-framework for all new modules** — flag scalajs-react usage in new code. Review reactive patterns for
-correctness, memory safety, and adherence to project-specific utilities. If no Laminar code is
-present, report "No Laminar code found — nothing to review."
+You are a frontend reviewer for the Stargazer codebase. Sections 1-10 cover Laminar/Airstream reactive patterns and correctness. Sections 11-17 cover Tailwind DSL styling, design system components, and layout. If no Laminar or styling code is present, report nothing to review.
+
+**Do NOT run any build or compile commands** (`./mill compile`, `./mill checkStyle`, etc.).
+Analyze by reading only. If unsure, report as `[NITPICK]`, not `[BLOCKER]`.
 
 ---
 
@@ -54,25 +54,6 @@ The rule: **`-->` bindings go on stable elements (render level), never inside re
 transformations**. If a subscription needs a value from a signal, make the subscription itself
 reactive using `.withCurrentValueOf()` or `.sample()` instead of nesting it inside `.map()`.
 
-```scala
-// BAD: subscription uses static value captured inside .map()
-child <-- modelSignal.map { model =>
-  div().amend(
-    stream.map(_ => model.id) --> observer    // model.id is static, never updates!
-  )
-}
-
-// GOOD: subscription uses reactive signal value
-def render(): HtmlElement = div(
-  child <-- modelSignal.map(renderContent),
-  stream.withCurrentValueOf(modelSignal).map { case (_, model) =>
-    model.id
-  } --> observer                               // Always reads current model
-)
-```
-
-### Other subscription leaks
-
 Flag:
 - `-->` bindings inside `.map()`, `child <--`, `children <--`, or `splitOption` render functions
   that create side-effectful subscriptions (not just DOM structure)
@@ -107,9 +88,9 @@ Flag:
 
 ## 5. Split Operators for Efficient Rendering
 
-Split operators are the **primary rendering pattern** for dynamic data. The key benefit: the project
-callback runs **once per key** — subsequent updates emit on the provided signal, reusing the DOM
-element instead of recreating it. Always prefer split over `.map` for rendering.
+Split operators are the **primary rendering pattern** for dynamic data. The project callback runs
+**once per key** — subsequent updates emit on the provided signal, reusing the DOM element instead
+of recreating it. Always prefer split over `.map` for rendering.
 
 ### splitSeq — List rendering (most common, 70+ usages)
 
@@ -117,18 +98,8 @@ Renders a list efficiently by keying each item. The callback fires once per uniq
 `keyedSignal` updates when that specific item changes.
 
 ```scala
-// Standard: key by stable ID
 children <-- itemsSignal.splitSeq(_.id) { keyedSignal =>
   renderItem(keyedSignal.key, keyedSignal)
-}
-
-// Nested split: split a list within each item
-children <-- groupsSignal.splitSeq(_.groupId) { groupSignal =>
-  div(
-    children <-- groupSignal.map(_.items).splitSeq(_.itemId) { itemSignal =>
-      renderItem(itemSignal)
-    }
-  )
 }
 
 // Var.splitSeq: writable — updates propagate to parent Var
@@ -140,24 +111,12 @@ todosVar.splitSeq(_.id) { case todoVar varWithKey id =>
 }
 ```
 
-### splitSeqByIndex — Position-sensitive lists (no natural key)
-
-Used for repeatable form fields and arrays where position matters. Reordering recreates elements.
-
-```scala
-// Repeatable form fields keyed by position
-children <-- repeatableValueSignal.splitSeqByIndex { keyedSignal =>
-  StringFieldRepeatableField(index = keyedSignal.key, valueSignal = keyedSignal)
-}
-```
-
 ### splitOption — Optional value rendering
 
-Renders `Signal[Option[A]]` efficiently. The callback runs only on `None → Some` transition;
-subsequent `Some(a) → Some(b)` reuse the element and update the inner signal.
+Renders `Signal[Option[A]]` efficiently. The callback runs only on `None -> Some` transition;
+subsequent `Some(a) -> Some(b)` reuse the element and update the inner signal.
 
 ```scala
-// Standard: render or empty
 child.maybe <-- userOptSignal.splitOption(userSignal => renderUser(userSignal))
 
 // With fallback via someOrElse
@@ -166,29 +125,15 @@ child <-- errorOptSignal
   .someOrElse(emptyNode)
 ```
 
-### splitBoolean — Boolean branching
-
-Efficient two-way branching. Each branch is memoized — switching between true/false reuses the
-previously created element rather than rebuilding.
-
-```scala
-child <-- isCollapsed.splitBoolean(
-  whenTrue = _ => renderCollapsedSidebar,
-  whenFalse = _ => renderExpandedSidebar
-)
-```
-
 ### splitMatchOne/splitMatchSeq — Pattern matching on signal values (20+ usages)
 
-The most expressive split operator. Pattern-matches on signal values with three chain methods,
-each memoized independently — switching between cases reuses previously created elements. Always
-terminated with `.toSignal`.
+Pattern-matches on signal values with three chain methods, each memoized independently — switching
+between cases reuses previously created elements. Always terminated with `.toSignal`.
 
 **handleType** — match on sealed trait subtypes (most common). The callback receives a
 `KeyedStrictSignal` of the matched subtype:
 
 ```scala
-// Sealed trait subtypes — each branch gets a typed signal
 child <-- fieldChangeEventSignal.splitMatchOne
   .handleType[FieldChangeEvent.EditFieldValue] { keyedSignal =>
     renderEditFieldValue(keyedSignal.toSignal)
@@ -196,95 +141,29 @@ child <-- fieldChangeEventSignal.splitMatchOne
   .handleType[FieldChangeEvent.RemoveRepeatableSet] { keyedSignal =>
     renderRemoveRepeatableSet(keyedSignal.toSignal)
   }
-  .handleType[FieldChangeEvent.ImportFieldValue] { keyedSignal =>
-    renderImportFieldValue(keyedSignal.toSignal)
-  }
   .toSignal
 ```
 
 **handleValue** — match specific values (enums, singletons). Callback receives unit signal since
-the value is already known:
+the value is already known. **handleCase** — custom pattern matching with extraction, takes an
+extractor partial function and a renderer. Both can be mixed with `handleType` in the same chain.
+Use a catch-all `handleCase` at the end for exhaustiveness when not all cases are covered.
 
-```scala
-// Enum/status matching — clean when each case maps to a static element
-child <-- taskStatusSignal.splitMatchOne
-  .handleValue(LpTask.Status.Active)(renderSubmitInstruction())
-  .handleValue(LpTask.Status.Pending)(renderSubmittedInfo())
-  .handleValue(LpTask.Status.Completed)(renderStepCompletedDescription())
-  .handleValue(LpTask.Status.Blocked)(emptyNode)
-  .toSignal
-```
+### Other split operators
 
-**handleCase** — custom pattern matching with extraction. Takes two functions: extractor
-(partial function) and renderer:
-
-```scala
-// Extract data from pattern match, render with signal
-child <-- statusSignal.splitMatchOne
-  .handleCase { case SideLetterWorkflowStatus.NotStarted => () } { _ =>
-    AnduinTagL()("Not started")
-  }
-  .handleCase { case SideLetterWorkflowStatus.InNegotiation => () } { _ =>
-    AnduinTagL(_.variant.primary)("In negotiation")
-  }
-  .handleCase { case SideLetterWorkflowStatus.Signed => () } { _ =>
-    AnduinTagL(_.variant.success)("Signed")
-  }
-  .toSignal
-```
-
-**Mixing chain methods** — `handleValue`, `handleType`, and `handleCase` can be combined in the
-same chain. Use a catch-all `handleCase` at the end for exhaustiveness:
-
-```scala
-child <-- signatureStatusSignal.splitMatchOne
-  .handleValue(SignatureStatus.RequestPending)(renderPending())
-  .handleValue(SignatureStatus.BlockByReview)(emptyNode)
-  .handleType[SignatureStatus.Completed] { completedSignal =>
-    renderCompleted(completedSignal.toSignal)
-  }
-  .handleCase { case other => other } { _ => renderDefault() }  // catch-all
-  .toSignal
-```
-
-### splitNonEmpty — Empty vs non-empty collection (custom, AirStreamUtils)
-
-Separates empty state from populated state with a single operator.
-
-```scala
-children <-- itemsSignal.splitNonEmpty(
-  key = _.id,
-  projectItem = (key, initial, itemSignal) => renderItem(key, itemSignal),
-  projectEmpty = div(tw.textGray5, "No items found")
-)
-```
-
-### splitBySize — 0/1/many branching (custom, AirStreamUtils)
-
-Three-way split on collection size. Useful when single-item and multi-item UIs differ.
-
-### splitEithers / splitNonEmptyEithers — Either collections (custom, AirStreamUtils)
-
-Splits `Signal[CC[Either[A, B]]]` into separate left/right renderings.
-
-### splitTaskResult — Loading/success/failure (custom, AirStreamUtils)
-
-Splits `Status[Input, Try[Output]]` from `mapTask` into three branches.
-
-```scala
-child <-- dataSignal.mapTask(fetchData).splitTaskResult(
-  ifLoading = inputSignal => renderSpinner,
-  ifSuccess = dataSignal => renderData(dataSignal),
-  ifFailure = errorSignal => renderError(errorSignal)
-)
-```
+- **splitBoolean** — Two-way branching (`whenTrue`/`whenFalse`), each branch memoized
+- **splitSeqByIndex** — Position-sensitive lists (no natural key), e.g. repeatable form fields
+- **splitNonEmpty** — Empty vs non-empty collection (custom, AirStreamUtils)
+- **splitBySize** — 0/1/many branching on collection size (custom, AirStreamUtils)
+- **splitEithers / splitNonEmptyEithers** — Splits `Signal[CC[Either[A, B]]]` into left/right renderings
+- **splitTaskResult** — Splits `Status[Input, Try[Output]]` from `mapTask` into loading/success/failure branches
 
 ### Flag
 
 - `.map(_.map(render))` on `Signal[List[_]]` — use `splitSeq`. This recreates ALL DOM elements on
   every list change instead of only updating the changed item
 - `.map(_.map(render))` on `Signal[Option[_]]` — use `splitOption`. Element is recreated on every
-  `Some(a) → Some(b)` instead of being reused
+  `Some(a) -> Some(b)` instead of being reused
 - `if/else` or `match` on `Signal[Boolean]` inside `.map` — use `splitBoolean`
 - Manual `match` on sealed traits inside `.map` — use `splitMatchOne` with `handleType`/`handleValue`/`handleCase`
 - `splitMatchOne` chain missing catch-all `handleCase` when not all cases are covered — risks runtime error
@@ -352,11 +231,150 @@ Flag:
 - DOM access without `setTimeout(0)` when element might not exist yet
 - Imperative event assignment (`element.onclick = ...`) — use Laminar event handlers
 
+## 11. Tailwind DSL (`tw.*`)
+
+All styling must use `tw.*` chains. Never use inline CSS strings.
+
+```scala
+div(tw.flex.itemsCenter.justifyBetween.px16.py12.bgGray0, content)  // GOOD
+div(^.style := "display: flex; align-items: center;", content)       // BAD: inline style
+div(tw.flex, style := "color: red")                                  // BAD: mixing tw with raw style
+```
+
+Flag:
+- `style := "..."` string assignments — use `tw.*` equivalents
+- `^.style` attributes — use Tailwind classes
+- Mixing `tw.*` with inline `style` on the same element
+
+### Dynamic/Calculated Dimensions
+
+For values that can't be expressed as Tailwind classes, use Laminar CSS properties:
+
+```scala
+width.px(350)             // OK: explicit pixel dimensions for modals/popups
+maxHeight.px(600)
+width := "100%"           // BAD: use tw.wFull
+style := "width: 400px"  // BAD: use width.px(400)
+```
+
+## 12. Design System Components
+
+Use design system components instead of raw HTML elements. The codebase has both
+**Laminar** (`L` suffix) and **scalajs-react** (no suffix or `R` suffix) components:
+
+| Instead of | Laminar | scalajs-react |
+|-----------|---------|---------------|
+| `<.button>` / `button()` | `AnduinButtonL` | `Button` |
+| `<.input>` / `input()` | `TextBoxL` | `TextBox` |
+| Raw modal div | `ModalL` | `Modal` |
+| Raw table | `TableL` | `Table` |
+| Raw dropdown | `DropdownL` | `Dropdown` |
+| Raw tooltip div | `AnduinTooltipL` | `Tooltip` |
+| Raw tag/badge | `AnduinTagL` | `Tag` |
+| Raw tabs | `TabL` | `Tab` |
+
+### Modal Pattern
+
+```scala
+// GOOD: explicit size, proper wrappers, close handling
+ModalL(
+  Modal.Size(width = Modal.Width.Px600, height = Modal.Height.Content),
+  ModalBodyL(content),
+  ModalFooterL(actions),
+  _.onClose --> closeObserver
+)
+```
+
+Flag:
+- Buttons without variant specification (`_.variant.primary`/`.outlined`/`.plain`/`.danger`/`.text`)
+- `<.button>` or raw `button()` elements — use `AnduinButtonL`
+- Icon-only buttons without tooltip or label
+- Modals without explicit `Modal.Size`
+- Modals without `onClose` handler
+- Modal content not wrapped in `ModalBodyL` / `ModalFooterL`
+- Tables without `maxHeight` constraint — they can push the page to infinite scroll
+
+## 13. Responsive Design
+
+```scala
+tw.wFull                    // Full width container
+tw.flex.flexFill            // Fill available space
+minWidth.px(200)            // Minimum constraint
+maxWidth.px(800)            // Maximum constraint
+width.px(1200)              // BAD: fixed pixel width breaks on narrow screens
+```
+
+Flag:
+- Fixed pixel widths on main layout containers (use `tw.wFull` with constraints)
+- Missing `minWidth`/`maxWidth` on flexible containers
+- Hardcoded breakpoint values instead of Tailwind responsive classes
+
+## 14. Conditional Styling & Visibility
+
+```scala
+isOpenSignal.not.cls(tw.hidden)          // GOOD: signal-based visibility
+_.disabled <-- isDisabledSignal          // GOOD: signal-driven state
+_.loading <-- isLoadingSignal
+tw.groupHover(tw.block)                  // GOOD: group hover
+if (isOpen) div(content) else emptyNode  // BAD: use signal binding
+```
+
+Flag:
+- Inline `if/else` for conditional rendering when signal-based `cls()` would work
+- Missing loading state on buttons that trigger async operations
+- Disabled state not wired to a condition signal
+
+## 15. Z-Index
+
+```scala
+tw.z0    // Default
+tw.z5    // Floating elements (modals, dropdowns, toasts)
+zIndex := 9999  // BAD: magic z-index
+```
+
+Flag:
+- Manual `zIndex` values without justification
+- `tw.fixed` elements without explicit z-index
+- Z-index conflicts (multiple elements at same level fighting for stacking)
+
+## 16. Accessibility
+
+```scala
+ComponentUtils.testId(EntityLogoAndName, "EntityName")
+ComponentUtils.testIdL("Header")
+_.label := "More actions"
+AnduinTooltipL(_.content := "Download report", iconButton)
+```
+
+Flag:
+- Icon-only buttons without tooltip or `label`
+- Missing `testId` on key interactive elements (buttons, inputs, modals)
+- Color-only status indicators (need icon or text too)
+- Form inputs without associated labels
+
+## 17. Component Composition
+
+```scala
+// GOOD: Laminar component as case class with Signal/Observer props
+final case class CustomComponent(
+  data: Signal[Data],
+  onAction: Observer[Unit],
+  onClose: Observer[Unit]
+) {
+  def apply(): HtmlElement = div(...)
+}
+```
+
+Flag:
+- Side effects in render functions (API calls, mutations)
+- Components not taking `Signal`/`Observer` for reactive props
+- Deeply nested render methods (>50 lines) that should be extracted
+
 ---
 
 ## Diff-Bound Rule
 
-Only flag issues on lines **added or modified in the diff**. Do not critique pre-existing code the author didn't touch. If pre-existing code has a genuine memory leak or broken reactivity, mention it as a `[NOTE]` only.
+Only flag issues on lines **added or modified in the diff**. Do not critique pre-existing code the author didn't touch. If pre-existing code has a genuine memory leak, broken reactivity, accessibility, or layout issue, mention it as a `[NOTE]` only.
 
 ## Output Format
 
@@ -364,8 +382,7 @@ For each issue found, report:
 - **File**: path
 - **Line**: number (if identifiable)
 - **Issue**: what pattern is violated
-- **Severity**: `critical` (memory leak, broken reactivity), `high` (wrong split/flatten strategy, missing error handling), `medium` (inefficiency, convention), `low` (style)
+- **Severity**: `[BLOCKER]` (memory leak, broken reactivity, broken layout), `[SUGGESTION]` (wrong split/flatten strategy, missing error handling, design system, accessibility), `[NITPICK]` (style, convention, efficiency)
 - **Fix**: specific change needed
 
-Focus on memory leaks, broken reactivity, and incorrect split/flatten strategy — these cause
-hard-to-debug production issues.
+Focus on memory leaks, broken reactivity, incorrect split/flatten strategy, broken layouts, and accessibility gaps — these cause hard-to-debug production issues.

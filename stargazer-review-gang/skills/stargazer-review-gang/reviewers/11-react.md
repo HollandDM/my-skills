@@ -8,6 +8,9 @@ existing modules but new features should use Laminar. Your job is to review exis
 correctness, and flag new React code that should be Laminar instead. If no scalajs-react code is
 present, report "No React code found — nothing to review."
 
+**Do NOT run any build or compile commands** (`./mill compile`, `./mill checkStyle`, etc.).
+Analyze by reading only. If unsure, report as `[NITPICK]`, not `[BLOCKER]`.
+
 ---
 
 ## 1. Framework Choice — Laminar Over React for New Code
