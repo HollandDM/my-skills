@@ -119,11 +119,12 @@ domain intent.
 ### Stop Conditions
 
 **Stop and ask the user** instead of proceeding when:
-- **Too many files (>20)** — ask which files to prioritize, or whether to review all
 - **No diff found** — no unstaged, staged, or committed changes to review
 - **Unclear scope** — user said "review my changes" but there are changes across unrelated branches
 - **Non-Scala files only** — if all changed files are config, docs, or non-code, skip the gang and
   review manually (the reviewers are Scala-specific)
+
+There is **no stop condition for PR size**. Large PRs are handled by the depth/router/split system.
 
 ### Determine Review Depth
 
