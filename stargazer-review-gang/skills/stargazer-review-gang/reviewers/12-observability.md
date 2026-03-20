@@ -10,8 +10,9 @@ them or leaves operational blind spots.
 If no service logic, endpoint handlers, or external calls are present in the diff, report
 "No observable code found — nothing to review."
 
-**Do NOT run any build or compile commands** (`./mill compile`, `./mill checkStyle`, etc.).
-Analyze by reading only. If unsure, report as `[NITPICK]`, not `[BLOCKER]`.
+> **FORBIDDEN:** Do NOT run `./mill`, `compile`, `test`, `checkStyle`, `checkStyleDirty`, `reformat`,
+> `checkUnused`, `WarnUnusedCode`, or ANY build/lint command. Do NOT use the Bash tool for compilation
+> or linting. You analyze code **by reading files only**. If unsure, report as `[NITPICK]`, not `[BLOCKER]`.
 
 ---
 

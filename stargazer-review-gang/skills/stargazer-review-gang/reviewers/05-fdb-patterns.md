@@ -13,8 +13,9 @@ FoundationDB has hard constraints that make certain patterns dangerous at scale:
 - **10MB transaction size limit** — exceeded transactions fail with `FDBStoreTransactionSizeException`
 - **100KB value size limit** — individual values can't exceed this (use `FDBChunkSubspace` for larger)
 
-**Do NOT run any build or compile commands** (`./mill compile`, `./mill checkStyle`, etc.).
-Analyze by reading only. If unsure, report as `[NITPICK]`, not `[BLOCKER]`.
+> **FORBIDDEN:** Do NOT run `./mill`, `compile`, `test`, `checkStyle`, `checkStyleDirty`, `reformat`,
+> `checkUnused`, `WarnUnusedCode`, or ANY build/lint command. Do NOT use the Bash tool for compilation
+> or linting. You analyze code **by reading files only**. If unsure, report as `[NITPICK]`, not `[BLOCKER]`.
 
 Focus on both correctness (right patterns, effect types, registrations) and performance (patterns
 that will fail or degrade under production load). If no FDB code is present, report

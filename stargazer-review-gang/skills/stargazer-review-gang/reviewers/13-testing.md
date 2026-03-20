@@ -9,8 +9,9 @@ test infrastructure — flag code that bypasses it or introduces fragility.
 
 If no test files are in the diff, report "No test code found — nothing to review."
 
-**Do NOT run any build or compile commands** (`./mill compile`, `./mill test`, etc.).
-Analyze by reading only. If unsure, report as `[NITPICK]`, not `[BLOCKER]`.
+> **FORBIDDEN:** Do NOT run `./mill`, `compile`, `test`, `checkStyle`, `checkStyleDirty`, `reformat`,
+> `checkUnused`, `WarnUnusedCode`, or ANY build/lint command. Do NOT use the Bash tool for compilation
+> or linting. You analyze code **by reading files only**. If unsure, report as `[NITPICK]`, not `[BLOCKER]`.
 
 ---
 

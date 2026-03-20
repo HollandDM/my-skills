@@ -8,8 +8,9 @@ with a custom framework layer (`anduin.workflow.*`) that provides typed workflow
 effect types. Your job is to ensure Temporal code follows the established patterns for definitions,
 activity attributes, registrations, and framework usage.
 
-**Do NOT run any build or compile commands** (`./mill compile`, `./mill checkStyle`, etc.).
-Analyze by reading only. If unsure, report as `[NITPICK]`, not `[BLOCKER]`.
+> **FORBIDDEN:** Do NOT run `./mill`, `compile`, `test`, `checkStyle`, `checkStyleDirty`, `reformat`,
+> `checkUnused`, `WarnUnusedCode`, or ANY build/lint command. Do NOT use the Bash tool for compilation
+> or linting. You analyze code **by reading files only**. If unsure, report as `[NITPICK]`, not `[BLOCKER]`.
 
 Only review if the code contains Temporal workflows or activities (imports from `anduin.workflow`,
 annotations like `@workflowInterface`, `@activityInterface`). If no Temporal code is present,

@@ -46,16 +46,75 @@ only contains case classes needs different reviewers than one importing `ZStream
 9. **Observability** (10): include for any `/jvm/` file with service logic, endpoint handlers, or external calls. Skip for pure model/DTO files
 10. **Frontend** (8): include for any `/js/` file with Laminar components OR Tailwind styling OR design system components
 
+## Workload Tracking
+
+For each file, count the **total changed lines** (additions + deletions in the diff). After routing,
+sum the changed lines per reviewer across all files assigned to it.
+
+If a reviewer's total workload exceeds **2000 lines**, it must be **split** into sub-reviewers. Each
+sub-reviewer gets the same files but focuses on a **different subset of sections** from the reviewer's
+checklist. This ensures each sub-reviewer has a focused scope for thorough analysis instead of one
+overloaded agent rushing through everything.
+
+How to split:
+- Target **2000–3000 lines per sub-reviewer**. Calculate: `min(ceil(total_lines / 2500), 5)` = number of sub-reviewers.
+  - 2000–3000 lines → 2 sub-reviewers
+  - 3001–5000 lines → 2-3 sub-reviewers
+  - 5001–7500 lines → 3 sub-reviewers
+  - 7500+ lines → scale up, but **never exceed 5 sub-reviewers per reviewer**
+- Look at the reviewer's checklist sections (e.g., ZIO reviewer has sections 1-18, FDB has 1-15).
+- Divide sections into roughly equal groups across the sub-reviewers.
+- Each sub-reviewer gets a label like `"2a"`, `"2b"`, `"2c"` with a `focus` field listing its assigned sections.
+
 ## Output Format
 
-Return a JSON object mapping each file to its list of reviewer IDs. Nothing else — no explanation,
-no commentary, no markdown formatting.
+Return a JSON object with two keys:
+- `routing`: maps each file to its list of reviewer IDs
+- `workload`: maps each reviewer ID to its total changed lines, plus `split` info when >2000 lines
+
+Nothing else — no explanation, no commentary, no markdown formatting.
+
+**Normal case** (all reviewers under 2000 lines):
 
 ```json
 {
-  "modules/fundsub/fundsub/jvm/src/main/scala/FundSubService.scala": ["1", "2", "3", "5", "6"],
-  "modules/fundsub/fundsub/js/src/main/scala/FundSubPage.scala": ["1", "3", "8"],
-  "modules/fundsub/fundsub/shared/src/main/scala/FundSubModels.scala": ["1", "3"],
-  "build.mill": ["3"]
+  "routing": {
+    "modules/fundsub/fundsub/jvm/src/main/scala/FundSubService.scala": ["1", "2", "3", "5", "6"],
+    "modules/fundsub/fundsub/js/src/main/scala/FundSubPage.scala": ["1", "3", "8"],
+    "modules/fundsub/fundsub/shared/src/main/scala/FundSubModels.scala": ["1", "3"],
+    "build.mill": ["3"]
+  },
+  "workload": {
+    "1": {"lines": 850},
+    "2": {"lines": 400},
+    "3": {"lines": 1200},
+    "5": {"lines": 300},
+    "6": {"lines": 200},
+    "8": {"lines": 450}
+  }
+}
+```
+
+**Split case** (reviewer 2 exceeds 2000 lines):
+
+```json
+{
+  "routing": {
+    "Service.scala": ["1", "2", "3", "5"],
+    "Pipeline.scala": ["1", "2", "3"],
+    "Stream.scala": ["1", "2"]
+  },
+  "workload": {
+    "1": {"lines": 1800},
+    "2": {
+      "lines": 3200,
+      "split": [
+        {"id": "2a", "focus": "Sections 1-9: Error handling, resource management, parallelism, state, composition, fibers, caching, rate limiting, ZIOUtils"},
+        {"id": "2b", "focus": "Sections 10-18: Layer & runtime, endpoint errors, chunking, unbounded collections, parallel streams, backpressure, stream retry, resource-safe streams, construction pitfalls"}
+      ]
+    },
+    "3": {"lines": 900},
+    "5": {"lines": 600}
+  }
 }
 ```

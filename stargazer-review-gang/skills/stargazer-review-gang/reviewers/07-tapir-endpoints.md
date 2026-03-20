@@ -5,8 +5,9 @@
 
 Review Tapir endpoint patterns for both server (jvm/) and client (js/) code. Apply Part A checks to jvm files and Part B checks to js files. If no Tapir server or client code is present, report "No Tapir endpoint code found — nothing to review."
 
-**Do NOT run any build or compile commands** (`./mill compile`, `./mill checkStyle`, etc.).
-Analyze by reading only. If unsure, report as `[NITPICK]`, not `[BLOCKER]`.
+> **FORBIDDEN:** Do NOT run `./mill`, `compile`, `test`, `checkStyle`, `checkStyleDirty`, `reformat`,
+> `checkUnused`, `WarnUnusedCode`, or ANY build/lint command. Do NOT use the Bash tool for compilation
+> or linting. You analyze code **by reading files only**. If unsure, report as `[NITPICK]`, not `[BLOCKER]`.
 
 ---
 
