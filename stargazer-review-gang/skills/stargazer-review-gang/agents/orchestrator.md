@@ -15,15 +15,15 @@ a JSON routing plan.
 ## Process
 
 1. Run `git diff --name-only <base>` to get the list of changed files.
-2. Run `git diff --stat <base>` to get total changed lines. Calculate depth:
-   - < 50 lines → `lite`
-   - 50–500 lines → `standard`
-   - > 500 lines → `deep`
+2. Run `git diff --stat <base>` to get total +/- (insertions + deletions). Calculate depth:
+   - ≤100 +/- → `lite`
+   - 101–1000 +/- → `medium`
+   - >1000 +/- → `heavy`
 3. For each file, run `git diff -U3 <base> -- <file>` to read the diff.
 4. Examine the diff content for imports, types, and patterns to decide which reviewers apply.
-3. Count changed lines (additions + deletions) per file.
-4. Sum lines per reviewer across all assigned files.
-5. If a reviewer's total exceeds 2000 lines, split into sub-reviewers.
+5. Count +/- (additions + deletions) per file from the diff.
+6. Sum +/- per reviewer across all assigned files.
+7. If a reviewer's total exceeds 2000 +/-, split into sub-reviewers.
 
 ## Reviewer Reference
 
@@ -55,8 +55,8 @@ a JSON routing plan.
 
 ## Workload Splitting
 
-If a reviewer's total lines exceed **2000**, split into sub-reviewers:
-- Target **2000–3000 lines per sub-reviewer**: `min(ceil(total_lines / 2500), 5)`
+If a reviewer's total +/- exceeds **2000**, split into sub-reviewers:
+- Target **2000–3000 +/- per sub-reviewer**: `min(ceil(total / 2500), 5)`
 - Divide the reviewer's checklist sections into equal groups across sub-reviewers
 - Each sub-reviewer gets a label like `"2a"`, `"2b"` with a `focus` field
 
@@ -67,22 +67,22 @@ Return JSON only:
 ```json
 {
   "total_files": 12,
-  "total_lines": 2982,
+  "total_changes": 2982,
   "depth": "deep",
   "routing": {
     "path/to/Service.scala": ["1", "2", "3", "5"],
     "path/to/Page.scala": ["1", "3", "8"]
   },
   "workload": {
-    "1": {"lines": 850},
+    "1": {"changes": 850},
     "2": {
-      "lines": 3200,
+      "changes": 3200,
       "split": [
         {"id": "2a", "focus": "Sections 1-9: ..."},
         {"id": "2b", "focus": "Sections 10-18: ..."}
       ]
     },
-    "3": {"lines": 900}
+    "3": {"changes": 900}
   }
 }
 ```

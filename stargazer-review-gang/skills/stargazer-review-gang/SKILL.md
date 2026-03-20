@@ -70,10 +70,10 @@ The orchestrator finds changed files, reads diffs, routes, and returns JSON:
 ```json
 {
   "total_files": 12,
-  "total_lines": 2982,
-  "depth": "deep",
+  "total_changes": 2982,
+  "depth": "heavy",
   "routing": {"path/to/File.scala": ["1", "2", "3"]},
-  "workload": {"1": {"lines": 850}, "2": {"lines": 3200, "split": [...]}}
+  "workload": {"1": {"changes": 850}, "2": {"changes": 3200, "split": [...]}}
 }
 ```
 
@@ -90,16 +90,16 @@ Using the routing output, determine the **union of all reviewer IDs** across all
 ### Workload Splits
 
 From `workload`:
-- **≤2000 lines:** One reviewer agent per ID.
-- **>2000 lines with split:** Spawn sub-reviewers (2a, 2b, etc.) with focused scope.
+- **≤2000 +/-:** One reviewer agent per ID.
+- **>2000 +/- with split:** Spawn sub-reviewers (2a, 2b, etc.) with focused scope.
   Prepend: `> FOCUSED REVIEW: You are sub-reviewer {id}. Review ONLY: {focus}`
 - **Max 5 sub-reviewers per scope.**
 
 ### Model Override by Depth
 
 - `lite`: `model: "haiku"` for all reviewers
-- `standard`: use roster defaults
-- `deep`: `model: "opus"` for standard reviewers; haiku stays haiku
+- `medium`: use roster defaults
+- `heavy`: `model: "opus"` for standard reviewers; haiku stays haiku
 
 ### Reviewer Roster
 
@@ -158,7 +158,7 @@ Spawn all reviewers in a **single message** for maximum parallelism.
 
 After all reviewers complete, validate BLOCKER and SUGGESTION findings to eliminate false positives.
 
-- **Skip if**: only nitpicks, or depth is lite.
+- **Skip if**: only nitpicks, or depth is `lite`.
 - Spawn **haiku validation agents** per file — they read code fresh and return CONFIRMED or FALSE_POSITIVE.
 - Drop FALSE_POSITIVE. Keep CONFIRMED. Fail-open on validator errors.
 
