@@ -29,31 +29,42 @@ Example restatements:
 
 ### 2. Spawn the initial round
 
-Launch all agents **in the same turn** (parallel). This includes the main prover/disprover agents AND the vibe check agent.
+Launch all agents as **background agents** (`run_in_background: true`) so the orchestrator is free to react as results arrive. Do NOT block on all agents — the whole point is to listen for the vibe check early.
+
+#### Spawn order
+
+1. **In a single turn**, spawn all 6 agents in the background:
+   - 2 provers (background)
+   - 3 disprovers (background)
+   - 1 vibe check agent (background, lighter model)
+
+2. **Listen for the vibe check result first.** Because the vibe check agent uses a lesser model and does shallow analysis, it will complete before the main agents. When it returns, immediately spawn **1 reinforcement agent in the background** based on its verdict:
+   - If vibe says `LIKELY TRUE` → spawn 1 additional prover (background)
+   - If vibe says `LIKELY FALSE` → spawn 1 additional disprover (background)
+
+3. **Collect all results.** Wait for all background agents (provers, disprovers, and the reinforcement agent) to complete before proceeding to judging. Do not proceed to step 3 until every agent has returned.
 
 #### Agent counts: disprover advantage
 
-Users naturally phrase claims they believe are true, creating a positivity bias. To counter this, **always spawn 1 more disprover than prover**. The default starting lineup is **2 provers + 3 disprovers + 1 vibe check agent** (6 agents total). This asymmetry forces the claim to survive stronger scrutiny — if it still holds, you can be more confident.
+Users naturally phrase claims they believe are true, creating a positivity bias. To counter this, **always spawn 1 more disprover than prover**. The default starting lineup is **2 provers + 3 disprovers + 1 vibe check agent** (6 agents total, plus 1 reinforcement agent spawned after vibe check). This asymmetry forces the claim to survive stronger scrutiny — if it still holds, you can be more confident.
 
 #### Focus limit: 2 vectors per agent max
 
 Each prover/disprover focuses on **at most 2 proof/attack vectors**. This keeps each agent fast and focused rather than producing sprawling, unfocused analysis. If you need more coverage, spawn more agents rather than overloading existing ones. State the 2 vectors explicitly in each agent's prompt.
 
-#### Vibe check agent (fast, concurrent)
+#### Vibe check agent (fast, background)
 
-Alongside the main agents, spawn a **lightweight vibe check agent** — use a lesser model, lesser reasoning effort, or both (e.g., `model: "haiku"`). Its job is to quickly assess whether the claim is more likely true or false, without rigorous proof. It reads the subject and claim, does a quick scan, and returns a one-line verdict: `LIKELY TRUE` or `LIKELY FALSE` with a 1-2 sentence rationale.
+Spawn the vibe check agent **in the background** alongside all other agents, using a lesser model, lesser reasoning effort, or both (e.g., `model: "haiku"`). Its job is to quickly assess whether the claim is more likely true or false, without rigorous proof. It reads the subject and claim, does a quick scan, and returns a one-line verdict: `LIKELY TRUE` or `LIKELY FALSE` with a 1-2 sentence rationale.
+
+Because it runs in the background with a lighter model, it completes first — the orchestrator receives its notification and immediately spawns the reinforcement agent (also in the background) without waiting for the main provers/disprovers to finish.
 
 **Important**: The vibe check is NOT a proof — it's a fast heuristic to guide resource allocation. Its verdict does not count toward the judge tally. Judges should ignore the vibe check result when evaluating arguments. The reinforcement agent spawned from the vibe check provides **supporting evidence**, not formal proof — label it accordingly.
 
-Only **1 vibe check agent per round**. It runs concurrently with the main agents and finishes faster. Once it returns, spawn **1 extra agent** to back its view:
-- If vibe says `LIKELY TRUE` → spawn 1 additional prover
-- If vibe says `LIKELY FALSE` → spawn 1 additional disprover
-
-This reinforcement agent joins the current round — its results are included in the synthesis.
+Only **1 vibe check agent per round**.
 
 #### Reinforcement agent vector selection
 
-The reinforcement agent must use a **fresh angle** not already assigned to other agents in this round.
+Spawn the reinforcement agent **in the background** (`run_in_background: true`) as soon as the vibe check returns. It must use a **fresh angle** not already assigned to other agents in this round.
 To select the angle:
 
 1. List all vectors already assigned to agents of the same role (provers or disprovers)
@@ -112,8 +123,9 @@ Provide each agent with:
 - Their role (prover or disprover)
 - **Their assigned angle — exactly 1-2 specific vectors to pursue**
 - The path to their instruction file so they can read it
+- **`run_in_background: true`** — all agents run in the background
 
-**Agent prompt template**:
+**Agent prompt template** (spawn with `run_in_background: true`):
 ```
 You are <Prover/Disprover> <letter>. Read the file <this-skill-path>/agents/<prover/disprover>.md for your instructions.
 
