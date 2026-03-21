@@ -13,13 +13,13 @@ The subject can be anything — code, architecture, runtime behavior, a design d
 
 ### 1. Identify the target
 
-Ask (or extract from context) two things:
+Extract (or ask for) two things:
 - **Subject**: what to analyze. This can be:
   - **Code**: a function, module, or code path — read it
   - **Architecture/Design**: a system design, data flow, or interaction pattern — explore the relevant files
   - **Runtime behavior**: how the system behaves in production — may need trace/log evidence
   - **Process/Config**: a migration, deployment, config change — read the relevant artifacts
-- **Claim**: what to prove or disprove. Restate it precisely before proceeding — ambiguous claims produce useless proofs. If the user's phrasing is vague, propose a precise formulation and confirm.
+- **Claim**: what to prove or disprove. Restate it precisely before proceeding — ambiguous claims produce useless proofs. If the user's phrasing is vague, propose a precise formulation and use the **AskUserQuestion** tool to confirm.
 
 Example restatements:
 - "it never crashes" → "for all valid inputs conforming to the type signature, the function returns normally without throwing"
@@ -195,7 +195,9 @@ Regardless of the result (PROVEN, DISPROVEN, or UNDECIDED), go to step 4 (ask us
 
 ### 4. Ask user for next action
 
-After every round, present the result and let the user decide what to do next. The user always has the final say — even if judges reached a clear verdict, the user may want more scrutiny.
+After every round, present the result and use the **AskUserQuestion** tool to let the user decide what to do next. The user always has the final say — even if judges reached a clear verdict, the user may want more scrutiny.
+
+Use AskUserQuestion with the following question text:
 
 ```
 ## Round <N> result: <PROVEN | DISPROVEN | UNDECIDED>
@@ -230,7 +232,7 @@ If the user accepts, go to step 6 (present verdict). Use the current round's jud
 #### Option 2: More context → new prove/disprove round
 
 If the user provides more context:
-1. **Refine the claim statement** based on the new information. Show the refined claim to the user and confirm before proceeding.
+1. **Refine the claim statement** based on the new information. Use the **AskUserQuestion** tool to show the refined claim and confirm before proceeding.
 2. Spawn a fresh **prove/disprove round** (same structure as step 2 — provers, disprovers, vibe check agent, reinforcement agent). Use the refined claim.
 3. Judge the round (step 3).
 
