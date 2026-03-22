@@ -2,8 +2,8 @@
 name: stargazer-review-gang
 description: >
   Trigger when user says "stargazer review gang", "review my changes", "review this PR",
-  or wants multi-angle feedback before pushing. Spawns specialized sub-agents for the
-  Stargazer codebase.
+  or wants multi-angle feedback before pushing. Spawns a team of specialized reviewer agents
+  for the Stargazer codebase.
 ---
 
 # Stargazer Review Gang
@@ -15,10 +15,10 @@ anything else before Step 1.
 
 ## Constraints
 
-1. **NO BUILD COMMANDS.** You and all sub-agents are FORBIDDEN from running `./mill`, `compile`,
+1. **NO BUILD COMMANDS.** You and all team members are FORBIDDEN from running `./mill`, `compile`,
    `test`, `checkStyle`, `checkStyleDirty`, `reformat`, `checkUnused`, `WarnUnusedCode`, or any
    build/lint command.
-2. **YOU DO NOT READ DIFFS, SOURCE FILES, OR SUB-AGENT INSTRUCTION FILES.** Do NOT run
+2. **YOU DO NOT READ DIFFS, SOURCE FILES, OR AGENT INSTRUCTION FILES.** Do NOT run
    `git diff` or `git merge-base`. Do NOT use the Read tool on any `.md` file in this skill.
    The orchestrator determines the diff ref itself from the user's review scope.
    **Exception:** You MAY run `git log --oneline` and `git status` (short form) in Step 3 to
@@ -30,10 +30,13 @@ anything else before Step 1.
 
 1. Ask user for context
 2. **Discover tools** — scan available plugins for tools reviewers can use (e.g. LSP for Scala)
-3. Spawn **routing orchestrator** → get back file list, depth, and routing plan (JSON)
-4. Spawn **reviewer agents** in parallel based on routing plan
-5. **Aggregate** (validates + deduplicates + filters) and present report
-6. Offer **auto-fix**
+3. Spawn **routing orchestrator** (plain agent) → get back file list, depth, and routing plan (JSON)
+4. **Create review team** and spawn **reviewer agents** as named team members
+5. Spawn **aggregator** as team member → validates, deduplicates, filters, **re-queries reviewers
+   directly** for borderline findings via SendMessage
+6. Present report and offer **auto-fix** — dispatched to the original reviewers who have full
+   file context
+7. **Shutdown team**
 
 ---
 
@@ -60,7 +63,7 @@ options:
 
 ## Step 2: Discover Available Tools
 
-Before spawning sub-agents, scan available plugins/skills for tools that reviewers can leverage
+Before spawning agents, scan available plugins/skills for tools that reviewers can leverage
 (e.g. an LSP server with Scala support for go-to-definition, find-references, type info).
 
 ### Discovery Process
@@ -93,8 +96,9 @@ Store the manifest as `discovered_tools` for use in subsequent steps.
 
 ## Step 3: Spawn Routing Orchestrator
 
-Spawn a **single agent** with this prompt (do NOT read the orchestrator file yourself).
-Use `model: "sonnet"` — the orchestrator interprets the review scope, determines diff refs, reads all diffs, and routes files.
+Spawn a **single plain agent** (not a team member) with this prompt.
+Use `model: "sonnet"` — the orchestrator interprets the review scope, determines diff refs, reads
+all diffs, and routes files. It is a one-shot job that does not need to persist.
 
 **Pass the user's review scope verbatim** — do NOT interpret it into base/head refs. The
 orchestrator determines the correct git diff strategy itself. **Add surrounding context** (branch
@@ -137,26 +141,37 @@ The orchestrator determines the diff ref, finds changed files, reads diffs, rout
 }
 ```
 
-Use the returned `diff_ref` when spawning reviewers and aggregators.
+Use the returned `diff_ref` when communicating with reviewers and aggregators.
 
 **Wait for the orchestrator to complete before proceeding.**
 
 ---
 
-## Step 4: Spawn Reviewer Agents
+## Step 4: Create Team and Spawn Reviewers
 
 > **ROUTING IS FINAL.** Spawn exactly the reviewers the orchestrator assigned — no more, no less.
 
+### 4a. Create the Review Team
+
+Use **TeamCreate** to create a team for this review session:
+
+```
+team_name: "review-gang"
+description: "Stargazer code review session"
+```
+
+### 4b. Determine Reviewer Set
+
 Using the routing output, determine the **union of all reviewer IDs** across all files.
 
-### Workload Splits
+#### Workload Splits
 
 From `workload`:
 - **≤4000 +/-:** One reviewer agent per ID.
 - **>4000 +/- with split:** Spawn sub-reviewers (2a, 2b, etc.) with focused scope.
   Prepend: `> FOCUSED REVIEW: You are sub-reviewer {id}. Review ONLY: {focus}`
 
-### Model Override by Depth
+#### Model Override by Depth
 
 - `lite`: use roster defaults (all reviewers are standard minimum — no haiku for semantic review)
 - `medium`: use roster defaults
@@ -177,12 +192,20 @@ From `workload`:
 | 10 | Observability | `reviewers/10-observability.md` | haiku |
 | 11 | Testing | `reviewers/11-testing.md` | standard |
 
-### Reviewer Prompt Template
+### 4c. Spawn Reviewers as Named Team Members
 
-For each reviewer, spawn an agent with this prompt (do NOT read checklist files yourself):
+For each reviewer, spawn an agent using the **Agent tool** with `team_name: "review-gang"` and a
+descriptive `name` (e.g., `"reviewer-1"`, `"reviewer-2"`, `"reviewer-5"`). The name MUST follow
+the pattern `reviewer-{ID}` so the aggregator can address them by name for re-queries.
+
+For sub-reviewers from workload splits, use `reviewer-{ID}{letter}` (e.g., `reviewer-2a`,
+`reviewer-2b`).
+
+Use this prompt template for each reviewer (do NOT read checklist files yourself):
 
 ```
-You are a code reviewer sub-agent. Do NOT invoke any skills or the Skill tool.
+You are a code reviewer on the "review-gang" team. Your name is "reviewer-{ID}".
+Do NOT invoke any skills or the Skill tool.
 Read your checklist from: [checklist file path from roster table]
 
 ---
@@ -217,6 +240,20 @@ For each file above:
 5. If LSP or similar tools are available: use them for type info, references, or diagnostics
    on changed lines to strengthen your findings.
 Then review ONLY changed lines.
+
+## Team Membership
+
+You are a persistent team member. After completing your initial review, you will go idle.
+You may receive follow-up messages:
+
+- **From the aggregator** — asking you to clarify a borderline finding or provide a more
+  concrete fix. Respond with the requested detail, then go idle again.
+- **From the team lead** — asking you to apply specific fixes to files you reviewed. You already
+  have full context on these files, so apply the fixes using the Edit tool, then report what
+  you changed.
+
+When you receive a message, handle it and go idle. Do NOT shut down unless you receive a
+shutdown request.
 ```
 
 Spawn all reviewers in a **single message** for maximum parallelism.
@@ -225,37 +262,45 @@ Spawn all reviewers in a **single message** for maximum parallelism.
 
 ## Step 5: Aggregate, Validate, and Filter
 
-Each aggregator now **validates** BLOCKER/SUGGESTION findings against actual code before
-deduplicating. No separate validation step needed.
-
 Count **all** reviewer agents that responded — including those that reported "Clean — no issues
 found" (sub-reviewers like 1a, 1b count separately). Every reviewer response counts as one output.
 
-- **≤4 outputs:** Spawn **one aggregator agent**.
-- **>4 outputs:** Split into batches of ≤4 and spawn **one aggregator per batch**. Group related
-  reviewers together (e.g., FDB + ZIO + Temporal). After all aggregators complete, spawn one
-  **final aggregator** to merge their reports and do a cross-group dedup pass.
+- **≤4 outputs:** Spawn **one aggregator** as a team member.
+- **>4 outputs:** Split into batches of ≤4 and spawn **one aggregator per batch** as team members.
+  Group related reviewers together (e.g., FDB + ZIO + Temporal). After all aggregators complete,
+  spawn one **final aggregator** team member to merge their reports and do a cross-group dedup pass.
 
 Use the same depth-based model override as reviewers:
 - `lite`: `model: "sonnet"` (aggregator default — no haiku for semantic work)
 - `medium`: `model: "sonnet"` (aggregator default)
 - `heavy`: `model: "opus"`
 
-For each aggregator, spawn an agent with the depth-appropriate model and this prompt (do NOT read the aggregator file yourself):
+For each aggregator, spawn an agent with the depth-appropriate model, `team_name: "review-gang"`,
+and `name: "aggregator"` (or `"aggregator-1"`, `"aggregator-2"` for batched, `"aggregator-final"`
+for the merge pass).
+
+Use this prompt (do NOT read the aggregator file yourself):
 
 ```
-You are a review aggregator sub-agent. Do NOT invoke any skills or the Skill tool.
+You are a review aggregator on the "review-gang" team. Your name is "aggregator".
+Do NOT invoke any skills or the Skill tool.
 Read your instructions from: agents/aggregator.md (relative to this skill's directory)
 
 Diff ref: <diff_ref from orchestrator output>
+
+## Team Members
+The following reviewers are active team members you can message directly:
+<list of reviewer names spawned in Step 4, e.g. "reviewer-1", "reviewer-2", "reviewer-5">
 
 ## Findings to Aggregate
 [paste all findings from the assigned reviewer batch]
 ```
 
-Pass the `diff_ref` so the aggregator can check diffs during validation.
+Pass the `diff_ref` so the aggregator can check diffs during validation. Pass the list of active
+reviewer names so the aggregator knows who to message for re-queries.
 
-The aggregator returns the final report. Present it to the user as-is.
+The aggregator validates findings, re-queries borderline ones by messaging reviewers directly,
+then returns the final report. Present it to the user as-is.
 
 ---
 
@@ -275,5 +320,39 @@ options:
     description: "Do not apply any fixes"
 ```
 
-Apply fixes file-by-file, blockers first.
-After fixing, tell user to run `checkStyleDirty` on affected modules.
+### Dispatch Fixes to Reviewers
+
+Instead of applying fixes yourself, dispatch them to the **original reviewers** who flagged the
+issues. They already have full file context from their review, making their fixes more accurate.
+
+For each reviewer that has findings to fix, use **SendMessage** to the reviewer:
+
+```
+to: "reviewer-{ID}"
+message: |
+  Apply the following fixes to the files you reviewed. Use the Edit tool for each fix.
+  After applying all fixes, report what you changed.
+
+  Fixes to apply (blockers first):
+  [list the specific findings from the aggregator report that belong to this reviewer,
+   including file:line, issue description, and suggested fix]
+summary: "Apply N fixes to reviewed files"
+```
+
+Wait for all dispatched reviewers to respond with their changes, then tell the user to run
+`checkStyleDirty` on affected modules.
+
+---
+
+## Step 7: Shutdown Team
+
+After the review is complete (either after presenting the report if user skipped auto-fix, or
+after auto-fix is applied):
+
+1. Send shutdown requests to all active team members:
+   ```
+   to: "*"
+   message: {"type": "shutdown_request", "reason": "Review complete"}
+   ```
+
+2. After all members have shut down, use **TeamDelete** to clean up.
