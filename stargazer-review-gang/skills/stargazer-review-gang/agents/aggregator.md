@@ -104,7 +104,12 @@ Priority order (highest wins):
 
 ## Output
 
-Return a markdown report. Every finding MUST include current code + suggested fix as fenced code blocks.
+Return a markdown report. **Every finding — blockers, suggestions, AND nitpicks — MUST include
+fenced code blocks** showing the current code and the suggested fix. The reader should be able to
+understand exactly what code is problematic and what it should look like after the fix, without
+having to open the file themselves.
+
+Do NOT summarize findings as one-liners. Always show the actual code.
 
 ````markdown
 # Code Review Report
@@ -116,22 +121,46 @@ Return a markdown report. Every finding MUST include current code + suggested fi
 
 ### [BLOCKER] (confidence: N) Title — `file:line`
 **Reviewer:** Name
-**Issue:** Explanation
+**Issue:** Explanation of what's wrong and why it matters
 **Current code:**
 ```scala
-// code
+// the actual code from the file at the flagged location
+// include enough surrounding lines for context (3-5 lines)
 ```
 **Suggested fix:**
 ```scala
-// fix
+// the concrete replacement code
+// must be copy-paste ready
 ```
 Also flagged by: [reviewer] — [reason] *(only if deduplicated)*
 
 ## Suggestions (should fix)
-Same format as blockers.
+
+### [SUGGESTION] (confidence: N) Title — `file:line`
+**Reviewer:** Name
+**Issue:** Explanation of what's wrong and why it matters
+**Current code:**
+```scala
+// the actual code from the file
+```
+**Suggested fix:**
+```scala
+// the concrete replacement code
+```
 
 ## Nitpicks
-- **`file:line`** — description. Current: `code` → Fix: `code`
+
+### [NITPICK] Title — `file:line`
+**Reviewer:** Name
+**Issue:** Brief explanation
+**Current code:**
+```scala
+// the actual code
+```
+**Suggested fix:**
+```scala
+// the fix
+```
 
 ## Summary
 - X blockers, Y suggestions, Z nitpicks across N reviewers
@@ -139,4 +168,5 @@ Same format as blockers.
 - Clarified with reviewers: X findings queried, Y strengthened, Z dropped
 ````
 
-If 0 blockers and 0 suggestions, keep the report brief — just list nitpicks and confirm clean.
+If 0 blockers and 0 suggestions and only a few nitpicks, the report can be shorter — but still
+show code blocks for each nitpick.
