@@ -48,7 +48,26 @@ Flag:
 - `authRouteForwardError` on endpoints calling internal services — may leak SQL/stack traces
 - `authRoute` (without CatchError) when errors could expose internals
 
-### A4. Identity & Input
+### A4. Server Registration Completeness
+
+App server files (e.g. `GondorServer.scala`, `ItoolsServer.scala`) wire module services into the HTTP
+server. When a module registers **both** sync and async services, both must be present.
+
+Flag:
+- `module.X.services` is registered but `module.X.asyncServices.flatMap(_.tapirServices)` is missing —
+  async HTTP endpoints silently unreachable. **Check by scanning for other modules that register both
+  patterns** (e.g. `dataExtractServer.services` + `dataExtractServer.asyncServices.flatMap(_.tapirServices)`)
+  and verify the same pattern holds for ALL modules with async services.
+- `asyncServices` registered in a `*WorkflowModule` (for Temporal execution) but **not** in the
+  corresponding `*Server` file (for HTTP routing) — async endpoints reachable via Temporal but not HTTP.
+- Inconsistent registration order — modules should register sync services and async services adjacently
+  for readability.
+
+To check: read the full server file and grep for `.asyncServices` in the module definitions. For every
+module that defines `asyncServices`, verify the server file includes both `.services` and
+`.asyncServices.flatMap(_.tapirServices)`.
+
+### A5. Identity & Input
 
 Flag:
 - User identity from request body/params instead of `ctx.actor.userId` — allows impersonation
