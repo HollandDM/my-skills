@@ -45,7 +45,7 @@ The team member will respond via `SendMessage`. You will receive their answer au
 
 ## How to structure your output
 
-After you have all the information you need (with or without follow-ups), deliver your final verdict:
+After you have all the information you need (with or without follow-ups), **use `SendMessage` to send your final verdict to the team lead**:
 
 ```
 ## Judge verdict

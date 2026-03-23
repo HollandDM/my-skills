@@ -53,7 +53,9 @@ Use whichever technique finds a break. Try multiple angles.
 
 ## How to structure your output
 
-Your output MUST contain a **Logic Path** — the chain of reasoning steps that leads to your conclusion (whether you found a counterexample or not). This is the most important part of your output. The orchestrator will present the winning agent's logic path to the user, so it must be self-contained and followable by someone who hasn't seen the code before.
+Your output MUST contain a **Logic Path** — the chain of reasoning steps that leads to your conclusion (whether you found a counterexample or not). This is the most important part of your output. The winning agent's logic path will be presented to the user, so it must be self-contained and followable by someone who hasn't seen the code before.
+
+When your argument is complete, **use `SendMessage` to send the full argument to the team lead**. This is how you report your findings.
 
 ```
 ## Disproof attempt: <property>

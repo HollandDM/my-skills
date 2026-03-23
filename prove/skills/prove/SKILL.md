@@ -154,10 +154,13 @@ Adapt as needed — the key is each agent has a distinct angle, limited to 2 vec
 ```
 You are <Prover/Disprover> <letter>. Read the file <this-skill-path>/agents/<prover/disprover>.md for your instructions.
 
-You are a member of a verification team.
+You are a member of a verification team. Use SendMessage for ALL communication.
 
 YOUR GROUP (<provers/disprovers>): <list of teammate names in the same group>
-You can SendMessage to anyone in your group to collaborate — share evidence, ask for help, or strengthen each other's arguments. Do NOT communicate with the opposing group.
+You can SendMessage anyone in your group to collaborate — share evidence, ask for help, or strengthen each other's arguments. Do NOT communicate with the opposing group.
+
+TEAM LEAD: <team-lead-name>
+When your argument is complete, use SendMessage to report your full argument to the team lead.
 
 JUDGES will join later and may SendMessage you to ask for clarification about your logic path. Respond via SendMessage with precise, concise answers.
 
@@ -170,6 +173,12 @@ Subject under analysis:
 
 Claim to <prove/prove FALSE>:
 <claim>
+
+When you finish your argument, SendMessage it to the team lead:
+SendMessage:
+  to: "<team-lead-name>"
+  message: "<your full argument with logic path>"
+  summary: "<Prover/Disprover> <letter> argument complete"
 ```
 
 ### 3. Judge the round (team evaluation)
@@ -199,7 +208,9 @@ Judges handle their own Q&A — they use `SendMessage` to ask provers/disprovers
 ```
 You are Judge <N>. Read the file <this-skill-path>/agents/judge.md for your instructions.
 
-You are part of a verification team. The provers and disprovers are your teammates — you can use SendMessage to ask any of them follow-up questions directly, and they will respond via SendMessage.
+You are part of a verification team. Use SendMessage for ALL communication.
+TEAM LEAD: <team-lead-name>
+The provers and disprovers are your teammates — you can use SendMessage to ask any of them follow-up questions directly, and they will respond via SendMessage.
 
 Your decision vector (evaluate ONLY through this lens): <one specific vector>
 
@@ -223,7 +234,7 @@ Subject:
 
 Evaluate the arguments through your lens. If any argument has a gap or unclear step that affects your verdict, use SendMessage to ask the specific team member for clarification — do not guess. You get at most 3 questions across at most 1 round of follow-ups.
 
-After you have all the information you need, deliver your final verdict:
+After you have all the information you need, SendMessage your final verdict to the team lead:
 - Verdict: PROVEN / DISPROVEN / UNDECIDED
 - Rationale: 2-3 sentences explaining your decision through your assigned lens
 - Winner (if not UNDECIDED): which specific agent's argument was most convincing
@@ -297,8 +308,9 @@ For each strong prover argument `pA`, spawn a **disprover** into the battle team
 ```
 You are Battle Disprover <N>. Read the file <this-skill-path>/agents/disprover.md for your instructions.
 
-You are a member of a verification team.
+You are a member of a verification team. Use SendMessage for ALL communication.
 YOUR GROUP (disprovers): <list fellow battle-disprover names>
+TEAM LEAD: <team-lead-name>
 You can SendMessage fellow disprovers to collaborate. Judges may also SendMessage you for clarification.
 
 Your specific target: Disprove the following argument from a Prover.
@@ -314,14 +326,17 @@ Subject:
 <subject>
 
 Your job: Find a flaw in THIS argument — a step that doesn't follow, an assumption that's wrong, a case it missed. Do not construct a general disproof; attack THIS specific logic path.
+
+When done, SendMessage your full argument to the team lead.
 ```
 
 For each strong disprover argument `dA`, spawn a **prover** into the battle team (named `Battle-Prover-<N>`):
 ```
 You are Battle Prover <N>. Read the file <this-skill-path>/agents/prover.md for your instructions.
 
-You are a member of a verification team.
+You are a member of a verification team. Use SendMessage for ALL communication.
 YOUR GROUP (provers): <list fellow battle-prover names>
+TEAM LEAD: <team-lead-name>
 You can SendMessage fellow provers to collaborate. Judges may also SendMessage you for clarification.
 
 Your specific target: Address the following counterexample/attack from a Disprover.
@@ -337,6 +352,8 @@ Subject:
 <subject>
 
 Your job: Show why THIS attack fails — the counterexample is invalid, the scenario is unreachable, the assumption is wrong. Do not construct a general proof; defeat THIS specific attack.
+
+When done, SendMessage your full argument to the team lead.
 ```
 
 After the battle round completes, judge the results (step 3 — spawn judges into the battle team). Then go to step 4 (ask user) regardless of verdict — the user always gets the final say.
