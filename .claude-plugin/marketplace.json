@@ -11,7 +11,7 @@
       "name": "stargazer-review-gang",
       "source": "./stargazer-review-gang",
       "description": "Multi-perspective code review with 10 specialized reviewer agents, validation layer, and confidence scoring for the Stargazer codebase",
-      "version": "8d8d277",
+      "version": "e3eb5cf",
       "author": {
         "name": "HollandDM"
       },
@@ -21,7 +21,7 @@
       "name": "prove",
       "source": "./prove",
       "description": "Adversarial verification skill: prover vs disprover agents argue, then a judge synthesizes a verdict",
-      "version": "8d8d277",
+      "version": "e3eb5cf",
       "author": {
         "name": "HollandDM"
       },
