@@ -169,9 +169,10 @@ Only flag issues on lines **added or modified in the diff**. Do not critique pre
 For each issue found, report:
 - **File**: path
 - **Line**: number (if identifiable)
+- **Severity**: `[BLOCKER]` (memory leak, blocking UI), `[SUGGESTION]` (missing error handling, wrong framework choice, pattern deviation), `[NITPICK]` (style)
+- **Confidence**: 0–100 (90+ certain, 70–89 strong signal, 50–69 suspicious, <50 don't report)
 - **Issue**: what pattern is violated
-- **Severity**: `critical` (memory leak/blocking UI), `high` (missing error handling, wrong framework choice), `medium` (pattern deviation), `low` (style)
-- **Fix**: specific change needed
+- **Fix**: fenced code blocks showing current code and suggested replacement
 
 Focus on: (1) new code that should be Laminar not React, (2) callback correctness and error handling,
 (3) memory leaks from unmounted state updates or missing cleanup.

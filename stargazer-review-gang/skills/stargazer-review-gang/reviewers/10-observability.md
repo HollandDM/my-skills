@@ -241,7 +241,7 @@ swallowing in a critical path), mention it as a `[NOTE]` only.
 For each issue found, report:
 - **File**: path
 - **Line**: number
+- **Severity**: `[BLOCKER]` (secrets in logs, silent error swallowing), `[SUGGESTION]` (missing metrics/tracing/structured logging), `[NITPICK]` (naming, service prefix, SpanKind)
+- **Confidence**: 0–100 (90+ certain, 70–89 strong signal, 50–69 suspicious, <50 don't report)
 - **Issue**: what's missing and why it matters operationally
-- **Severity**: `[BLOCKER]` (secrets in logs, silent error swallowing), `[SUGGESTION]` (missing
-  metrics/tracing/structured logging), `[NITPICK]` (naming, service prefix, SpanKind)
-- **Fix**: specific code change with before/after
+- **Fix**: fenced code blocks showing current code and suggested replacement

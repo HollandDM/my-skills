@@ -344,8 +344,7 @@ the author didn't touch. If pre-existing tests have a genuine isolation issue (e
 For each issue found, report:
 - **File**: path
 - **Line**: number
+- **Severity**: `[BLOCKER]` (flaky/order-dependent/Thread.sleep, missing Temporal fixture), `[SUGGESTION]` (weak assertions, missing cleanup, missing negative tests), `[NITPICK]` (naming, combined assertions, test data style)
+- **Confidence**: 0–100 (90+ certain, 70–89 strong signal, 50–69 suspicious, <50 don't report)
 - **Issue**: what's wrong and the CI/correctness risk
-- **Severity**: `[BLOCKER]` (flaky/order-dependent/Thread.sleep, missing Temporal fixture),
-  `[SUGGESTION]` (weak assertions, missing cleanup, missing negative tests),
-  `[NITPICK]` (naming, combined assertions, test data style)
-- **Fix**: specific code change with before/after
+- **Fix**: fenced code blocks showing current code and suggested replacement

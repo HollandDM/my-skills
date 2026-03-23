@@ -467,8 +467,9 @@ For each issue found, report:
 - **File**: path
 - **Line**: number (if identifiable)
 - **Severity**: `[BLOCKER]` (wrong effect type, missing registration, data integrity risk, will fail at scale), `[SUGGESTION]` (wrong transaction type, pattern deviation, suboptimal performance), `[NITPICK]` (style, minor convention)
+- **Confidence**: 0–100 (90+ certain, 70–89 strong signal, 50–69 suspicious, <50 don't report)
 - **Issue**: what FDB pattern or performance rule is violated and why it's dangerous
-- **Fix**: specific change with before/after code
+- **Fix**: fenced code blocks showing current code and suggested replacement
 
 Focus on both correctness (right patterns, effect types, registrations) and performance (N+1
 queries, unbounded scans, missing splits, timeout risks, external calls inside transactions).

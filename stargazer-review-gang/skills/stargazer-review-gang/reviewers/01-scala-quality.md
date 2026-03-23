@@ -351,9 +351,10 @@ For each issue found, report:
 - **File**: path
 - **Line**: number (if identifiable)
 - **Severity**: `[BLOCKER]`, `[SUGGESTION]`, or `[NITPICK]`
+- **Confidence**: 0–100 (90+ certain, 70–89 strong signal, 50–69 suspicious, <50 don't report)
 - **Rule**: rule name (from tables above) or pattern name (from sections 5-9)
 - **Issue**: what's wrong and why it matters
-- **Fix**: specific code change, with before/after when helpful
+- **Fix**: fenced code blocks showing current code and suggested replacement
 
 Only report actual violations. No praise, no summaries, no filler.
 Skip anything inside string literals or comments (except `scalastyle` comment check).

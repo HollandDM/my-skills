@@ -415,8 +415,9 @@ Only flag issues on lines **added or modified in the diff**. Do not critique pre
 For each issue found, report:
 - **File**: path
 - **Line**: number (if identifiable)
-- **Issue**: what pattern is violated
 - **Severity**: `[BLOCKER]` (memory leak, broken reactivity, broken layout), `[SUGGESTION]` (wrong split/flatten strategy, missing error handling, design system, accessibility), `[NITPICK]` (style, convention, efficiency)
-- **Fix**: specific change needed
+- **Confidence**: 0–100 (90+ certain, 70–89 strong signal, 50–69 suspicious, <50 don't report)
+- **Issue**: what pattern is violated
+- **Fix**: fenced code blocks showing current code and suggested replacement
 
 Focus on memory leaks, broken reactivity, incorrect split/flatten strategy, broken layouts, and accessibility gaps — these cause hard-to-debug production issues.

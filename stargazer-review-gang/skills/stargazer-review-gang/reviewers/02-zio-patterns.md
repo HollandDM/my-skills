@@ -506,8 +506,9 @@ Only flag issues on lines **added or modified in the diff**. Do not critique pre
 For each issue found, report:
 - **File**: path
 - **Line**: number (if identifiable)
-- **Issue**: what's wrong, why it matters, and its production impact
 - **Severity**: `[BLOCKER]` (data loss/silent failure/thread starvation/OOM), `[SUGGESTION]` (correctness/performance), `[NITPICK]` (style/minor)
-- **Fix**: specific code change with before/after
+- **Confidence**: 0–100 (90+ certain, 70–89 strong signal, 50–69 suspicious, <50 don't report)
+- **Issue**: what's wrong, why it matters, and its production impact
+- **Fix**: fenced code blocks showing current code and suggested replacement
 
 Focus on correctness, silent failure risks, thread starvation, memory leaks, and contention.

@@ -94,8 +94,9 @@ Only flag issues on lines **added or modified in the diff**. Do not critique pre
 For each issue found, report:
 - **File**: path
 - **Line**: number
-- **Issue**: what was found
 - **Severity**: `[BLOCKER]` (dependency direction violation, runtime breakage), `[SUGGESTION]` (layer leak, custom codec notification), `[NITPICK]` (code placement)
-- **Fix**: where the code should live or suggestion if applicable
+- **Confidence**: 0–100 (90+ certain, 70–89 strong signal, 50–69 suspicious, <50 don't report)
+- **Issue**: what was found
+- **Fix**: fenced code blocks showing current code and suggested replacement (or where the code should live)
 
 If no violations are found across both parts, report "Architecture and serialization look clean — no issues detected."

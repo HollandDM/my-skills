@@ -442,8 +442,9 @@ Only flag issues on lines **added or modified in the diff**. Do not critique pre
 For each issue found, report:
 - **File**: path
 - **Line**: number (if identifiable)
+- **Severity**: `[BLOCKER]` (data loss, duplicates, missing activity attributes, idempotency violations), `[SUGGESTION]` (timeout/retry config, pattern deviations), `[NITPICK]` (style, naming)
+- **Confidence**: 0–100 (90+ certain, 70–89 strong signal, 50–69 suspicious, <50 don't report)
 - **Issue**: what Temporal pattern is violated
-- **Severity**: `critical` (data loss/duplicate/missing attributes), `high` (timeout/retry), `medium` (pattern), `low` (style)
-- **Fix**: specific change needed
+- **Fix**: fenced code blocks showing current code and suggested replacement
 
 Focus on **activity attributes** (most commonly missed), **idempotency**, and **pattern selection** — these cause production incidents.

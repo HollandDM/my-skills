@@ -113,6 +113,7 @@ Only flag issues on lines **added or modified in the diff**. Do not critique pre
 For each issue found, report:
 - **File**: path
 - **Line**: number
-- **Issue**: what convention is violated
 - **Severity**: `[BLOCKER]` (auth bypass/data leak/silent error), `[SUGGESTION]` (missing validation/authz/error handling/loading), `[NITPICK]` (pattern deviation)
-- **Fix**: specific change needed
+- **Confidence**: 0–100 (90+ certain, 70–89 strong signal, 50–69 suspicious, <50 don't report)
+- **Issue**: what convention is violated
+- **Fix**: fenced code blocks showing current code and suggested replacement
