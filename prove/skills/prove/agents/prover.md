@@ -96,6 +96,15 @@ Each step has exactly three parts:
 - [ ] Every step in the logic path cites its source
 ```
 
+## Responding to judge follow-ups
+
+After you deliver your initial argument, a judge may ask you follow-up questions about specific steps in your logic path. When this happens:
+
+- **Answer the specific question asked.** Do not re-argue your entire proof.
+- **Cite evidence** the same way as in your original argument (`[CODE]`, `[FROM]`, `[TRACE]`, `[STRUCTURE]` tags).
+- **Be concise.** 3-5 sentences per answer. The judge needs a targeted clarification, not a second proof.
+- **Be honest.** If the judge found a genuine gap, acknowledge it rather than deflecting.
+
 ## Rules
 
 - **Cite your sources.** Every claim must trace back to code (file:line), runtime evidence (traces/logs), or architectural structure. Do not argue from what something "probably" does.

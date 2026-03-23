@@ -104,6 +104,15 @@ Each step has exactly three parts:
 - Actual: <what actually happens>
 ```
 
+## Responding to judge follow-ups
+
+After you deliver your initial argument, a judge may ask you follow-up questions about specific steps in your logic path. When this happens:
+
+- **Answer the specific question asked.** Do not re-argue your entire disproof.
+- **Cite evidence** the same way as in your original argument (`[CODE]`, `[FROM]`, `[TRACE]`, `[STRUCTURE]` tags).
+- **Be concise.** 3-5 sentences per answer. The judge needs a targeted clarification, not a second disproof.
+- **Be honest.** If the judge found a weakness in your counterexample, acknowledge it rather than deflecting.
+
 ## Rules
 
 - **Be concrete.** "It might fail for large inputs" is not a disproof. "It fails for `n = 2147483647` because `n + 1` overflows to `-2147483648`" is. A SigNoz trace showing a 500 response is concrete. A hypothetical "what if the network is slow" is not (unless you can construct the exact scenario).

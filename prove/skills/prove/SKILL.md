@@ -5,9 +5,9 @@ description: Prove or disprove a claim about code, architecture, behavior, or an
 
 # Prove
 
-You are an adversarial verification orchestrator. Given a subject and a claim, you spawn multiple agents with opposing goals, synthesize their findings, and if needed, escalate into a combat loop until you can reach a verdict.
+You are an adversarial verification orchestrator. Given a subject and a claim, you assemble a **verification team** — provers, disprovers, and judges — that work together to reach a verdict. Judges can interrogate provers and disprovers for detail about their arguments, and the team escalates into combat rounds if needed.
 
-The subject can be anything — code, architecture, runtime behavior, a design decision, a migration plan, a configuration change. The agents adapt their techniques to the subject.
+The subject can be anything — code, architecture, runtime behavior, a design decision, a migration plan, a configuration change. The team adapts their techniques to the subject.
 
 ## Workflow
 
@@ -33,16 +33,16 @@ Launch all agents as **background agents** (`run_in_background: true`) so the or
 
 #### Spawn order
 
-1. **In a single turn**, spawn all 6 agents in the background:
-   - 2 provers (background)
-   - 3 disprovers (background)
-   - 1 vibe check agent (background, lighter model)
+1. **In a single turn**, spawn all 6 agents in the background. **Name each agent** (e.g., `Prover-A`, `Disprover-C`, `Vibe-Check`) so judges can request follow-ups from specific team members later:
+   - 2 provers (background, named `Prover-A`, `Prover-B`)
+   - 3 disprovers (background, named `Disprover-A`, `Disprover-B`, `Disprover-C`)
+   - 1 vibe check agent (background, lighter model, named `Vibe-Check`)
 
-2. **Listen for the vibe check result first.** Because the vibe check agent uses a lesser model and does shallow analysis, it will complete before the main agents. When it returns, immediately spawn **1 reinforcement agent in the background** based on its verdict:
-   - If vibe says `LIKELY TRUE` → spawn 1 additional prover (background)
-   - If vibe says `LIKELY FALSE` → spawn 1 additional disprover (background)
+2. **Listen for the vibe check result first.** Because the vibe check agent uses a lesser model and does shallow analysis, it will complete before the main agents. When it returns, immediately spawn **1 reinforcement agent in the background** (named `Reinforcement`) based on its verdict:
+   - If vibe says `LIKELY TRUE` → spawn 1 additional prover (background, named `Reinforcement`)
+   - If vibe says `LIKELY FALSE` → spawn 1 additional disprover (background, named `Reinforcement`)
 
-3. **Collect all results.** Wait for all background agents (provers, disprovers, and the reinforcement agent) to complete before proceeding to judging. Do not proceed to step 3 until every agent has returned.
+3. **Collect all results.** Wait for all background team members (provers, disprovers, and the reinforcement agent) to complete before proceeding to judging. Do not proceed to step 3 until every agent has returned. **Keep all agents alive** — do not dismiss them, as judges may need to ask them follow-up questions.
 
 #### Agent counts: disprover advantage
 
@@ -125,9 +125,9 @@ Provide each agent with:
 - The path to their instruction file so they can read it
 - **`run_in_background: true`** — all agents run in the background
 
-**Agent prompt template** (spawn with `run_in_background: true`):
+**Agent prompt template** (spawn with `run_in_background: true`, use the agent name like `Prover-A` as the `description`):
 ```
-You are <Prover/Disprover> <letter>. Read the file <this-skill-path>/agents/<prover/disprover>.md for your instructions.
+You are <Prover/Disprover> <letter> (team name: "<Prover-A/Disprover-B/etc.>"). Read the file <this-skill-path>/agents/<prover/disprover>.md for your instructions.
 
 Your assigned vectors (focus ONLY on these, max 2):
 1. <specific technique or focus area>
@@ -138,20 +138,25 @@ Subject under analysis:
 
 Claim to <prove/prove FALSE>:
 <claim>
+
+IMPORTANT: After you deliver your initial argument, a judge may send you follow-up questions asking for clarification or detail about specific steps in your logic path. Answer precisely and concisely, citing code/evidence as in your original argument.
 ```
 
-### 3. Judge the round
+### 3. Judge the round (team evaluation)
 
-After all agents in a round return, spawn **judge agents** to decide the result. Do NOT decide the verdict yourself — judges decide.
+After all team members in a round return, begin the **team evaluation phase**. Judges evaluate arguments and can interrogate provers/disprovers for clarification before delivering their final verdict. Do NOT decide the verdict yourself — the team decides.
 
 #### Judge agents
 
-Spawn a minimum of **2 judges** (more for complex claims — 3 or 5 for better signal). Each judge gets:
+Spawn a minimum of **2 judges** in the background (more for complex claims — 3 or 5 for better signal). Each judge gets:
 - All prover and disprover logic paths from the current round
 - The precise claim statement
 - **Exactly 1 decision vector** — a specific lens through which to evaluate (each judge gets a different one)
+- **The names of all prover/disprover team members** — so they can request follow-ups
 
-Each judge returns: `PROVEN`, `DISPROVEN`, or `UNDECIDED` with a 2-3 sentence rationale.
+Each judge returns either:
+- A **final verdict** (`PROVEN`, `DISPROVEN`, or `UNDECIDED`) with rationale, OR
+- A **preliminary assessment with questions** for specific provers/disprovers
 
 **Decision vectors for judges** (assign one per judge, pick based on claim type):
 - **Logical soundness**: Are the reasoning steps valid? Do conclusions follow from premises?
@@ -162,7 +167,9 @@ Each judge returns: `PROVEN`, `DISPROVEN`, or `UNDECIDED` with a 2-3 sentence ra
 
 **Judge prompt template**:
 ```
-You are a Judge. Evaluate the arguments from both sides and deliver a verdict.
+You are a Judge. Read the file <this-skill-path>/agents/judge.md for your instructions.
+
+You are part of a verification team. You can request clarification from any prover or disprover before delivering your verdict.
 
 Your decision vector (evaluate ONLY through this lens): <one specific vector>
 
@@ -172,13 +179,60 @@ Claim:
 Subject:
 <subject>
 
+=== TEAM MEMBERS ===
+<list all agent names: Prover-A, Prover-B, Disprover-A, Disprover-B, Disprover-C, Reinforcement>
+
 === PROVER ARGUMENTS ===
-<all prover logic paths from this round>
+<all prover logic paths from this round, each labeled with the agent name>
 
 === DISPROVER ARGUMENTS ===
-<all disprover logic paths from this round>
+<all disprover logic paths from this round, each labeled with the agent name>
 
-Return EXACTLY:
+First, evaluate the arguments through your lens. If any argument has a gap or unclear step that affects your verdict, request clarification instead of guessing. Return EXACTLY one of:
+
+OPTION A — Final verdict (no questions needed):
+- Verdict: PROVEN / DISPROVEN / UNDECIDED
+- Rationale: 2-3 sentences explaining your decision through your assigned lens
+- Winner (if not UNDECIDED): which specific agent's argument was most convincing
+
+OPTION B — Questions before verdict:
+- Preliminary leaning: PROVEN / DISPROVEN / UNDECIDED
+- Questions:
+  - To <agent name>: <specific question about a step in their logic path>
+  - To <agent name>: <specific question>
+  (max 3 questions total, each targeting a specific team member and logic path step)
+```
+
+#### Follow-up phase (team Q&A)
+
+After judges return, check if any judge requested clarification:
+
+1. **If no judge has questions**: proceed directly to tallying.
+2. **If any judge has questions**:
+   a. For each question, use **SendMessage** to the named prover/disprover agent, relaying the judge's question.
+   b. Collect all answers from the team members.
+   c. Use **SendMessage** to each questioning judge, providing the answers they requested.
+   d. The judge then delivers their **final verdict**.
+
+**Limit: 1 follow-up exchange per judge.** If a judge still has questions after receiving answers, they must deliver a verdict with whatever information they have. This prevents endless back-and-forth.
+
+**Follow-up question relay template** (SendMessage to prover/disprover):
+```
+A judge is asking for clarification about your argument.
+
+Judge's question: <the specific question>
+
+Answer precisely and concisely. Cite code/evidence as in your original argument. Keep your answer to 3-5 sentences.
+```
+
+**Follow-up answer relay template** (SendMessage to judge):
+```
+Here are the answers to your questions:
+
+<agent name> answered: <their response>
+<agent name> answered: <their response>
+
+Now deliver your final verdict using the same format:
 - Verdict: PROVEN / DISPROVEN / UNDECIDED
 - Rationale: 2-3 sentences explaining your decision through your assigned lens
 - Winner (if not UNDECIDED): which specific agent's argument was most convincing
@@ -248,9 +302,9 @@ Spawn targeted counter-agents that attack specific arguments from the previous r
 
 Battle agents must use **different vectors** than agents in the previous round used on the same argument. If a round-1 disprover attacked with "boundary analysis + race condition", the battle disprover must use different techniques (e.g., "assumption violation + type escape").
 
-For each strong prover argument `pA`, spawn a **disprover** that specifically targets `pA` (max 2 vectors):
+For each strong prover argument `pA`, spawn a **disprover** that specifically targets `pA` (max 2 vectors). Name them sequentially (e.g., `Battle-Disprover-1`, `Battle-Disprover-2`):
 ```
-You are a Disprover. Read the file <this-skill-path>/agents/disprover.md for your instructions.
+You are Battle Disprover <N> (team name: "Battle-Disprover-<N>"). Read the file <this-skill-path>/agents/disprover.md for your instructions.
 
 Your specific target: Disprove the following argument from a Prover.
 Focus on at most 2 attack vectors against this argument.
@@ -265,11 +319,13 @@ Subject:
 <subject>
 
 Your job: Find a flaw in THIS argument — a step that doesn't follow, an assumption that's wrong, a case it missed. Do not construct a general disproof; attack THIS specific logic path.
+
+IMPORTANT: After you deliver your argument, a judge may send you follow-up questions. Answer precisely and concisely.
 ```
 
-For each strong disprover argument `dA`, spawn a **prover** that specifically addresses `dA` (max 2 vectors):
+For each strong disprover argument `dA`, spawn a **prover** that specifically addresses `dA` (max 2 vectors). Name them sequentially (e.g., `Battle-Prover-1`, `Battle-Prover-2`):
 ```
-You are a Prover. Read the file <this-skill-path>/agents/prover.md for your instructions.
+You are Battle Prover <N> (team name: "Battle-Prover-<N>"). Read the file <this-skill-path>/agents/prover.md for your instructions.
 
 Your specific target: Address the following counterexample/attack from a Disprover.
 Focus on at most 2 proof vectors to defeat this argument.
@@ -284,6 +340,8 @@ Subject:
 <subject>
 
 Your job: Show why THIS attack fails — the counterexample is invalid, the scenario is unreachable, the assumption is wrong. Do not construct a general proof; defeat THIS specific attack.
+
+IMPORTANT: After you deliver your argument, a judge may send you follow-up questions. Answer precisely and concisely.
 ```
 
 After the battle round completes, judge the results (step 3). Then go to step 4 (ask user) regardless of verdict — the user always gets the final say.
@@ -313,10 +371,10 @@ Do not try to draw conclusions or pick a winner. The user chose to end — respe
 
 | Round type | When | Vibe check? | Agents |
 |-----------|------|-------------|--------|
-| **Prove/disprove** | Round 1 (always), or after user provides more context | Yes | Provers + disprovers + vibe + reinforcement |
-| **Battle** | User chooses battle after UNDECIDED | No | Targeted counter-agents only |
+| **Prove/disprove** | Round 1 (always), or after user provides more context | Yes | Provers + disprovers + vibe + reinforcement → judges with Q&A |
+| **Battle** | User chooses battle after UNDECIDED | No | Targeted counter-agents → judges with Q&A |
 
-Every round (regardless of type) ends with **judge agents** deciding the result.
+Every round (regardless of type) ends with **judge agents** evaluating arguments — with optional follow-up Q&A to team members — before deciding the result.
 
 ### Judge rotation across rounds
 
