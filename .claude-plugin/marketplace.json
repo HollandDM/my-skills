@@ -18,6 +18,16 @@
       "keywords": ["code-review", "scala", "zio", "stargazer"]
     },
     {
+      "name": "stargazer-subagent-dev",
+      "source": "./stargazer-subagent-dev",
+      "description": "Execute implementation plans for Stargazer via team-based agents with two-stage review (spec compliance + code quality)",
+      "version": "1c0eb92",
+      "author": {
+        "name": "HollandDM"
+      },
+      "keywords": ["implementation", "subagent", "scala", "zio", "stargazer", "plan-execution"]
+    },
+    {
       "name": "prove",
       "source": "./prove",
       "description": "Adversarial verification skill: prover vs disprover agents argue, then a judge synthesizes a verdict",
