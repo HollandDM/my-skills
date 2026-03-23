@@ -29,20 +29,28 @@ Example restatements:
 
 ### 2. Spawn the initial round
 
-Launch all agents as **background agents** (`run_in_background: true`) so the orchestrator is free to react as results arrive. Do NOT block on all agents — the whole point is to listen for the vibe check early.
+#### Create the verification team
+
+Before spawning any agents, create a team for this round using **TeamCreate**:
+
+```
+TeamCreate: { team_name: "prove-round-<N>", description: "Verification team for: <claim summary>" }
+```
+
+All agents in this round — provers, disprovers, vibe check, reinforcement, and later judges — join this team via the `team_name` parameter on the Agent tool. This enables **direct peer-to-peer communication**: judges can `SendMessage` to provers/disprovers to ask follow-up questions, and provers/disprovers respond directly.
 
 #### Spawn order
 
-1. **In a single turn**, spawn all 6 agents in the background. **Name each agent** (e.g., `Prover-A`, `Disprover-C`, `Vibe-Check`) so judges can request follow-ups from specific team members later:
-   - 2 provers (background, named `Prover-A`, `Prover-B`)
-   - 3 disprovers (background, named `Disprover-A`, `Disprover-B`, `Disprover-C`)
-   - 1 vibe check agent (background, lighter model, named `Vibe-Check`)
+1. **In a single turn**, spawn all 6 agents as **teammates** in the team. Each agent gets a `name` and `team_name`:
+   - 2 provers (named `Prover-A`, `Prover-B`)
+   - 3 disprovers (named `Disprover-A`, `Disprover-B`, `Disprover-C`)
+   - 1 vibe check agent (lighter model, named `Vibe-Check`)
 
-2. **Listen for the vibe check result first.** Because the vibe check agent uses a lesser model and does shallow analysis, it will complete before the main agents. When it returns, immediately spawn **1 reinforcement agent in the background** (named `Reinforcement`) based on its verdict:
-   - If vibe says `LIKELY TRUE` → spawn 1 additional prover (background, named `Reinforcement`)
-   - If vibe says `LIKELY FALSE` → spawn 1 additional disprover (background, named `Reinforcement`)
+2. **Listen for the vibe check result first.** Because the vibe check agent uses a lesser model and does shallow analysis, it will complete before the main agents. When it returns, immediately spawn **1 reinforcement agent** (named `Reinforcement`) into the same team based on its verdict:
+   - If vibe says `LIKELY TRUE` → spawn 1 additional prover (named `Reinforcement`)
+   - If vibe says `LIKELY FALSE` → spawn 1 additional disprover (named `Reinforcement`)
 
-3. **Collect all results.** Wait for all background team members (provers, disprovers, and the reinforcement agent) to complete before proceeding to judging. Do not proceed to step 3 until every agent has returned. **Keep all agents alive** — do not dismiss them, as judges may need to ask them follow-up questions.
+3. **Collect all results.** Wait for all team members (provers, disprovers, and the reinforcement agent) to complete before proceeding to judging. Do not proceed to step 3 until every agent has returned. Teammates remain alive in the team — judges will communicate with them directly via `SendMessage`.
 
 #### Agent counts: disprover advantage
 
@@ -54,9 +62,9 @@ Each prover/disprover focuses on **at most 2 proof/attack vectors**. This keeps 
 
 #### Vibe check agent (fast, background)
 
-Spawn the vibe check agent **in the background** alongside all other agents, using a lesser model, lesser reasoning effort, or both (e.g., `model: "haiku"`). Its job is to quickly assess whether the claim is more likely true or false, without rigorous proof. It reads the subject and claim, does a quick scan, and returns a one-line verdict: `LIKELY TRUE` or `LIKELY FALSE` with a 1-2 sentence rationale.
+Spawn the vibe check agent as a teammate using a lesser model, lesser reasoning effort, or both (e.g., `model: "haiku"`). Its job is to quickly assess whether the claim is more likely true or false, without rigorous proof. It reads the subject and claim, does a quick scan, and returns a one-line verdict: `LIKELY TRUE` or `LIKELY FALSE` with a 1-2 sentence rationale.
 
-Because it runs in the background with a lighter model, it completes first — the orchestrator receives its notification and immediately spawns the reinforcement agent (also in the background) without waiting for the main provers/disprovers to finish.
+Because it uses a lighter model, it completes first — the orchestrator receives its notification and immediately spawns the reinforcement agent into the same team without waiting for the main provers/disprovers to finish.
 
 **Important**: The vibe check is NOT a proof — it's a fast heuristic to guide resource allocation. Its verdict does not count toward the judge tally. Judges should ignore the vibe check result when evaluating arguments. The reinforcement agent spawned from the vibe check provides **supporting evidence**, not formal proof — label it accordingly.
 
@@ -64,7 +72,7 @@ Only **1 vibe check agent per round**.
 
 #### Reinforcement agent vector selection
 
-Spawn the reinforcement agent **in the background** (`run_in_background: true`) as soon as the vibe check returns. It must use a **fresh angle** not already assigned to other agents in this round.
+Spawn the reinforcement agent into the team as soon as the vibe check returns. It must use a **fresh angle** not already assigned to other agents in this round.
 To select the angle:
 
 1. List all vectors already assigned to agents of the same role (provers or disprovers)
@@ -123,11 +131,16 @@ Provide each agent with:
 - Their role (prover or disprover)
 - **Their assigned angle — exactly 1-2 specific vectors to pursue**
 - The path to their instruction file so they can read it
-- **`run_in_background: true`** — all agents run in the background
+- **`team_name`** — the team created in the previous step
+- **`name`** — their agent name (e.g., `Prover-A`)
 
-**Agent prompt template** (spawn with `run_in_background: true`, use the agent name like `Prover-A` as the `description`):
+**Agent spawn parameters**: `team_name: "prove-round-<N>"`, `name: "<agent-name>"`, `description: "<agent-name>"`
+
+**Agent prompt template**:
 ```
-You are <Prover/Disprover> <letter> (team name: "<Prover-A/Disprover-B/etc.>"). Read the file <this-skill-path>/agents/<prover/disprover>.md for your instructions.
+You are <Prover/Disprover> <letter>. Read the file <this-skill-path>/agents/<prover/disprover>.md for your instructions.
+
+You are a member of a verification team. After you deliver your initial argument, judges on your team may use SendMessage to ask you follow-up questions about specific steps in your logic path. When you receive a message from a judge, respond via SendMessage with a precise, concise answer citing code/evidence as in your original argument.
 
 Your assigned vectors (focus ONLY on these, max 2):
 1. <specific technique or focus area>
@@ -138,25 +151,21 @@ Subject under analysis:
 
 Claim to <prove/prove FALSE>:
 <claim>
-
-IMPORTANT: After you deliver your initial argument, a judge may send you follow-up questions asking for clarification or detail about specific steps in your logic path. Answer precisely and concisely, citing code/evidence as in your original argument.
 ```
 
 ### 3. Judge the round (team evaluation)
 
-After all team members in a round return, begin the **team evaluation phase**. Judges evaluate arguments and can interrogate provers/disprovers for clarification before delivering their final verdict. Do NOT decide the verdict yourself — the team decides.
+After all team members in a round return, spawn **judges into the same team**. Judges evaluate arguments and can **directly interrogate** provers/disprovers via `SendMessage` before delivering their final verdict. Do NOT decide the verdict yourself — the team decides.
 
 #### Judge agents
 
-Spawn a minimum of **2 judges** in the background (more for complex claims — 3 or 5 for better signal). Each judge gets:
+Spawn a minimum of **2 judges** into the team (more for complex claims — 3 or 5 for better signal). Name them `Judge-1`, `Judge-2`, etc. Each judge gets:
 - All prover and disprover logic paths from the current round
 - The precise claim statement
 - **Exactly 1 decision vector** — a specific lens through which to evaluate (each judge gets a different one)
-- **The names of all prover/disprover team members** — so they can request follow-ups
+- **The names of all prover/disprover team members** — so they can `SendMessage` directly
 
-Each judge returns either:
-- A **final verdict** (`PROVEN`, `DISPROVEN`, or `UNDECIDED`) with rationale, OR
-- A **preliminary assessment with questions** for specific provers/disprovers
+Judges handle their own Q&A — they use `SendMessage` to ask provers/disprovers questions and receive answers directly. The orchestrator does NOT need to relay messages. Once a judge has all the information they need, they deliver their final verdict.
 
 **Decision vectors for judges** (assign one per judge, pick based on claim type):
 - **Logical soundness**: Are the reasoning steps valid? Do conclusions follow from premises?
@@ -165,11 +174,13 @@ Each judge returns either:
 - **Assumption audit**: Are the assumptions stated by provers actually enforced by the system?
 - **Scope coverage**: Does the winning argument address ALL cases, or only a subset?
 
+**Judge spawn parameters**: `team_name: "prove-round-<N>"`, `name: "Judge-<N>"`, `description: "Judge-<N>"`
+
 **Judge prompt template**:
 ```
-You are a Judge. Read the file <this-skill-path>/agents/judge.md for your instructions.
+You are Judge <N>. Read the file <this-skill-path>/agents/judge.md for your instructions.
 
-You are part of a verification team. You can request clarification from any prover or disprover before delivering your verdict.
+You are part of a verification team. The provers and disprovers are your teammates — you can use SendMessage to ask any of them follow-up questions directly, and they will respond via SendMessage.
 
 Your decision vector (evaluate ONLY through this lens): <one specific vector>
 
@@ -179,7 +190,7 @@ Claim:
 Subject:
 <subject>
 
-=== TEAM MEMBERS ===
+=== TEAM MEMBERS (you can SendMessage to any of these) ===
 <list all agent names: Prover-A, Prover-B, Disprover-A, Disprover-B, Disprover-C, Reinforcement>
 
 === PROVER ARGUMENTS ===
@@ -188,51 +199,9 @@ Subject:
 === DISPROVER ARGUMENTS ===
 <all disprover logic paths from this round, each labeled with the agent name>
 
-First, evaluate the arguments through your lens. If any argument has a gap or unclear step that affects your verdict, request clarification instead of guessing. Return EXACTLY one of:
+Evaluate the arguments through your lens. If any argument has a gap or unclear step that affects your verdict, use SendMessage to ask the specific team member for clarification — do not guess. You get at most 3 questions across at most 1 round of follow-ups.
 
-OPTION A — Final verdict (no questions needed):
-- Verdict: PROVEN / DISPROVEN / UNDECIDED
-- Rationale: 2-3 sentences explaining your decision through your assigned lens
-- Winner (if not UNDECIDED): which specific agent's argument was most convincing
-
-OPTION B — Questions before verdict:
-- Preliminary leaning: PROVEN / DISPROVEN / UNDECIDED
-- Questions:
-  - To <agent name>: <specific question about a step in their logic path>
-  - To <agent name>: <specific question>
-  (max 3 questions total, each targeting a specific team member and logic path step)
-```
-
-#### Follow-up phase (team Q&A)
-
-After judges return, check if any judge requested clarification:
-
-1. **If no judge has questions**: proceed directly to tallying.
-2. **If any judge has questions**:
-   a. For each question, use **SendMessage** to the named prover/disprover agent, relaying the judge's question.
-   b. Collect all answers from the team members.
-   c. Use **SendMessage** to each questioning judge, providing the answers they requested.
-   d. The judge then delivers their **final verdict**.
-
-**Limit: 1 follow-up exchange per judge.** If a judge still has questions after receiving answers, they must deliver a verdict with whatever information they have. This prevents endless back-and-forth.
-
-**Follow-up question relay template** (SendMessage to prover/disprover):
-```
-A judge is asking for clarification about your argument.
-
-Judge's question: <the specific question>
-
-Answer precisely and concisely. Cite code/evidence as in your original argument. Keep your answer to 3-5 sentences.
-```
-
-**Follow-up answer relay template** (SendMessage to judge):
-```
-Here are the answers to your questions:
-
-<agent name> answered: <their response>
-<agent name> answered: <their response>
-
-Now deliver your final verdict using the same format:
+After you have all the information you need, deliver your final verdict:
 - Verdict: PROVEN / DISPROVEN / UNDECIDED
 - Rationale: 2-3 sentences explaining your decision through your assigned lens
 - Winner (if not UNDECIDED): which specific agent's argument was most convincing
@@ -287,12 +256,12 @@ If the user accepts, go to step 6 (present verdict). Use the current round's jud
 
 If the user provides more context:
 1. **Refine the claim statement** based on the new information. Use the **AskUserQuestion** tool to show the refined claim and confirm before proceeding.
-2. Spawn a fresh **prove/disprove round** (same structure as step 2 — provers, disprovers, vibe check agent, reinforcement agent). Use the refined claim.
+2. **Create a new team** (`prove-round-<N>`) and spawn a fresh **prove/disprove round** (same structure as step 2 — provers, disprovers, vibe check agent, reinforcement agent). Use the refined claim.
 3. Judge the round (step 3).
 
 #### Option 3: Battle round
 
-Spawn targeted counter-agents that attack specific arguments from the previous round. **No vibe check agent in battle rounds** — only direct argument combat.
+Create a **new team** for the battle round (`prove-battle-<N>`) and spawn targeted counter-agents that attack specific arguments from the previous round. **No vibe check agent in battle rounds** — only direct argument combat.
 
 **Identifying "strong" arguments**: An argument is strong if at least one judge cited it as convincing in their rationale. If no judge cited a specific argument, it is not strong enough to warrant a battle agent. Select at most the **top 2** strongest arguments from each side (prover and disprover) — those cited by the most judges.
 
@@ -302,9 +271,11 @@ Spawn targeted counter-agents that attack specific arguments from the previous r
 
 Battle agents must use **different vectors** than agents in the previous round used on the same argument. If a round-1 disprover attacked with "boundary analysis + race condition", the battle disprover must use different techniques (e.g., "assumption violation + type escape").
 
-For each strong prover argument `pA`, spawn a **disprover** that specifically targets `pA` (max 2 vectors). Name them sequentially (e.g., `Battle-Disprover-1`, `Battle-Disprover-2`):
+For each strong prover argument `pA`, spawn a **disprover** into the battle team (named `Battle-Disprover-<N>`):
 ```
-You are Battle Disprover <N> (team name: "Battle-Disprover-<N>"). Read the file <this-skill-path>/agents/disprover.md for your instructions.
+You are Battle Disprover <N>. Read the file <this-skill-path>/agents/disprover.md for your instructions.
+
+You are a member of a verification team. After you deliver your argument, judges on your team may use SendMessage to ask follow-up questions. Respond via SendMessage with precise, concise answers.
 
 Your specific target: Disprove the following argument from a Prover.
 Focus on at most 2 attack vectors against this argument.
@@ -319,13 +290,13 @@ Subject:
 <subject>
 
 Your job: Find a flaw in THIS argument — a step that doesn't follow, an assumption that's wrong, a case it missed. Do not construct a general disproof; attack THIS specific logic path.
-
-IMPORTANT: After you deliver your argument, a judge may send you follow-up questions. Answer precisely and concisely.
 ```
 
-For each strong disprover argument `dA`, spawn a **prover** that specifically addresses `dA` (max 2 vectors). Name them sequentially (e.g., `Battle-Prover-1`, `Battle-Prover-2`):
+For each strong disprover argument `dA`, spawn a **prover** into the battle team (named `Battle-Prover-<N>`):
 ```
-You are Battle Prover <N> (team name: "Battle-Prover-<N>"). Read the file <this-skill-path>/agents/prover.md for your instructions.
+You are Battle Prover <N>. Read the file <this-skill-path>/agents/prover.md for your instructions.
+
+You are a member of a verification team. After you deliver your argument, judges on your team may use SendMessage to ask follow-up questions. Respond via SendMessage with precise, concise answers.
 
 Your specific target: Address the following counterexample/attack from a Disprover.
 Focus on at most 2 proof vectors to defeat this argument.
@@ -340,11 +311,13 @@ Subject:
 <subject>
 
 Your job: Show why THIS attack fails — the counterexample is invalid, the scenario is unreachable, the assumption is wrong. Do not construct a general proof; defeat THIS specific attack.
-
-IMPORTANT: After you deliver your argument, a judge may send you follow-up questions. Answer precisely and concisely.
 ```
 
-After the battle round completes, judge the results (step 3). Then go to step 4 (ask user) regardless of verdict — the user always gets the final say.
+After the battle round completes, judge the results (step 3 — spawn judges into the battle team). Then go to step 4 (ask user) regardless of verdict — the user always gets the final say.
+
+#### Team lifecycle
+
+Each round gets its own team. When a round completes and the user chooses their next action, **shut down the current team** by sending a shutdown request to all teammates (`SendMessage` with `type: "shutdown_request"` to `"*"`). Then create a fresh team for the next round if needed.
 
 #### Option 4: End the session
 

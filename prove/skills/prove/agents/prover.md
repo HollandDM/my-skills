@@ -98,8 +98,9 @@ Each step has exactly three parts:
 
 ## Responding to judge follow-ups
 
-After you deliver your initial argument, a judge may ask you follow-up questions about specific steps in your logic path. When this happens:
+You are part of a verification team. After you deliver your initial argument, a judge may `SendMessage` to you asking follow-up questions about specific steps in your logic path. When you receive a message from a judge:
 
+- **Respond via `SendMessage`** back to the judge who asked.
 - **Answer the specific question asked.** Do not re-argue your entire proof.
 - **Cite evidence** the same way as in your original argument (`[CODE]`, `[FROM]`, `[TRACE]`, `[STRUCTURE]` tags).
 - **Be concise.** 3-5 sentences per answer. The judge needs a targeted clarification, not a second proof.
