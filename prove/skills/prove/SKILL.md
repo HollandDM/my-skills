@@ -62,7 +62,7 @@ The team has three groups with distinct communication rules:
    - 3 disprovers (named `Disprover-A`, `Disprover-B`, `Disprover-C`)
    - 1 vibe check agent (lighter model, named `Vibe-Check`)
 
-2. **Listen for the vibe check result first.** Because the vibe check agent uses a lesser model and does shallow analysis, it will complete before the main agents. When it returns, immediately spawn **1 reinforcement agent** (named `Reinforcement`) into the same team based on its verdict:
+2. **Listen for the vibe check report.** The vibe checker uses `SendMessage` to report its verdict to the team lead. Because it uses a lighter model, this report arrives before the main agents finish. When the team lead receives the report, immediately spawn **1 reinforcement agent** (named `Reinforcement`) into the same team based on the verdict:
    - If vibe says `LIKELY TRUE` → spawn 1 additional prover (named `Reinforcement`)
    - If vibe says `LIKELY FALSE` → spawn 1 additional disprover (named `Reinforcement`)
 
@@ -78,9 +78,9 @@ Each prover/disprover focuses on **at most 2 proof/attack vectors**. This keeps 
 
 #### Vibe check agent (fast scout)
 
-Spawn the vibe check agent as a teammate using a lesser model, lesser reasoning effort, or both (e.g., `model: "haiku"`). Its sole job is to quickly assess whether the claim is more likely true or false and **report back to the team lead** (orchestrator). It does NOT communicate with other teammates.
+Spawn the vibe check agent as a teammate using a lesser model, lesser reasoning effort, or both (e.g., `model: "haiku"`). Its sole job is to quickly assess whether the claim is more likely true or false and **use `SendMessage` to report its verdict to the team lead** (orchestrator). It does NOT communicate with other teammates — only with the team lead.
 
-The vibe checker finishes early because it uses a lighter model. When its result arrives, the **team lead reads the verdict and spawns a reinforcement agent** into the team — reinforcing whichever side the vibe check suggests is weaker. This happens while the main provers/disprovers are still working.
+The vibe checker finishes early because it uses a lighter model. It sends its verdict to the team lead via `SendMessage`, then goes idle. The **team lead reads the verdict and spawns a reinforcement agent** into the team — reinforcing whichever side the vibe check suggests is weaker. This happens while the main provers/disprovers are still working.
 
 **Important**: The vibe check is NOT a proof — it's a fast heuristic for the team lead to decide where to allocate reinforcement. Its verdict does not count toward the judge tally. Judges should ignore the vibe check result when evaluating arguments. The reinforcement agent provides **supporting evidence**, not formal proof — label it accordingly.
 
@@ -101,13 +101,18 @@ output as "Reinforcement" so judges can weight it appropriately.
 
 **Vibe check prompt template**:
 ```
-You are the Vibe Check agent — a fast scout for the team lead. Do a quick, shallow assessment of whether this claim is more likely true or false.
+You are the Vibe Check agent — a fast scout reporting directly to the team lead.
 
-Do NOT do rigorous proof or deep code analysis. Do NOT communicate with other teammates. Skim the subject, use your intuition and surface-level reading, and report your verdict. The team lead will use your assessment to decide where to deploy reinforcement.
+Do a quick, shallow assessment of whether this claim is more likely true or false. Do NOT do rigorous proof or deep code analysis. Do NOT communicate with other teammates — you report only to the team lead.
 
-Return:
-- Verdict: LIKELY TRUE or LIKELY FALSE
-- Rationale: 1-2 sentences explaining your gut read
+After your assessment, use SendMessage to report your verdict to the team lead:
+
+SendMessage:
+  to: "<team-lead-name>"
+  message: "Vibe check complete. Verdict: <LIKELY TRUE / LIKELY FALSE>. Rationale: <1-2 sentences>"
+  summary: "Vibe check: <LIKELY TRUE / LIKELY FALSE>"
+
+The team lead will use your report to decide where to deploy reinforcement.
 
 Subject:
 <subject>
