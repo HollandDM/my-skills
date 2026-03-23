@@ -37,7 +37,23 @@ Before spawning any agents, create a team for this round using **TeamCreate**:
 TeamCreate: { team_name: "prove-round-<N>", description: "Verification team for: <claim summary>" }
 ```
 
-All agents in this round — provers, disprovers, vibe check, reinforcement, and later judges — join this team via the `team_name` parameter on the Agent tool. This enables **direct peer-to-peer communication**: judges can `SendMessage` to provers/disprovers to ask follow-up questions, and provers/disprovers respond directly.
+All agents in this round join this team via the `team_name` parameter on the Agent tool. The **orchestrator is the team lead**.
+
+#### Team groups and communication rules
+
+The team has three groups with distinct communication rules:
+
+| Group | Members | Can SendMessage to | Purpose |
+|-------|---------|-------------------|---------|
+| **Provers** | Prover-A, Prover-B, Reinforcement (if prover) | Fellow provers only | Collaborate to build the strongest proof. Help each other fill gaps, share evidence, strengthen arguments. |
+| **Disprovers** | Disprover-A, Disprover-B, Disprover-C, Reinforcement (if disprover) | Fellow disprovers only | Collaborate to find the strongest counterexample. Help each other identify weaknesses, share attack angles. |
+| **Judges** | Judge-1, Judge-2, ... | Any prover or disprover | Interrogate both sides for clarification before delivering a verdict. |
+
+**Cross-group rules**:
+- Provers MUST NOT communicate with disprovers (and vice versa) — they are adversaries
+- Judges can `SendMessage` to any prover or disprover to ask for detail
+- Provers/disprovers respond to judge questions via `SendMessage`
+- The vibe check agent reports to the **team lead** (orchestrator), not to other teammates
 
 #### Spawn order
 
@@ -60,13 +76,13 @@ Users naturally phrase claims they believe are true, creating a positivity bias.
 
 Each prover/disprover focuses on **at most 2 proof/attack vectors**. This keeps each agent fast and focused rather than producing sprawling, unfocused analysis. If you need more coverage, spawn more agents rather than overloading existing ones. State the 2 vectors explicitly in each agent's prompt.
 
-#### Vibe check agent (fast, background)
+#### Vibe check agent (fast scout)
 
-Spawn the vibe check agent as a teammate using a lesser model, lesser reasoning effort, or both (e.g., `model: "haiku"`). Its job is to quickly assess whether the claim is more likely true or false, without rigorous proof. It reads the subject and claim, does a quick scan, and returns a one-line verdict: `LIKELY TRUE` or `LIKELY FALSE` with a 1-2 sentence rationale.
+Spawn the vibe check agent as a teammate using a lesser model, lesser reasoning effort, or both (e.g., `model: "haiku"`). Its sole job is to quickly assess whether the claim is more likely true or false and **report back to the team lead** (orchestrator). It does NOT communicate with other teammates.
 
-Because it uses a lighter model, it completes first — the orchestrator receives its notification and immediately spawns the reinforcement agent into the same team without waiting for the main provers/disprovers to finish.
+The vibe checker finishes early because it uses a lighter model. When its result arrives, the **team lead reads the verdict and spawns a reinforcement agent** into the team — reinforcing whichever side the vibe check suggests is weaker. This happens while the main provers/disprovers are still working.
 
-**Important**: The vibe check is NOT a proof — it's a fast heuristic to guide resource allocation. Its verdict does not count toward the judge tally. Judges should ignore the vibe check result when evaluating arguments. The reinforcement agent spawned from the vibe check provides **supporting evidence**, not formal proof — label it accordingly.
+**Important**: The vibe check is NOT a proof — it's a fast heuristic for the team lead to decide where to allocate reinforcement. Its verdict does not count toward the judge tally. Judges should ignore the vibe check result when evaluating arguments. The reinforcement agent provides **supporting evidence**, not formal proof — label it accordingly.
 
 Only **1 vibe check agent per round**.
 
@@ -85,9 +101,11 @@ output as "Reinforcement" so judges can weight it appropriately.
 
 **Vibe check prompt template**:
 ```
-You are the Vibe Check agent. Do a quick, shallow assessment of whether this claim is more likely true or false.
+You are the Vibe Check agent — a fast scout for the team lead. Do a quick, shallow assessment of whether this claim is more likely true or false.
 
-Do NOT do rigorous proof or deep code analysis. Skim the subject, use your intuition and surface-level reading, and return:
+Do NOT do rigorous proof or deep code analysis. Do NOT communicate with other teammates. Skim the subject, use your intuition and surface-level reading, and report your verdict. The team lead will use your assessment to decide where to deploy reinforcement.
+
+Return:
 - Verdict: LIKELY TRUE or LIKELY FALSE
 - Rationale: 1-2 sentences explaining your gut read
 
@@ -125,22 +143,18 @@ For system behavior claims (architecture, runtime, integration):
 
 Adapt as needed — the key is each agent has a distinct angle, limited to 2 vectors, stated in its prompt.
 
-Provide each agent with:
-- The subject (code, file paths, system description — whatever is relevant)
-- The precise claim statement
-- Their role (prover or disprover)
-- **Their assigned angle — exactly 1-2 specific vectors to pursue**
-- The path to their instruction file so they can read it
-- **`team_name`** — the team created in the previous step
-- **`name`** — their agent name (e.g., `Prover-A`)
-
 **Agent spawn parameters**: `team_name: "prove-round-<N>"`, `name: "<agent-name>"`, `description: "<agent-name>"`
 
 **Agent prompt template**:
 ```
 You are <Prover/Disprover> <letter>. Read the file <this-skill-path>/agents/<prover/disprover>.md for your instructions.
 
-You are a member of a verification team. After you deliver your initial argument, judges on your team may use SendMessage to ask you follow-up questions about specific steps in your logic path. When you receive a message from a judge, respond via SendMessage with a precise, concise answer citing code/evidence as in your original argument.
+You are a member of a verification team.
+
+YOUR GROUP (<provers/disprovers>): <list of teammate names in the same group>
+You can SendMessage to anyone in your group to collaborate — share evidence, ask for help, or strengthen each other's arguments. Do NOT communicate with the opposing group.
+
+JUDGES will join later and may SendMessage you to ask for clarification about your logic path. Respond via SendMessage with precise, concise answers.
 
 Your assigned vectors (focus ONLY on these, max 2):
 1. <specific technique or focus area>
@@ -159,7 +173,7 @@ After all team members in a round return, spawn **judges into the same team**. J
 
 #### Judge agents
 
-Spawn a minimum of **2 judges** into the team (more for complex claims — 3 or 5 for better signal). Name them `Judge-1`, `Judge-2`, etc. Each judge gets:
+Spawn **ceil((provers + disprovers) / 2) judges** into the team. For the default lineup of 2 provers + 3 disprovers + 1 reinforcement = 6 arguers, that's **3 judges**. Name them `Judge-1`, `Judge-2`, `Judge-3`, etc. Each judge gets:
 - All prover and disprover logic paths from the current round
 - The precise claim statement
 - **Exactly 1 decision vector** — a specific lens through which to evaluate (each judge gets a different one)
@@ -190,8 +204,11 @@ Claim:
 Subject:
 <subject>
 
-=== TEAM MEMBERS (you can SendMessage to any of these) ===
-<list all agent names: Prover-A, Prover-B, Disprover-A, Disprover-B, Disprover-C, Reinforcement>
+=== PROVER GROUP (you can SendMessage to any of these) ===
+<list prover names: Prover-A, Prover-B, Reinforcement (if prover)>
+
+=== DISPROVER GROUP (you can SendMessage to any of these) ===
+<list disprover names: Disprover-A, Disprover-B, Disprover-C, Reinforcement (if disprover)>
 
 === PROVER ARGUMENTS ===
 <all prover logic paths from this round, each labeled with the agent name>
@@ -275,7 +292,9 @@ For each strong prover argument `pA`, spawn a **disprover** into the battle team
 ```
 You are Battle Disprover <N>. Read the file <this-skill-path>/agents/disprover.md for your instructions.
 
-You are a member of a verification team. After you deliver your argument, judges on your team may use SendMessage to ask follow-up questions. Respond via SendMessage with precise, concise answers.
+You are a member of a verification team.
+YOUR GROUP (disprovers): <list fellow battle-disprover names>
+You can SendMessage fellow disprovers to collaborate. Judges may also SendMessage you for clarification.
 
 Your specific target: Disprove the following argument from a Prover.
 Focus on at most 2 attack vectors against this argument.
@@ -296,7 +315,9 @@ For each strong disprover argument `dA`, spawn a **prover** into the battle team
 ```
 You are Battle Prover <N>. Read the file <this-skill-path>/agents/prover.md for your instructions.
 
-You are a member of a verification team. After you deliver your argument, judges on your team may use SendMessage to ask follow-up questions. Respond via SendMessage with precise, concise answers.
+You are a member of a verification team.
+YOUR GROUP (provers): <list fellow battle-prover names>
+You can SendMessage fellow provers to collaborate. Judges may also SendMessage you for clarification.
 
 Your specific target: Address the following counterexample/attack from a Disprover.
 Focus on at most 2 proof vectors to defeat this argument.
