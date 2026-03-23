@@ -1,5 +1,5 @@
 {
   "name": "prove",
   "description": "Adversarial verification skill: prover vs disprover agents argue, then a judge synthesizes a verdict",
-  "version": "96dc54e"
+  "version": "cb6b2e1"
 }
