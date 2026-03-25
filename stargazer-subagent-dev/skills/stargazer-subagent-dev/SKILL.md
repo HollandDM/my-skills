@@ -250,15 +250,23 @@ description: "Stargazer plan execution session"
 
 This team persists for the entire plan execution. Members join and leave per task.
 
-## Step 3: Per-Task Cycle
+## Step 3: Dispatch and Review Tasks
 
-For each task in the plan:
+### Parallelism Strategy
 
-### 3a. Dispatch Implementer
+Tasks run in parallel where possible. **As soon as an implementer finishes, immediately
+dispatch its spec reviewer** — don't wait for other implementers to finish.
 
-Spawn an implementer agent as a **named team member** using the template in
-`./implementer-prompt.md`. Use `team_name: "stargazer-dev"` and
-`name: "implementer-N"` (where N is the task number).
+- **Independent tasks** (no shared files, no dependency): dispatch implementers in parallel
+- **Dependent tasks** (task B needs task A's output): dispatch B only after A's full review
+  cycle completes
+- Review chains are always sequential per task: implementer → spec reviewer → quality reviewer
+
+### 3a. Dispatch Implementers
+
+For each task (or batch of independent tasks), spawn implementer agents as **named team
+members** using the template in `./implementer-prompt.md`. Use `team_name: "stargazer-dev"`
+and `name: "implementer-N"` (where N is the task number).
 
 **Model selection:**
 - Touches 1-2 files with clear spec -> `model: "sonnet"`
@@ -274,10 +282,12 @@ Spawn an implementer agent as a **named team member** using the template in
 
 ### 3b. Handle Implementer Status
 
+As each implementer reports back, handle it immediately:
+
 | Status | Action |
 |--------|--------|
-| **DONE** | Proceed to spec review |
-| **DONE_WITH_CONCERNS** | Read concerns. If correctness/scope, address before review. If observations, note and proceed |
+| **DONE** | Immediately dispatch spec reviewer for this task |
+| **DONE_WITH_CONCERNS** | Read concerns. If correctness/scope, address before review. If observations, note and proceed to spec review |
 | **NEEDS_CONTEXT** | Answer questions via SendMessage, let implementer continue |
 | **BLOCKED** | Assess: provide context, re-dispatch with stronger model, break task down, or escalate to user |
 
@@ -289,9 +299,9 @@ message: <answer to their question with full context>
 summary: "Providing context for [topic]"
 ```
 
-### 3c. Dispatch Spec Reviewer
+### 3c. Dispatch Spec Reviewer (immediately when implementer finishes)
 
-After implementer reports DONE, spawn a spec reviewer as a team member using
+As soon as implementer-N reports DONE, spawn a spec reviewer as a team member using
 `./spec-reviewer-prompt.md`. Use `name: "spec-reviewer-N"`.
 
 **Always use `model: "sonnet"`** — spec compliance is a focused comparison task.
@@ -304,10 +314,10 @@ The spec reviewer messages the implementer directly to fix issues and re-verifie
 This loop runs autonomously — you don't need to mediate. Wait for the spec reviewer's
 final report (PASS or FAIL).
 
-### 3d. Dispatch Code Quality Reviewer
+### 3d. Dispatch Code Quality Reviewer (immediately when spec passes)
 
-After spec compliance passes, spawn a code quality reviewer as a team member using
-`./code-quality-reviewer-prompt.md`. Use `name: "quality-reviewer-N"`.
+As soon as spec reviewer-N reports PASS, spawn a code quality reviewer as a team member
+using `./code-quality-reviewer-prompt.md`. Use `name: "quality-reviewer-N"`.
 
 **Always use `model: "sonnet"`** — code quality review is checklist-driven.
 
@@ -327,7 +337,7 @@ reviewer's final report (APPROVED or NEEDS_CHANGES).
 
 ### 3e. Shutdown Task Members
 
-After a task's review cycle completes:
+After a task's full review cycle completes (quality reviewer reports):
 
 ```
 to: "spec-reviewer-N"
@@ -340,7 +350,7 @@ to: "implementer-N"
 message: {"type": "shutdown_request", "reason": "Task N complete"}
 ```
 
-Mark the task complete in TodoWrite, then proceed to the next task.
+Mark the task complete in TodoWrite. Other tasks may still be running their cycles.
 
 ## Step 4: Final Review
 
@@ -380,13 +390,13 @@ When task B depends on task A's output:
 - Write implementation code yourself (you are the controller)
 - Start implementation on main/master without user consent
 - Skip either review stage (spec compliance AND code quality are both required)
-- Dispatch multiple implementers in parallel (they'll conflict)
+- Dispatch dependent implementers in parallel (they'll conflict on shared files)
 - Make implementers read the plan file (provide full text)
 - Ignore implementer questions or BLOCKED status
 - Accept spec non-compliance ("close enough" = not done)
 - Start quality review before spec review passes
 - Skip the re-review loop (reviewer found issues -> fix -> review again)
-- Move to next task while any review has open issues
+- Wait for all implementers before starting any reviews
 - Write a plan without researching the codebase first
 
 **Always:**
