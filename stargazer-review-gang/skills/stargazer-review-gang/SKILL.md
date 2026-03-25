@@ -26,20 +26,6 @@ anything else before Step 1.
    yourself; just pass it to the orchestrator.
 3. **NO STOP CONDITION FOR PR SIZE.** Handle all PRs regardless of file count or line count.
 
-## Workflow
-
-1. Ask user for context
-2. **Discover tools** — scan available plugins for tools reviewers can use (e.g. LSP for Scala)
-3. Spawn **routing orchestrator** (plain agent) → get back file list, depth, and routing plan (JSON)
-4. **Create review team** and spawn **reviewer agents** as named team members
-5. Spawn **aggregator** as team member → validates, deduplicates, filters, **re-queries reviewers
-   directly** for borderline findings via SendMessage
-6. Present report and offer **auto-fix** — dispatched to the original reviewers who have full
-   file context
-7. **Shutdown team**
-
----
-
 ## Step 1: Ask for Context
 
 Use the **AskUserQuestion** tool as your first action (do NOT run any git commands or analyze
@@ -63,34 +49,9 @@ options:
 
 ## Step 2: Discover Available Tools
 
-Before spawning agents, scan available plugins/skills for tools that reviewers can leverage
-(e.g. an LSP server with Scala support for go-to-definition, find-references, type info).
-
-### Discovery Process
-
-1. **Read the root marketplace file** at `../../.claude-plugin/marketplace.json` (relative to this
-   skill's directory) to get the list of installed plugins.
-2. **For each plugin**, read its `plugin.json` (at `<source>/.claude-plugin/plugin.json`) and look
-   for a `tools` array. Each tool entry should have at minimum `name` and `description`.
-3. **Filter for relevant tools**: keep tools whose `keywords` or `description` mention any of:
-   `lsp`, `language-server`, `scala`, `metals`, `goto-definition`, `find-references`, `type-info`,
-   `diagnostics`, `completions`.
-4. **Build a tool manifest** — a JSON array of discovered tools:
-
-```json
-[
-  {
-    "plugin": "<plugin name>",
-    "tool": "<tool name>",
-    "description": "<what the tool does>",
-    "capabilities": ["<matched keywords>"]
-  }
-]
-```
-
-5. If **no tools are found**, set the manifest to `[]` and proceed — tool availability is optional.
-
-Store the manifest as `discovered_tools` for use in subsequent steps.
+Scan `../../.claude-plugin/marketplace.json` for installed plugins with tools (LSP, etc.).
+Build a JSON array of relevant tools (`[{"plugin", "tool", "description", "capabilities"}]`).
+Set to `[]` if none found — tool availability is optional.
 
 ---
 
@@ -105,45 +66,13 @@ orchestrator determines the correct git diff strategy itself. **Add surrounding 
 name, recent commit summaries, number of files) to help the orchestrator orient quickly, but keep
 the user's words intact as the primary scope.
 
-```
-You are the routing orchestrator for the stargazer-review-gang code review system.
-Your ONLY job is to classify changed files and produce a JSON routing plan.
+Prompt must include:
+- `Read your full instructions from: agents/orchestrator.md`
+- `Do NOT invoke the Skill tool`
+- User's review scope (verbatim), branch/history context, user context, discovered tools JSON
 
-CRITICAL: Do NOT invoke the Skill tool — you are already inside the stargazer-review-gang
-workflow. Re-triggering it would cause infinite recursion.
-
-Read your full instructions from: agents/orchestrator.md (relative to this skill's directory)
-
-## Review Scope
-<user's exact words describing what to review, word for word>
-
-## Branch & Recent History
-<current branch name, last 3-5 commit summaries, dirty/clean status — gathered by the main agent
-from git log/status BEFORE spawning this orchestrator>
-
-## Context
-<user-provided context from Step 1, or "None">
-
-## Available Tools
-<discovered_tools JSON from Step 2, or "[]" if none found>
-```
-
-The orchestrator determines the diff ref, finds changed files, reads diffs, routes, and returns JSON:
-
-```json
-{
-  "diff_ref": "abc123..def456",
-  "total_files": 12,
-  "total_changes": 2982,
-  "depth": "heavy",
-  "routing": {"path/to/File.scala": ["1", "2", "3"]},
-  "workload": {"1": {"changes": 850}, "2": {"changes": 3200, "split": [...]}}
-}
-```
-
-Use the returned `diff_ref` when communicating with reviewers and aggregators.
-
-**Wait for the orchestrator to complete before proceeding.**
+The orchestrator returns a JSON routing plan with `diff_ref`, `routing`, `workload`, and `depth`.
+**Wait for completion before proceeding.**
 
 ---
 
@@ -194,82 +123,18 @@ From `workload`:
 
 ### 4c. Spawn Reviewers as Named Team Members
 
-For each reviewer, spawn an agent using the **Agent tool** with `team_name: "review-gang"` and a
-descriptive `name` (e.g., `"reviewer-1"`, `"reviewer-2"`, `"reviewer-5"`). The name MUST follow
-the pattern `reviewer-{ID}` so the aggregator can address them by name for re-queries.
+Name pattern: `reviewer-{ID}` (sub-reviewers: `reviewer-{ID}{letter}`).
+Use `team_name: "review-gang"`. Spawn all in a **single message** for parallelism.
 
-For sub-reviewers from workload splits, use `reviewer-{ID}{letter}` (e.g., `reviewer-2a`,
-`reviewer-2b`).
-
-Use this prompt template for each reviewer (do NOT read checklist files yourself):
-
-```
-You are a code reviewer on the "review-gang" team. Your name is "reviewer-{ID}".
-Do NOT invoke any skills or the Skill tool.
-Read your checklist from: [checklist file path from roster table]
-
----
-
-## Review Rules
-
-1. **Diff-bound**: Only flag issues on changed lines. Pre-existing issues → [NOTE] only.
-2. **FORBIDDEN**: No ./mill, compile, test, checkStyle, or any build command. Read only.
-3. **Triage**: [BLOCKER] (must fix) / [SUGGESTION] (should fix) / [NITPICK] (nice to have)
-4. **Confidence 0–100**: 90+ certain, 70-89 strong signal, 50-69 suspicious, <50 don't report.
-5. **False positives**: Skip pre-existing, intentional (same author), compiler-caught, pedantic.
-6. **EVERY finding — blocker, suggestion, AND nitpick — MUST use this exact format:**
-
-   **[SEVERITY]** (confidence: N) Title — `file:line`
-   **Issue:** what's wrong and why
-   **Current code:**
-   ```scala
-   // actual code from the file (3-5 lines of context)
-   ```
-   **Suggested fix:**
-   ```scala
-   // concrete replacement, copy-paste ready
-   ```
-
-   Do NOT skip code blocks for lower-severity findings. One-liner findings without code blocks are useless.
-7. Clean → report "Clean — no issues found."
-
-## Change Context
-[user context if provided, otherwise omit]
-
-## Your Files
-[file paths assigned to this reviewer]
-
-## Available Tools
-<discovered_tools JSON from Step 2, or "[]" if none found>
-If tools are available, use them to enrich your review (e.g. LSP for type checking,
-go-to-definition, find-references). Tools are optional — proceed without them if empty.
-
-## Gather Your Own Context
-For each file above:
-1. Get diff: git diff -U3 <diff_ref> -- <file>
-2. Read full file (Read tool)
-3. Blame changed lines: git blame -L <start>,<end> HEAD -- <file>
-4. Recent history: git log --oneline -3 -- <file>
-5. If LSP or similar tools are available: use them for type info, references, or diagnostics
-   on changed lines to strengthen your findings.
-Then review ONLY changed lines.
-
-## Team Membership
-
-You are a persistent team member. After completing your initial review, you will go idle.
-You may receive follow-up messages:
-
-- **From the aggregator** — asking you to clarify a borderline finding or provide a more
-  concrete fix. Respond with the requested detail, then go idle again.
-- **From the team lead** — asking you to apply specific fixes to files you reviewed. You already
-  have full context on these files, so apply the fixes using the Edit tool, then report what
-  you changed.
-
-When you receive a message, handle it and go idle. Do NOT shut down unless you receive a
-shutdown request.
-```
-
-Spawn all reviewers in a **single message** for maximum parallelism.
+Each reviewer prompt must include:
+- `Read your checklist from: [checklist path from roster]`
+- `Do NOT invoke any skills or the Skill tool`
+- Diff ref, assigned file paths, user context, discovered tools JSON
+- **No build commands** — read only
+- **Diff-bound** — only flag changed lines
+- For each file: `git diff -U3 <diff_ref> -- <file>`, read full file, blame changed lines
+- Checklist files already define the output format and triage rules — do not override them
+- After initial review, stay idle for aggregator re-queries or team lead fix requests
 
 ---
 
@@ -288,32 +153,15 @@ Use the same depth-based model override as reviewers:
 - `medium`: `model: "sonnet"` (aggregator default)
 - `heavy`: `model: "opus"`
 
-For each aggregator, spawn an agent with the depth-appropriate model, `team_name: "review-gang"`,
-and `name: "aggregator"` (or `"aggregator-1"`, `"aggregator-2"` for batched, `"aggregator-final"`
-for the merge pass).
+Name: `"aggregator"` (or `"aggregator-1"`, `"aggregator-2"` for batches, `"aggregator-final"`
+for merge). Use `team_name: "review-gang"` with depth-appropriate model.
 
-Use this prompt (do NOT read the aggregator file yourself):
+Each aggregator prompt must include:
+- `Read your instructions from: agents/aggregator.md`
+- `Do NOT invoke any skills or the Skill tool`
+- Diff ref, list of active reviewer names, and all findings from the assigned batch
 
-```
-You are a review aggregator on the "review-gang" team. Your name is "aggregator".
-Do NOT invoke any skills or the Skill tool.
-Read your instructions from: agents/aggregator.md (relative to this skill's directory)
-
-Diff ref: <diff_ref from orchestrator output>
-
-## Team Members
-The following reviewers are active team members you can message directly:
-<list of reviewer names spawned in Step 4, e.g. "reviewer-1", "reviewer-2", "reviewer-5">
-
-## Findings to Aggregate
-[paste all findings from the assigned reviewer batch]
-```
-
-Pass the `diff_ref` so the aggregator can check diffs during validation. Pass the list of active
-reviewer names so the aggregator knows who to message for re-queries.
-
-The aggregator validates findings, re-queries borderline ones by messaging reviewers directly,
-then returns the final report.
+The aggregator validates, re-queries reviewers directly, and returns the final report.
 
 **Present the aggregator's report to the user verbatim.** Do NOT rewrite, reformat, summarize,
 or strip any part of it — including severity emoji indicators (🔴🟡🔵), code blocks, confidence
