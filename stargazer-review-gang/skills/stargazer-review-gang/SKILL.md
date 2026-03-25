@@ -168,6 +168,10 @@ The aggregator validates, re-queries reviewers directly, and returns the final r
 or strip any part of it — including severity emoji indicators (🔴🟡🔵), code blocks, confidence
 scores, and reviewer attributions. The report is the deliverable; your job is to pass it through.
 
+This applies even when all findings are nitpicks — still show the full report with code blocks.
+Never reduce a finding to a one-liner summary like "[NITPICK] description (confidence N)".
+The code blocks ARE the report.
+
 ---
 
 ## Step 6: Auto-Fix
