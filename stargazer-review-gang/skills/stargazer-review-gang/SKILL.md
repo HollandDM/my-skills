@@ -146,24 +146,49 @@ found" (sub-reviewers like 1a, 1b count separately). Every reviewer response cou
 
 - **≤4 outputs:** Spawn **one aggregator** as a team member.
 - **>4 outputs:** Split into batches of ≤4 and spawn **one aggregator per batch** as team members.
-  Group related reviewers together (e.g., FDB + ZIO + Temporal). After all aggregators complete,
-  spawn one **final aggregator** team member to merge their reports and do a cross-group dedup pass.
+  Group related reviewers together (e.g., FDB + ZIO + Temporal). After all batch aggregators
+  complete, spawn **exactly one** final merge aggregator.
 
 **Model selection:**
-- **Per-batch aggregators** (validate, re-query, filter): depth-based model override —
+- **Per-batch aggregators** (`aggregator-1`, `aggregator-2`, etc.): depth-based —
   `lite`/`medium`: `model: "sonnet"`, `heavy`: `model: "opus"`
-- **Final aggregator** (merge + dedup only): always `model: "haiku"` — it only concatenates
-  and deduplicates, no validation or re-querying needed
+- **Final merge aggregator** (`aggregator-final`): always `model: "haiku"`
 
-Name: `"aggregator"` (or `"aggregator-1"`, `"aggregator-2"` for batches, `"aggregator-final"`
-for merge). Use `team_name: "review-gang"`.
+Use `team_name: "review-gang"` for all.
 
-Each aggregator prompt must include:
-- `Read your instructions from: agents/aggregator.md`
-- `Do NOT invoke any skills or the Skill tool`
-- Diff ref, list of active reviewer names, and all findings from the assigned batch
+### Per-batch aggregator prompt
 
-The aggregator validates, re-queries reviewers directly, and returns the final report.
+Each batch aggregator reads and follows `agents/aggregator.md` — it validates findings, re-queries
+reviewers, filters, and produces a report.
+
+```
+Read your instructions from: agents/aggregator.md
+Do NOT invoke any skills or the Skill tool.
+Diff ref: <diff_ref>
+Team Members: <list of reviewer names in this batch>
+Findings to Aggregate: <paste findings>
+```
+
+### Final merge aggregator prompt
+
+The final merge aggregator does **NOT** read `agents/aggregator.md`. It does **NOT** validate,
+re-query, or filter. It only concatenates batch reports and deduplicates across batches.
+Spawn **exactly one** — never spawn additional aggregators after this.
+
+```
+You are the final merge aggregator. Your name is "aggregator-final".
+Do NOT invoke any skills or the Skill tool.
+Do NOT read agents/aggregator.md — you are NOT a validation aggregator.
+
+Your ONLY job:
+1. Concatenate the batch reports below into one report
+2. Deduplicate: if the same file:line appears in multiple batches, keep the highest-priority one
+3. Preserve all code blocks, emoji indicators, and formatting verbatim
+4. Do NOT re-validate, re-query reviewers, or drop any findings
+
+Batch reports:
+<paste all batch aggregator reports>
+```
 
 **Present the aggregator's report to the user verbatim.** Do NOT rewrite, reformat, summarize,
 or strip any part of it — including severity emoji indicators (🔴🟡🔵), code blocks, confidence
