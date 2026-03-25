@@ -108,7 +108,7 @@ because another reviewer has 3000.
 
 | Reviewer's +/- | Model |
 |----------------|-------|
-| ≤100 | roster default (haiku for 3/8b/10, standard for others) |
+| ≤100 | `model: "haiku"` |
 | 101–1500 | roster default |
 | >1500 | `model: "opus"` |
 
