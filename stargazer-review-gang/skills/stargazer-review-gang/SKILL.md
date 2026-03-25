@@ -313,7 +313,11 @@ Pass the `diff_ref` so the aggregator can check diffs during validation. Pass th
 reviewer names so the aggregator knows who to message for re-queries.
 
 The aggregator validates findings, re-queries borderline ones by messaging reviewers directly,
-then returns the final report. Present it to the user as-is.
+then returns the final report.
+
+**Present the aggregator's report to the user verbatim.** Do NOT rewrite, reformat, summarize,
+or strip any part of it — including severity emoji indicators (🔴🟡🔵), code blocks, confidence
+scores, and reviewer attributions. The report is the deliverable; your job is to pass it through.
 
 ---
 
