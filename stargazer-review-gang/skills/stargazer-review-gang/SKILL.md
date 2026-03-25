@@ -116,7 +116,8 @@ From `workload`:
 | 5 | FDB Patterns | `reviewers/05-fdb-patterns.md` | standard |
 | 6 | Temporal | `reviewers/06-temporal.md` | standard |
 | 7 | Tapir | `reviewers/07-tapir-endpoints.md` | standard |
-| 8 | Frontend | `reviewers/08-frontend.md` | standard |
+| 8a | Laminar | `reviewers/08-laminar.md` | standard |
+| 8b | Frontend Styling | `reviewers/08-frontend.md` | haiku |
 | 9 | scalajs-react | `reviewers/09-react.md` | standard |
 | 10 | Observability | `reviewers/10-observability.md` | haiku |
 | 11 | Testing | `reviewers/11-testing.md` | standard |

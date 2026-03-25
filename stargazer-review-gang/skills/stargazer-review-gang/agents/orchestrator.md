@@ -67,7 +67,8 @@ current state, then determine the correct diff strategy:
 | 5 | FDB Patterns | `FDBRecord`, `FDBStore`, `RecordIO`, `RecordReadIO`, `RecordTask`, `transact`, `FDBOperations`, `FDBRecordEnum`, `StoreProvider`, `FDBChunkSubspace`, `splitTransaction`, `batchTransact`, `largeScan`, `scanIndexRecords`, `scanAllL`, `TupleRange`, `transactRead` |
 | 6 | Temporal | `TemporalWorkflow`, `TemporalActivity`, `WorkflowTask`, `@workflowInterface`, `@activityInterface`, `BatchAction`, `FDBCdcEventListener`, `AsyncEndpoint` |
 | 7 | Tapir Endpoints | Server: `EndpointServer`, `AuthenticatedEndpoint`, `authRoute`, `validateRoute` in `/jvm/`. Client: `EndpointClient`, `AuthenticatedEndpointClient`, `AsyncEndpointClient` in `/js/`. Also: server wiring files (`*Server.scala` in `apps/`) that register `.services` or `.asyncServices` — checks registration completeness |
-| 8 | Frontend | `Laminar`, `Signal`, `EventStream`, `Var`, `Observer`, `splitSeq`, `splitOption`, `splitMatchOne`, `child <--`, `children <--`, `-->`, `L.`, `tw.`, `AnduinButton`, `AnduinTag`, `Modal`, `Table`, `TextBox`, `Dropdown`, `Tooltip`, `Tab` |
+| 8a | Laminar | `Laminar`, `Signal`, `EventStream`, `Var`, `Observer`, `splitSeq`, `splitOption`, `splitMatchOne`, `child <--`, `children <--`, `-->`, `L.`, `flatMapSwitch`, `flatMapMerge`, `taskToStream`, `LaminarComponent` |
+| 8b | Frontend Styling | `tw.`, `AnduinButton`, `AnduinTag`, `Modal`, `ModalL`, `Table`, `TableL`, `TextBox`, `TextBoxL`, `Dropdown`, `DropdownL`, `Tooltip`, `AnduinTooltipL`, `Tab`, `TabL`, `testId`, `testIdL` |
 | 9 | scalajs-react | `ScalaComponent`, `BackendScope`, `Callback`, `VdomElement`, `<.div`, `^.onClick`, `WrapperR`, `QueryComponent` |
 | 10 | Observability | `ZIO.logInfo`, `ZIO.logWarning`, `ZIO.logError`, `ZIO.logErrorCause`, `ZIOLoggingUtils`, `ZIOTelemetryUtils.injectMetrics`, `ZIOTelemetryUtils.injectTracing`, `injectOutgoingOtelContext`, `ActionLoggerService`, `Metric.histogram`, `Metric.counter`, `Metric.gauge`, `scribe.`, `.ignore`, `.catchAll(_ =>`, `println` |
 | 11 | Testing Quality | Test files only (`**/test/src/**`, `**/it/src/**`, `**/multiregionit/**`): `assertTrue`, `assertCompletes`, `ZIOBaseInteg`, `BaseInteg`, `TemporalFixture`, `TestAspect`, `aroundAllWith`, `Thread.sleep`, `var ` in test class, `.either`, `.isRight`, `.isLeft`, `.toOption.get` |
@@ -83,7 +84,8 @@ current state, then determine the correct diff strategy:
 7. When uncertain, **include the reviewer**
 8. **Test files**: always route to **11** plus **1** and relevant domain reviewers
 9. **Observability** (10): include for `/jvm/` files with service logic. Skip pure model/DTO files
-10. **Frontend** (8): include for `/js/` files with Laminar, Tailwind, or design system components
+10. **Laminar** (8a): include for `/js/` files with Laminar/Airstream reactive patterns
+11. **Frontend Styling** (8b): include for `/js/` files with `tw.*`, design system components, or layout
 
 ## Workload Splitting
 

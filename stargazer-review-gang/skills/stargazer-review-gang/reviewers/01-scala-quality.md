@@ -298,38 +298,6 @@ to avoid intermediate collections.
 **`.copy()` in tight loops:** Fine for small collections, but flag on large datasets -- allocates per
 iteration. Consider mutable builder internally if performance matters.
 
-### Val Lambdas in Hot Paths
-
-`val fn: A => B = SomeType(_)` allocates a `Function1` closure object every time the enclosing
-scope executes. In hot paths (reactive callbacks, `.map` chains, tight loops), this adds GC
-pressure per invocation.
-
-```scala
-// BAD: val lambda — allocates Function1 on every call to process()
-def process(items: List[Item]) =
-  val wrap: ItemId => WrappedId = WrappedId(_)
-  items.map(i => wrap(i.id))
-
-// GOOD: inline def — compiler inlines at call site, zero allocation
-def process(items: List[Item]) =
-  inline def wrap(id: ItemId): WrappedId = WrappedId(id)
-  items.map(i => wrap(i.id))
-
-// GOOD: regular def — compiler hoists to method, no closure object
-def process(items: List[Item]) =
-  def wrap(id: ItemId): WrappedId = WrappedId(id)
-  items.map(i => wrap(i.id))
-```
-
-Preference order: `inline def` > `def` > `val` lambda. Use `inline def` when the body is small
-and doesn't do IO (see section 9). Use `def` when inlining isn't appropriate.
-
-Flag:
-- `val fn: A => B = ...` or `val fn = (a: A) => ...` in hot paths — use `inline def` or `def`
-- Lambda vals inside reactive callbacks (`.map`, `.flatMap`, signal chains) — allocates per emission
-- Does NOT apply to lambdas passed directly as arguments (e.g., `items.map(WrappedId(_))`) —
-  the compiler already optimizes these
-
 ---
 
 ## 9. Inline Usage
@@ -370,6 +338,8 @@ Flag:
 - `inline` on methods with large bodies (>10 lines) -- bytecode bloat risk
 - `inline` on IO-heavy methods where lambda allocation is negligible
 - Missing `inline` on function parameters when the method is already `inline` (both should be inline)
+- `val fn: A => B = ...` in hot paths (loops, reactive callbacks) -- use `inline def` (zero
+  allocation) or `def` (compiler hoists to method) instead of val lambda (allocates `Function1`)
 
 ---
 

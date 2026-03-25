@@ -20,7 +20,8 @@ for trigger patterns.
 | 05 | `reviewers/05-fdb-patterns.md` | `FDBRecord`, `FDBStore`, `RecordIO`, `RecordReadIO`, `RecordTask`, `transact`, `FDBOperations`, `StoreProvider`, `FDBChunkSubspace`, `splitTransaction`, `batchTransact`, `largeScan` |
 | 06 | `reviewers/06-temporal.md` | `TemporalWorkflow`, `TemporalActivity`, `WorkflowTask`, `@workflowInterface`, `@activityInterface`, `BatchAction`, `FDBCdcEventListener`, `AsyncEndpoint` |
 | 07 | `reviewers/07-tapir-endpoints.md` | `EndpointServer`, `AuthenticatedEndpoint`, `authRoute`, `validateRoute`, `EndpointClient`, `AsyncEndpointClient`, or `*Server.scala` wiring files |
-| 08 | `reviewers/08-frontend.md` | `Laminar`, `Signal`, `EventStream`, `Var`, `Observer`, `splitSeq`, `splitOption`, `child <--`, `children <--`, `L.`, `tw.`, `AnduinButton`, `Modal`, `Table`, `TextBox`, `Dropdown` |
+| 08a | `reviewers/08-laminar.md` | `Laminar`, `Signal`, `EventStream`, `Var`, `Observer`, `splitSeq`, `splitOption`, `splitMatchOne`, `child <--`, `children <--`, `-->`, `L.`, `flatMapSwitch`, `flatMapMerge`, `taskToStream`, `LaminarComponent` |
+| 08b | `reviewers/08-frontend.md` | `tw.`, `AnduinButton`, `AnduinTag`, `Modal`, `ModalL`, `Table`, `TableL`, `TextBox`, `TextBoxL`, `Dropdown`, `DropdownL`, `Tooltip`, `AnduinTooltipL`, `testId`, `testIdL` |
 | 09 | `reviewers/09-react.md` | `ScalaComponent`, `BackendScope`, `Callback`, `VdomElement`, `<.div`, `^.onClick` |
 | 10 | `reviewers/10-observability.md` | `ZIO.logInfo`, `ZIO.logWarning`, `ZIO.logError`, `ZIOLoggingUtils`, `ZIOTelemetryUtils`, `ActionLoggerService`, `Metric.histogram`, `Metric.counter`, `scribe.`, `.ignore` — only for `/jvm/` service files, skip pure model/DTO files |
 | 11 | `reviewers/11-testing.md` | Test files only (`**/test/src/**`, `**/it/src/**`, `**/multiregionit/**`) |
