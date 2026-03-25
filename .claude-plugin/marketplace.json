@@ -11,7 +11,7 @@
       "name": "stargazer-review-gang",
       "source": "./stargazer-review-gang",
       "description": "Multi-perspective code review with 10 specialized reviewer agents, validation layer, and confidence scoring for the Stargazer codebase",
-      "version": "3606bfa",
+      "version": "7379b76",
       "author": {
         "name": "HollandDM"
       },
@@ -21,7 +21,7 @@
       "name": "stargazer-subagent-dev",
       "source": "./stargazer-subagent-dev",
       "description": "Execute implementation plans for Stargazer via team-based agents with two-stage review (spec compliance + code quality)",
-      "version": "3606bfa",
+      "version": "7379b76",
       "author": {
         "name": "HollandDM"
       },
@@ -31,7 +31,7 @@
       "name": "prove",
       "source": "./prove",
       "description": "Adversarial verification skill: prover vs disprover agents argue, then a judge synthesizes a verdict",
-      "version": "3606bfa",
+      "version": "7379b76",
       "author": {
         "name": "HollandDM"
       },
