@@ -100,11 +100,17 @@ From `workload`:
 - **>4000 +/- with split:** Spawn sub-reviewers (2a, 2b, etc.) with focused scope.
   Prepend: `> FOCUSED REVIEW: You are sub-reviewer {id}. Review ONLY: {focus}`
 
-#### Model Override by Depth
+#### Model Selection — Per-Reviewer Workload
 
-- `lite`: use roster defaults (all reviewers are standard minimum — no haiku for semantic review)
-- `medium`: use roster defaults
-- `heavy`: `model: "opus"` for all reviewers
+Use each reviewer's **own workload** from the orchestrator's `workload` output to pick its model.
+Do NOT apply one model to all reviewers — a reviewer with 50 changes shouldn't get opus just
+because another reviewer has 3000.
+
+| Reviewer's +/- | Model |
+|----------------|-------|
+| ≤100 | roster default (haiku for 3/8b/10, standard for others) |
+| 101–2000 | roster default |
+| >2000 | `model: "opus"` |
 
 ### Reviewer Roster
 
@@ -150,8 +156,7 @@ found" (sub-reviewers like 1a, 1b count separately). Every reviewer response cou
   complete, spawn **exactly one** final merge aggregator.
 
 **Model selection:**
-- **Per-batch aggregators** (`aggregator-1`, `aggregator-2`, etc.): depth-based —
-  `lite`/`medium`: `model: "sonnet"`, `heavy`: `model: "opus"`
+- **Per-batch aggregators** (`aggregator-1`, `aggregator-2`, etc.): always `model: "sonnet"`
 - **Final merge aggregator** (`aggregator-final`): always `model: "haiku"`
 
 Use `team_name: "review-gang"` for all.
