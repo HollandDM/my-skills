@@ -134,9 +134,9 @@ Do NOT summarize findings as one-liners. Always show the actual code.
 ## Files Reviewed
 - file list with platform classification
 
-## Blockers (must fix)
+## 🔴 Blockers (must fix)
 
-### [BLOCKER] (confidence: N) Title — `file:line`
+### 🔴 [BLOCKER] (confidence: N) Title — `file:line`
 **Reviewer:** Name
 **Issue:** Explanation of what's wrong and why it matters
 **Current code:**
@@ -151,9 +151,9 @@ Do NOT summarize findings as one-liners. Always show the actual code.
 ```
 Also flagged by: [reviewer] — [reason] *(only if deduplicated)*
 
-## Suggestions (should fix)
+## 🟡 Suggestions (should fix)
 
-### [SUGGESTION] (confidence: N) Title — `file:line`
+### 🟡 [SUGGESTION] (confidence: N) Title — `file:line`
 **Reviewer:** Name
 **Issue:** Explanation of what's wrong and why it matters
 **Current code:**
@@ -165,9 +165,9 @@ Also flagged by: [reviewer] — [reason] *(only if deduplicated)*
 // the concrete replacement code
 ```
 
-## Nitpicks
+## 🔵 Nitpicks
 
-### [NITPICK] Title — `file:line`
+### 🔵 [NITPICK] Title — `file:line`
 **Reviewer:** Name
 **Issue:** Brief explanation
 **Current code:**
