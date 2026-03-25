@@ -149,13 +149,14 @@ found" (sub-reviewers like 1a, 1b count separately). Every reviewer response cou
   Group related reviewers together (e.g., FDB + ZIO + Temporal). After all aggregators complete,
   spawn one **final aggregator** team member to merge their reports and do a cross-group dedup pass.
 
-Use the same depth-based model override as reviewers:
-- `lite`: `model: "sonnet"` (aggregator default — no haiku for semantic work)
-- `medium`: `model: "sonnet"` (aggregator default)
-- `heavy`: `model: "opus"`
+**Model selection:**
+- **Per-batch aggregators** (validate, re-query, filter): depth-based model override —
+  `lite`/`medium`: `model: "sonnet"`, `heavy`: `model: "opus"`
+- **Final aggregator** (merge + dedup only): always `model: "haiku"` — it only concatenates
+  and deduplicates, no validation or re-querying needed
 
 Name: `"aggregator"` (or `"aggregator-1"`, `"aggregator-2"` for batches, `"aggregator-final"`
-for merge). Use `team_name: "review-gang"` with depth-appropriate model.
+for merge). Use `team_name: "review-gang"`.
 
 Each aggregator prompt must include:
 - `Read your instructions from: agents/aggregator.md`
