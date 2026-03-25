@@ -210,8 +210,32 @@ STM.atomically {
 for { _ <- balanceRef.update(_ - amount); _ <- historyRef.update(_ :+ tx) } yield ()
 ```
 
+### Lazy Init Caches -- `Ref.Synchronized` Required
+
+`Ref` get-then-set is a race condition for lazy initialization. Two concurrent fibers can both
+see `None`, both compute the value, and one result is silently discarded.
+
+```scala
+// BAD: two fibers can both see None and compute twice
+for {
+  cached <- cacheRef.get
+  result <- cached match {
+    case Some(v) => ZIO.succeed(v)
+    case None    => expensive.tap(v => cacheRef.set(Some(v)))
+  }
+} yield result
+
+// GOOD: Ref.Synchronized holds a lock during effectful update — compute-once
+cacheSyncRef.modifyZIO {
+  case Some(v) => ZIO.succeed((v, Some(v)))
+  case None    => expensive.map(v => (v, Some(v)))
+}
+```
+
 Flag:
 - `ref.get` followed by `ref.set` -- always a race condition
+- `Ref[Option[A]]` with get-then-compute-then-set pattern -- use `Ref.Synchronized.modifyZIO`
+  for lazy init / cache-once semantics
 - Effectful operations inside `Ref.modify` that assume atomicity -- use `Ref.Synchronized`
 - Mutable data stored in `Ref` (e.g., `Ref[mutable.Map[...]]`) -- defeats purpose
 - Sequential updates to multiple `Ref`s that should be atomic -- use STM
