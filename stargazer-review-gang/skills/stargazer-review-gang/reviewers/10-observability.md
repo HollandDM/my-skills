@@ -244,4 +244,7 @@ For each issue found, report:
 - **Severity**: `[BLOCKER]` (secrets in logs, silent error swallowing), `[SUGGESTION]` (missing metrics/tracing/structured logging), `[NITPICK]` (naming, service prefix, SpanKind)
 - **Confidence**: 0–100 (90+ certain, 70–89 strong signal, 50–69 suspicious, <50 don't report)
 - **Issue**: what's missing and why it matters operationally
-- **Fix**: fenced code blocks showing current code and suggested replacement
+- **Current code**: fenced code block showing the actual code from the file (3-5 lines of context)
+- **Suggested fix**: fenced code block with the concrete replacement, copy-paste ready
+
+**EVERY finding — blocker, suggestion, AND nitpick — MUST include both Current code and Suggested fix blocks.** One-liner findings without code blocks will be rejected by the aggregator.

@@ -97,6 +97,9 @@ For each issue found, report:
 - **Severity**: `[BLOCKER]` (dependency direction violation, runtime breakage), `[SUGGESTION]` (layer leak, custom codec notification), `[NITPICK]` (code placement)
 - **Confidence**: 0–100 (90+ certain, 70–89 strong signal, 50–69 suspicious, <50 don't report)
 - **Issue**: what was found
-- **Fix**: fenced code blocks showing current code and suggested replacement (or where the code should live)
+- **Current code**: fenced code block showing the actual code from the file (3-5 lines of context)
+- **Suggested fix**: fenced code block with the concrete replacement (or where the code should live), copy-paste ready
+
+**EVERY finding — blocker, suggestion, AND nitpick — MUST include both Current code and Suggested fix blocks.** One-liner findings without code blocks will be rejected by the aggregator.
 
 If no violations are found across both parts, report "Architecture and serialization look clean — no issues detected."

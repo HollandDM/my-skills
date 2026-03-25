@@ -418,6 +418,9 @@ For each issue found, report:
 - **Severity**: `[BLOCKER]` (memory leak, broken reactivity, broken layout), `[SUGGESTION]` (wrong split/flatten strategy, missing error handling, design system, accessibility), `[NITPICK]` (style, convention, efficiency)
 - **Confidence**: 0–100 (90+ certain, 70–89 strong signal, 50–69 suspicious, <50 don't report)
 - **Issue**: what pattern is violated
-- **Fix**: fenced code blocks showing current code and suggested replacement
+- **Current code**: fenced code block showing the actual code from the file (3-5 lines of context)
+- **Suggested fix**: fenced code block with the concrete replacement, copy-paste ready
+
+**EVERY finding — blocker, suggestion, AND nitpick — MUST include both Current code and Suggested fix blocks.** One-liner findings without code blocks will be rejected by the aggregator.
 
 Focus on memory leaks, broken reactivity, incorrect split/flatten strategy, broken layouts, and accessibility gaps — these cause hard-to-debug production issues.

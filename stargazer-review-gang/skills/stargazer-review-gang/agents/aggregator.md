@@ -26,6 +26,10 @@ before finalizing findings from that reviewer.
 
 ## Step 1: Validate Findings
 
+For every finding (BLOCKER, SUGGESTION, and NITPICK), first check it has both **Current code**
+and **Suggested fix** code blocks. If either is missing, message the reviewer to provide them
+before proceeding with validation.
+
 For every BLOCKER and SUGGESTION finding, verify it against the actual source code:
 
 1. **Read the file** at the cited line using the Read tool
@@ -39,7 +43,8 @@ Rules:
 - **NEEDS_CLARIFICATION** if: you can see the code but aren't sure whether the finding is valid,
   the suggested fix looks incomplete, or the issue description is ambiguous
 - **Fail-open**: if you can't read the file at all, treat as CONFIRMED
-- **Skip validation** for NITPICKs — pass them through as-is
+- **Skip diff validation** for NITPICKs — pass them through without checking the diff, but still
+  reject any that lack code blocks
 
 Drop all FALSE_POSITIVE findings. Keep CONFIRMED ones. For NEEDS_CLARIFICATION — proceed to
 Step 2.
@@ -56,7 +61,7 @@ encounter any of these situations during validation:
 | **Finding is ambiguous** — you read the code but can't tell if the issue is real | "I see `<code>` at file:line. Is this actually a problem? The surrounding code suggests `<your observation>`." |
 | **Fix is vague or missing** — finding says what's wrong but not how to fix it | "Your finding at file:line lacks a concrete fix. What specific code change do you recommend?" |
 | **Fix looks wrong** — the suggested fix would break something or doesn't compile | "Your suggested fix at file:line looks like it would `<problem>`. Can you revise?" |
-| **Borderline confidence (60-69)** — finding might be worth including with more detail | "This finding is at confidence N. Can you strengthen it with a concrete fix, or should I drop it?" |
+| **Borderline confidence (50-59)** — finding is included but could be strengthened | "This finding is at confidence N. Can you strengthen it with more detail or a concrete fix?" |
 | **Contradiction between reviewers** — two reviewers disagree about the same code | Ask both: "Reviewer-X flagged file:line as `<issue>` but you said it's fine / flagged it differently. What's your take?" |
 | **Uncertain false positive** — you think it might be a false positive but aren't sure | "I think this might be a false positive because `<reason>`. Am I wrong?" |
 
@@ -97,10 +102,17 @@ Priority order (highest wins):
 
 ## Step 4: Final Filter
 
-1. **Drop confidence < 70** — after clarification, some findings may have been strengthened above
-   this threshold. Only drop findings that are still below 70 after the reviewer had a chance to
-   clarify.
-2. **Drop vague findings** — no line number, no concrete fix, or not in the diff.
+You may **reassess confidence scores** based on your validation — adjust up or down as warranted.
+Then apply these rules:
+
+1. **Drop confidence < 50** — findings below 50 after reassessment are noise. Drop them.
+2. **RETAIN everything >= 50** — you MUST keep every non-duplicate finding with confidence >= 50.
+   You cannot drop, downgrade to a note, or omit a finding just because you think it's minor,
+   borderline, or stylistic. If it scored >= 50 and isn't a duplicate, it goes in the report.
+3. **Drop duplicates** — per Step 3 dedup rules only. Merging duplicates is fine; silently
+   dropping unique findings is not.
+4. **Request missing code blocks** — if a finding >= 50 lacks Current code / Suggested fix blocks,
+   message the reviewer to provide them. Do NOT drop the finding for being vague — fix it.
 
 ## Output
 
@@ -108,6 +120,11 @@ Return a markdown report. **Every finding — blockers, suggestions, AND nitpick
 fenced code blocks** showing the current code and the suggested fix. The reader should be able to
 understand exactly what code is problematic and what it should look like after the fix, without
 having to open the file themselves.
+
+**Preserve reviewer code blocks.** Copy the **Current code** and **Suggested fix** blocks from
+the reviewer's output verbatim. Do NOT rewrite, summarize, shorten, or paraphrase them. The
+reviewer has full file context and their code blocks are accurate. You may only modify a code
+block if the reviewer explicitly provided an updated version during clarification (Step 2).
 
 Do NOT summarize findings as one-liners. Always show the actual code.
 

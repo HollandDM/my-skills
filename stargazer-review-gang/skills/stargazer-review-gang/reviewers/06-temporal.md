@@ -445,6 +445,9 @@ For each issue found, report:
 - **Severity**: `[BLOCKER]` (data loss, duplicates, missing activity attributes, idempotency violations), `[SUGGESTION]` (timeout/retry config, pattern deviations), `[NITPICK]` (style, naming)
 - **Confidence**: 0–100 (90+ certain, 70–89 strong signal, 50–69 suspicious, <50 don't report)
 - **Issue**: what Temporal pattern is violated
-- **Fix**: fenced code blocks showing current code and suggested replacement
+- **Current code**: fenced code block showing the actual code from the file (3-5 lines of context)
+- **Suggested fix**: fenced code block with the concrete replacement, copy-paste ready
+
+**EVERY finding — blocker, suggestion, AND nitpick — MUST include both Current code and Suggested fix blocks.** One-liner findings without code blocks will be rejected by the aggregator.
 
 Focus on **activity attributes** (most commonly missed), **idempotency**, and **pattern selection** — these cause production incidents.

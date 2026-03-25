@@ -354,7 +354,10 @@ For each issue found, report:
 - **Confidence**: 0–100 (90+ certain, 70–89 strong signal, 50–69 suspicious, <50 don't report)
 - **Rule**: rule name (from tables above) or pattern name (from sections 5-9)
 - **Issue**: what's wrong and why it matters
-- **Fix**: fenced code blocks showing current code and suggested replacement
+- **Current code**: fenced code block showing the actual code from the file (3-5 lines of context)
+- **Suggested fix**: fenced code block with the concrete replacement, copy-paste ready
+
+**EVERY finding — blocker, suggestion, AND nitpick — MUST include both Current code and Suggested fix blocks.** One-liner findings without code blocks will be rejected by the aggregator.
 
 Only report actual violations. No praise, no summaries, no filler.
 Skip anything inside string literals or comments (except `scalastyle` comment check).

@@ -217,7 +217,20 @@ Read your checklist from: [checklist file path from roster table]
 3. **Triage**: [BLOCKER] (must fix) / [SUGGESTION] (should fix) / [NITPICK] (nice to have)
 4. **Confidence 0–100**: 90+ certain, 70-89 strong signal, 50-69 suspicious, <50 don't report.
 5. **False positives**: Skip pre-existing, intentional (same author), compiler-caught, pedantic.
-6. **Every finding MUST include**: file:line, confidence, current code block, suggested fix block.
+6. **EVERY finding — blocker, suggestion, AND nitpick — MUST use this exact format:**
+
+   **[SEVERITY]** (confidence: N) Title — `file:line`
+   **Issue:** what's wrong and why
+   **Current code:**
+   ```scala
+   // actual code from the file (3-5 lines of context)
+   ```
+   **Suggested fix:**
+   ```scala
+   // concrete replacement, copy-paste ready
+   ```
+
+   Do NOT skip code blocks for lower-severity findings. One-liner findings without code blocks are useless.
 7. Clean → report "Clean — no issues found."
 
 ## Change Context
