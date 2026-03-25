@@ -3,30 +3,33 @@
 Use this template when dispatching a code quality reviewer. Only dispatch **after spec
 compliance review passes**.
 
-The reviewer loads Stargazer-specific checklists based on which domains the task touches.
-The checklists live in the stargazer-review-gang skill — this avoids duplication.
+The reviewer loads only the checklists relevant to the actual files changed.
+The checklists are symlinked into this skill's `reviewers/` directory.
 
-## Checklist Routing
+## Checklist Routing — Based on Changed Files
 
-Based on the domain identified in Step 1 of the main skill, tell the reviewer which
-checklists to load:
+**Before dispatching the reviewer**, the controller (you) must determine which checklists
+to include by inspecting the diff. Run `git diff <base>..<head>` and scan the diff content
+for trigger patterns.
 
-| Domain | Checklist path (relative to stargazer-review-gang skill) |
-|--------|----------------------------------------------------------|
-| All Scala code | `reviewers/01-scala-quality.md` |
-| ZIO effects/streams | `reviewers/02-zio-patterns.md` |
-| Architecture/serialization | `reviewers/03-foundations.md` |
-| FDB stores/queries | `reviewers/05-fdb-patterns.md` |
-| Temporal workflows | `reviewers/06-temporal.md` |
-| Tapir endpoints | `reviewers/07-tapir-endpoints.md` |
-| Laminar frontend | `reviewers/08-frontend.md` |
-| scalajs-react | `reviewers/09-react.md` |
-| Observability/logging | `reviewers/10-observability.md` |
-| Tests | `reviewers/11-testing.md` |
+| ID | Checklist | Trigger: include when diff contains |
+|----|-----------|-------------------------------------|
+| 01 | `reviewers/01-scala-quality.md` | **Any `.scala` file** (always include) |
+| 02 | `reviewers/02-zio-patterns.md` | `ZIO`, `Task`, `UIO`, `URIO`, `IO`, `ZLayer`, `Scope`, `Schedule`, `Ref`, `ZStream`, `ZSink`, `ZPipeline`, `foreachPar`, `collectAllPar`, `Semaphore`, `Queue`, `Cache`, `forkDaemon`, `forkScoped`, `attemptBlocking`, imports from `zio.*` |
+| 03 | `reviewers/03-foundations.md` | `JsoniterCodec`, `JsonCodecMaker`, `JsonValueCodec`, `derives`, `TypeMapper`, `.proto` files, protobuf imports, or cross-module imports |
+| 05 | `reviewers/05-fdb-patterns.md` | `FDBRecord`, `FDBStore`, `RecordIO`, `RecordReadIO`, `RecordTask`, `transact`, `FDBOperations`, `StoreProvider`, `FDBChunkSubspace`, `splitTransaction`, `batchTransact`, `largeScan` |
+| 06 | `reviewers/06-temporal.md` | `TemporalWorkflow`, `TemporalActivity`, `WorkflowTask`, `@workflowInterface`, `@activityInterface`, `BatchAction`, `FDBCdcEventListener`, `AsyncEndpoint` |
+| 07 | `reviewers/07-tapir-endpoints.md` | `EndpointServer`, `AuthenticatedEndpoint`, `authRoute`, `validateRoute`, `EndpointClient`, `AsyncEndpointClient`, or `*Server.scala` wiring files |
+| 08 | `reviewers/08-frontend.md` | `Laminar`, `Signal`, `EventStream`, `Var`, `Observer`, `splitSeq`, `splitOption`, `child <--`, `children <--`, `L.`, `tw.`, `AnduinButton`, `Modal`, `Table`, `TextBox`, `Dropdown` |
+| 09 | `reviewers/09-react.md` | `ScalaComponent`, `BackendScope`, `Callback`, `VdomElement`, `<.div`, `^.onClick` |
+| 10 | `reviewers/10-observability.md` | `ZIO.logInfo`, `ZIO.logWarning`, `ZIO.logError`, `ZIOLoggingUtils`, `ZIOTelemetryUtils`, `ActionLoggerService`, `Metric.histogram`, `Metric.counter`, `scribe.`, `.ignore` — only for `/jvm/` service files, skip pure model/DTO files |
+| 11 | `reviewers/11-testing.md` | Test files only (`**/test/src/**`, `**/it/src/**`, `**/multiregionit/**`) |
 
-**Always include 01-scala-quality.** Add domain-specific checklists based on what the task
-touches. For example, a task adding a new FDB store with a Tapir endpoint would get:
-01 + 02 + 03 + 05 + 07 + 11.
+**Rules:**
+1. Always include **01** for any `.scala` file
+2. Include other checklists **only if** their trigger patterns appear in the diff
+3. Do NOT include checklists speculatively based on the plan's domain tag — only based on actual file content
+4. When uncertain whether a pattern is present, include the checklist (fail-open)
 
 ## Prompt Template
 
@@ -35,7 +38,7 @@ Agent tool:
   team_name: "stargazer-dev"
   name: "quality-reviewer-N"
   description: "Code quality review for Task N"
-  model: [sonnet for most tasks, opus for heavy/architectural]
+  model: "sonnet"
   prompt: |
     You are a code quality reviewer for the Stargazer codebase.
     You are a member of the "stargazer-dev" team. Your name is "quality-reviewer-N".
@@ -57,8 +60,8 @@ Agent tool:
     ## Your Checklists
 
     Read these checklist files and apply them to the changed code:
-    [List the absolute paths to the relevant reviewer .md files from the routing table above.
-     The base path for checklist files is the stargazer-review-gang skill directory.]
+    [List the paths to the relevant reviewer .md files from the routing table above,
+     relative to this skill's directory.]
 
     ## Your Tools
 
@@ -88,6 +91,36 @@ Agent tool:
     - Did this change create large new files or significantly grow existing ones?
     - Are LSP findReferences showing any broken callers from type changes?
 
+    ## Feedback Loop
+
+    The implementer is an active team member: `implementer-N` (same N as your name).
+    If you find blockers or suggestions, **message the implementer directly** to fix them:
+
+    ```
+    to: "implementer-N"
+    message: |
+      Code quality issues found. Please fix blockers and suggestions:
+
+      1. **[BLOCKER]** (confidence: N) — `file:line`
+         **Issue:** ...
+         **Current code:**
+         ```scala
+         ...
+         ```
+         **Suggested fix:**
+         ```scala
+         ...
+         ```
+
+      After fixing, reply with what you changed.
+    summary: "Fix N code quality issues"
+    ```
+
+    Wait for the implementer to respond, then **re-review the changed files only**.
+    Repeat until all blockers and suggestions are resolved, **up to 3 iterations max**.
+    If issues remain after 3 rounds, stop and report NEEDS_CHANGES with remaining issues.
+    Nitpicks do not require a fix round — note them but don't send back.
+
     ## Report Format
 
     Report via SendMessage to the team lead:
@@ -99,9 +132,12 @@ Agent tool:
     - **Severity**: [BLOCKER] / [SUGGESTION] / [NITPICK]
     - **Confidence**: 0-100
     - **Issue**: What's wrong and why it matters
-    - **Fix**: Fenced code blocks (current -> suggested)
+    - **Current code**: fenced code block (3-5 lines of context)
+    - **Suggested fix**: fenced code block, copy-paste ready
 
     **Assessment:** APPROVED | NEEDS_CHANGES
-    If NEEDS_CHANGES, list only what must be fixed (blockers + suggestions).
-    Nitpicks can be noted but don't block approval.
+    - **APPROVED**: all blockers and suggestions resolved. Include how many fix rounds
+      were needed. Nitpicks may remain.
+    - **NEEDS_CHANGES**: only if the implementer cannot resolve issues after 3 fix rounds.
+      List remaining issues.
 ```

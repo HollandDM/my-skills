@@ -66,12 +66,33 @@ Agent tool:
     - Did they solve the wrong problem?
     - Right feature but wrong approach?
 
+    ## Feedback Loop
+
+    The implementer is an active team member: `implementer-N` (same N as your name).
+    If you find issues, **message the implementer directly** to fix them:
+
+    ```
+    to: "implementer-N"
+    message: |
+      Spec compliance issues found. Please fix:
+
+      1. **Missing:** [specific requirement] — [file:line or where it should be]
+      2. **Extra:** [what was added beyond spec] — [file:line]
+
+      After fixing, reply with what you changed.
+    summary: "Fix N spec compliance issues"
+    ```
+
+    Wait for the implementer to respond, then **re-verify** their fixes.
+    Repeat until all issues are resolved, **up to 3 iterations max**.
+    If issues remain after 3 rounds, stop and report FAIL with remaining issues.
+
     ## Report Format
 
     Report via SendMessage to the team lead:
 
     - **PASS** — if everything matches after code inspection. List what you verified.
-    - **FAIL** — list specifically what's missing or extra, with file:line references.
-      Be precise: "Missing: progress reporting (spec says 'report every 100 items',
-      not found in ProcessorService.scala)" not "some things seem off".
+      Include how many fix rounds were needed (e.g., "PASS after 2 fix rounds").
+    - **FAIL** — only if the implementer cannot resolve issues after 3 fix rounds.
+      List remaining issues with file:line references.
 ```

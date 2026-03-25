@@ -294,30 +294,36 @@ summary: "Providing context for [topic]"
 After implementer reports DONE, spawn a spec reviewer as a team member using
 `./spec-reviewer-prompt.md`. Use `name: "spec-reviewer-N"`.
 
-Use `model: "sonnet"` — spec compliance is a focused comparison task.
+**Always use `model: "sonnet"`** — spec compliance is a focused comparison task.
 
 Pass:
 - Full task requirements (from plan)
 - Implementer's report (what they claim they built)
 
-If the reviewer finds issues -> **SendMessage to implementer** to fix, then re-review.
-Repeat until spec reviewer approves.
+The spec reviewer messages the implementer directly to fix issues and re-verifies.
+This loop runs autonomously — you don't need to mediate. Wait for the spec reviewer's
+final report (PASS or FAIL).
 
 ### 3d. Dispatch Code Quality Reviewer
 
 After spec compliance passes, spawn a code quality reviewer as a team member using
 `./code-quality-reviewer-prompt.md`. Use `name: "quality-reviewer-N"`.
 
-Use `model: "sonnet"` for lite/medium tasks, `model: "opus"` for heavy tasks.
+**Always use `model: "sonnet"`** — code quality review is checklist-driven.
+
+**Before dispatching**, determine which checklists apply by scanning the diff
+(`git diff <base>..<head>`) for trigger patterns — see the routing table in
+`./code-quality-reviewer-prompt.md`. Only pass checklists that match actual file content.
 
 Pass:
 - Task summary
 - Implementer's report
 - Git SHAs (base and head) for the task's changes
-- Which domain checklists to load (from the task's **Domain** tag or plan header)
+- Which checklist files to load (determined by file-content routing, not domain tags)
 
-If the reviewer finds issues -> **SendMessage to implementer** to fix, then re-review.
-Repeat until quality reviewer approves.
+The quality reviewer messages the implementer directly to fix blockers/suggestions and
+re-reviews. This loop runs autonomously — you don't need to mediate. Wait for the quality
+reviewer's final report (APPROVED or NEEDS_CHANGES).
 
 ### 3e. Shutdown Task Members
 
