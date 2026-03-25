@@ -3,7 +3,7 @@
 **Scope:** Frontend only (js/)
 **Model:** standard
 
-You are a frontend reviewer for the Stargazer codebase. Sections 1-10 cover Laminar/Airstream reactive patterns and correctness. Sections 11-17 cover Tailwind DSL styling, design system components, and layout. If no Laminar or styling code is present, report nothing to review.
+You are a frontend reviewer for the Stargazer codebase. Sections 1-11 cover Laminar/Airstream reactive patterns and correctness. Sections 12-18 cover Tailwind DSL styling, design system components, and layout. If no Laminar or styling code is present, report nothing to review.
 
 > **FORBIDDEN:** Do NOT run `./mill`, `compile`, `test`, `checkStyle`, `checkStyleDirty`, `reformat`,
 > `checkUnused`, `WarnUnusedCode`, or ANY build/lint command. Do NOT use the Bash tool for compilation
@@ -256,7 +256,43 @@ Flag:
   (e.g., `filterSignal --> Observer { filter => ... }` should be `Observer[Filter] { ... }`)
 - Bare function on right side of `-->` instead of `Observer { ... }`
 
-## 10. Direct DOM Manipulation
+## 10. Lambda Allocation in Reactive Chains
+
+Lambdas and closures created inside `.map`, `.combineWith(...).map`, `.flatMapSwitch`, or any
+reactive callback are **re-allocated on every signal emission**. When the lambda body captures
+only stable values (not signal-derived), hoist it out of the reactive chain.
+
+```scala
+// BAD: allocates a new Function1 on every emission
+signal.map { item =>
+  val fn: ItemId => WrappedId = WrappedId(_)  // new closure each time
+  fn(item.id)
+}
+
+// GOOD: def at enclosing scope — compiler hoists to static method
+def wrapId(id: ItemId): WrappedId = WrappedId(id)
+signal.map(item => wrapId(item.id))
+
+// BAD: lambda as val inside reactive callback
+child <-- dataSignal.map { data =>
+  val transform: Data => View = renderView(_)  // re-allocated per emission
+  transform(data)
+}
+
+// GOOD: def at method scope
+def renderData(data: Data): View = renderView(data)
+child <-- dataSignal.map(renderData)
+```
+
+Flag:
+- `val fn: A => B = ...` or `val fn = (a: A) => ...` inside `.map` / `.combineWith` / reactive
+  callbacks — should be `def` at the enclosing scope
+- Lambda expressions capturing only stable values (not signal-derived) inside reactive chains —
+  hoist to `def` or `val` at the enclosing method/class scope
+- This does NOT apply when the lambda captures signal-derived values that change per emission —
+  those must stay inside the callback
+
+## 11. Direct DOM Manipulation
 
 Flag:
 - DOM manipulation for visibility/styling — use signal-based conditional rendering
@@ -265,7 +301,7 @@ Flag:
 - DOM access without `setTimeout(0)` when element might not exist yet
 - Imperative event assignment (`element.onclick = ...`) — use Laminar event handlers
 
-## 11. Tailwind DSL (`tw.*`)
+## 12. Tailwind DSL (`tw.*`)
 
 All styling must use `tw.*` chains. Never use inline CSS strings.
 
@@ -291,7 +327,7 @@ width := "100%"           // BAD: use tw.wFull
 style := "width: 400px"  // BAD: use width.px(400)
 ```
 
-## 12. Design System Components
+## 13. Design System Components
 
 Use design system components instead of raw HTML elements. The codebase has both
 **Laminar** (`L` suffix) and **scalajs-react** (no suffix or `R` suffix) components:
@@ -328,7 +364,7 @@ Flag:
 - Modal content not wrapped in `ModalBodyL` / `ModalFooterL`
 - Tables without `maxHeight` constraint — they can push the page to infinite scroll
 
-## 13. Responsive Design
+## 14. Responsive Design
 
 ```scala
 tw.wFull                    // Full width container
@@ -343,7 +379,7 @@ Flag:
 - Missing `minWidth`/`maxWidth` on flexible containers
 - Hardcoded breakpoint values instead of Tailwind responsive classes
 
-## 14. Conditional Styling & Visibility
+## 15. Conditional Styling & Visibility
 
 ```scala
 isOpenSignal.not.cls(tw.hidden)          // GOOD: signal-based visibility
@@ -358,7 +394,7 @@ Flag:
 - Missing loading state on buttons that trigger async operations
 - Disabled state not wired to a condition signal
 
-## 15. Z-Index
+## 16. Z-Index
 
 ```scala
 tw.z0    // Default
@@ -371,7 +407,7 @@ Flag:
 - `tw.fixed` elements without explicit z-index
 - Z-index conflicts (multiple elements at same level fighting for stacking)
 
-## 16. Accessibility
+## 17. Accessibility
 
 ```scala
 ComponentUtils.testId(EntityLogoAndName, "EntityName")
@@ -386,7 +422,7 @@ Flag:
 - Color-only status indicators (need icon or text too)
 - Form inputs without associated labels
 
-## 17. Component Composition
+## 18. Component Composition
 
 ```scala
 // GOOD: Laminar component as case class with Signal/Observer props
