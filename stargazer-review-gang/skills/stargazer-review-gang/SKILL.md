@@ -57,19 +57,28 @@ Set to `[]` if none found — tool availability is optional.
 
 ## Step 3: Spawn Routing Orchestrator
 
-Spawn a **single plain agent** (not a team member) with this prompt.
-Use `model: "sonnet"` — the orchestrator interprets the review scope, determines diff refs, reads
+Spawn a **single plain agent** (not a team member) using the exact prompt template below.
+Use `model: "sonnet"` — the orchestrator interprets the scope, determines diff refs, reads
 all diffs, and routes files. It is a one-shot job that does not need to persist.
 
-**Pass the user's review scope verbatim** — do NOT interpret it into base/head refs. The
+**Pass the user's scope verbatim** — do NOT interpret it into base/head refs. The
 orchestrator determines the correct git diff strategy itself. **Add surrounding context** (branch
 name, recent commit summaries, number of files) to help the orchestrator orient quickly, but keep
 the user's words intact as the primary scope.
 
-Prompt must include:
-- `Read your full instructions from: agents/orchestrator.md`
-- `Do NOT invoke the Skill tool`
-- User's review scope (verbatim), branch/history context, user context, discovered tools JSON
+**Prompt template** (fill in the bracketed sections):
+
+```
+You are a subagent dispatched to execute a specific routing task.
+Do NOT invoke the Skill tool or any skills — you are already inside a workflow.
+
+Read your full instructions from: agents/orchestrator.md
+
+Scope: [user's verbatim scope]
+Branch context: [branch name, recent commits, file count]
+User context: [user-provided context or "none"]
+Available tools: [discovered tools JSON]
+```
 
 The orchestrator returns a JSON routing plan with `diff_ref`, `routing`, `workload`, and `depth`.
 **Wait for completion before proceeding.**
@@ -133,9 +142,14 @@ because another reviewer has 3000.
 Name pattern: `reviewer-{ID}` (sub-reviewers: `reviewer-{ID}{letter}`).
 Use `team_name: "review-gang"`. Spawn all in a **single message** for parallelism.
 
-Each reviewer prompt must include:
+Each reviewer prompt must start with:
+```
+You are a subagent dispatched to execute a specific task.
+Do NOT invoke the Skill tool or any skills — you are already inside a workflow.
+```
+
+Then include:
 - `Read your checklist from: [checklist path from roster]`
-- `Do NOT invoke any skills or the Skill tool`
 - Diff ref, assigned file paths, user context, discovered tools JSON
 - **No build commands** — read only
 - **Diff-bound** — only flag changed lines
@@ -167,8 +181,10 @@ Each batch aggregator reads and follows `agents/aggregator.md` — it validates 
 reviewers, filters, and produces a report.
 
 ```
+You are a subagent dispatched to execute a specific task.
+Do NOT invoke the Skill tool or any skills — you are already inside a workflow.
+
 Read your instructions from: agents/aggregator.md
-Do NOT invoke any skills or the Skill tool.
 Diff ref: <diff_ref>
 Team Members: <list of reviewer names in this batch>
 Findings to Aggregate: <paste findings>
@@ -181,8 +197,10 @@ re-query, or filter. It only concatenates batch reports and deduplicates across 
 Spawn **exactly one** — never spawn additional aggregators after this.
 
 ```
+You are a subagent dispatched to execute a specific task.
+Do NOT invoke the Skill tool or any skills — you are already inside a workflow.
+
 You are the final merge aggregator. Your name is "aggregator-final".
-Do NOT invoke any skills or the Skill tool.
 Do NOT read agents/aggregator.md — you are NOT a validation aggregator.
 
 Your ONLY job:
