@@ -21,7 +21,7 @@
       "name": "stargazer-subagent-dev",
       "source": "./stargazer-subagent-dev",
       "description": "Execute implementation plans for Stargazer via paired implementer+reviewer agents with direct communication",
-      "version": "58c2b2c",
+      "version": "f2b20f1",
       "author": {
         "name": "HollandDM"
       },
