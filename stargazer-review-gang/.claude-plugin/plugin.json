@@ -1,5 +1,5 @@
 {
   "name": "stargazer-review-gang",
   "description": "Multi-perspective code review with 10 specialized reviewer agents, validation layer, and confidence scoring for the Stargazer codebase",
-  "version": "756340c"
+  "version": "73d45a1"
 }
