@@ -92,14 +92,15 @@ Agent tool:
 
     ## Your Reviewer
 
-    Your reviewer is `reviewer-N` — a teammate on the same team. When you finish
-    implementation, **message the reviewer directly** (not the team lead) with your
-    report. The reviewer will review your code and message you back with any issues.
-    Fix the issues and message the reviewer again. This loop continues until the
+    Your phase reviewer is `phase-P-reviewer`. When you finish implementation,
+    **message the reviewer directly** with your report. The reviewer collects
+    reports from all implementers in this phase, then reviews all changes together.
+    If the reviewer finds issues with your work, they will message you directly —
+    fix the issues and message the reviewer again. This loop continues until the
     reviewer approves.
 
-    Only escalate to the team lead for BLOCKED or NEEDS_CONTEXT situations that the
-    reviewer can't help with (e.g., missing plan context, architectural questions).
+    Only escalate to the team lead for BLOCKED or NEEDS_CONTEXT situations that
+    the reviewer can't help with (e.g., missing plan context, architectural questions).
 
     ## Stargazer Coding Standards
 
@@ -181,7 +182,7 @@ Agent tool:
 
     ## Report Format
 
-    When done, report via SendMessage to `reviewer-N`:
+    When done, report via SendMessage to `phase-P-reviewer`:
     - **Status:** DONE | DONE_WITH_CONCERNS
     - What you implemented
     - Diagnostics results (any type errors remaining?)

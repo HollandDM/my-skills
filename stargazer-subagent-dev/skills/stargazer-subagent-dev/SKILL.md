@@ -90,73 +90,80 @@ description: "Stargazer plan execution session"
 
 This team persists for the entire plan execution. Members join and leave per task.
 
-## Step 3: Dispatch Task Pairs
+## Step 3: Execute Phases
 
-### Parallelism Strategy
+Work is organized into **phases** — groups of independent tasks that can run in parallel.
+Dependent tasks go into later phases. Each phase follows: implementers -> reviewer -> next phase.
 
-- **Independent tasks** (no shared files, no dependency): dispatch task pairs in parallel
-- **Dependent tasks** (task B needs task A's output): dispatch B only after A's pair completes
+### 3a. Group Tasks into Phases
 
-### 3a. Dispatch Implementer + Reviewer Pair
+From the plan, identify blocking dependencies and group tasks:
+- **Phase 1**: Tasks with no dependencies (can all run in parallel)
+- **Phase 2**: Tasks that depend on Phase 1 outputs
+- **Phase N**: Tasks that depend on Phase N-1 outputs
 
-For each task, spawn **both** an implementer and a reviewer as named team members
-simultaneously. They work as a pair — the reviewer watches, reviews, and communicates
-directly with the implementer without going through the team lead.
+### 3b. Dispatch Phase (Implementers + Reviewer in Parallel)
 
-**Implementer:** Use the template in `${SKILL_DIR}/implementer-prompt.md`.
+Spawn all implementers **and** the phase reviewer simultaneously:
+
+**Implementers:** Use the template in `${SKILL_DIR}/implementer-prompt.md`.
 - `team_name: "stargazer-dev"`, `name: "implementer-N"`
-- Tell the implementer their reviewer is `"reviewer-N"` — they should message the reviewer
-  when done and respond to reviewer feedback directly.
-
-**Reviewer:** Use the template in `${SKILL_DIR}/code-quality-reviewer-prompt.md`.
-- `team_name: "stargazer-dev"`, `name: "reviewer-N"`, `model: "sonnet"`
-- Tell the reviewer their implementer is `"implementer-N"` — they should wait for the
-  implementer to message them, then review and message the implementer directly with
-  any issues. The review-fix loop runs autonomously between the pair.
-
-**Before dispatching the reviewer**, determine which checklists apply by scanning the
-plan's task for domain/tech indicators — see the routing table in
-`${SKILL_DIR}/code-quality-reviewer-prompt.md`. Only pass checklists that match.
+- Tell each implementer their reviewer is `"phase-P-reviewer"` — they message the
+  reviewer directly when done and respond to reviewer feedback directly.
 
 **Implementer model selection:**
 - Touches 1-2 files with clear spec -> `model: "sonnet"`
 - Multi-file coordination, integration concerns -> default (no override)
 - Requires architectural judgment or broad codebase understanding -> `model: "opus"`
 
-**Key context to include in both prompts:**
+**Phase Reviewer:** Use the template in `${SKILL_DIR}/code-quality-reviewer-prompt.md`.
+- `team_name: "stargazer-dev"`, `name: "phase-P-reviewer"`
+- Tell the reviewer which implementers to expect (e.g., `implementer-1`, `implementer-2`)
+- The reviewer waits for all implementers to report, then reviews all changes together.
+
+**Reviewer model selection** (always lightweight — never opus):
+- Phase has few total files changed, single checklist -> `model: "haiku"`
+- Phase has multiple files or multiple checklists -> `model: "sonnet"`
+
+**Before dispatching the reviewer**, determine which checklists apply by scanning the
+plan's tasks for domain/tech indicators — see the routing table in
+`${SKILL_DIR}/code-quality-reviewer-prompt.md`. Only pass checklists that match.
+
+**Key context to include in all prompts:**
 - Full task text from the plan (never make agents read the plan file)
 - Where this task fits in the overall plan
-- Dependencies on previous tasks and what changed
+- Dependencies on previous phases and what changed
 - The working directory
-- Their partner's name (`implementer-N` / `reviewer-N`)
+- The reviewer's name (for implementers) / implementer names (for reviewer)
 
-### 3b. Handle Escalations
+### 3c. Handle Escalations
 
-The pair runs autonomously. Only intervene when an agent messages the team lead:
+Only intervene when an agent messages the team lead:
 
 | Status | Action |
 |--------|--------|
 | **NEEDS_CONTEXT** | Answer questions via SendMessage, let agent continue |
 | **BLOCKED** | Assess: provide context, re-dispatch with stronger model, break task down, or escalate to user |
 
-### 3c. Wait for Pair Completion
+### 3d. Wait for Phase Completion
 
-The reviewer sends the final report to the team lead: **APPROVED** or **NEEDS_CHANGES**.
+The reviewer and implementers communicate directly:
+1. Each implementer finishes → messages the reviewer with their report
+2. Reviewer waits for all implementers, then reviews the combined diff
+3. Reviewer messages implementers directly with issues per-task
+4. Implementers fix and message the reviewer again (up to 3 rounds)
+5. Reviewer sends final APPROVED/NEEDS_CHANGES report to the team lead
 
-- **APPROVED**: Shutdown both members, mark task complete.
+The controller only waits for the reviewer's final report.
+
+- **APPROVED**: Shutdown all phase members, mark tasks complete.
 - **NEEDS_CHANGES** (after 3 fix rounds): Escalate to user for guidance.
 
-### 3d. Shutdown Task Pair
+### 3e. Complete Phase
 
-```
-to: "reviewer-N"
-message: {"type": "shutdown_request", "reason": "Task N review complete"}
-
-to: "implementer-N"
-message: {"type": "shutdown_request", "reason": "Task N complete"}
-```
-
-Mark the task complete in TodoWrite. Other task pairs may still be running.
+1. Shutdown the reviewer and all implementers
+2. Mark all phase tasks as complete
+3. Proceed to the next phase (go back to 3b)
 
 ## Step 4: Compile & Test
 
@@ -205,7 +212,8 @@ When task B depends on task A's output:
 - Write implementation code yourself (you are the controller)
 - Start implementation on main/master without user consent
 - Skip the quality review stage
-- Dispatch dependent implementers in parallel (they'll conflict on shared files)
+- Dispatch dependent phases in parallel (they'll conflict on shared files)
+- Dispatch more than one reviewer per phase
 - Make implementers read the plan file (provide full text)
 - Ignore implementer questions or BLOCKED status
 - Skip the re-review loop (reviewer found issues -> fix -> review again)
