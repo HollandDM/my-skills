@@ -20,8 +20,8 @@
     {
       "name": "stargazer-subagent-dev",
       "source": "./stargazer-subagent-dev",
-      "description": "Execute implementation plans for Stargazer via team-based agents with two-stage review (spec compliance + code quality)",
-      "version": "fc0d7df",
+      "description": "Execute implementation plans for Stargazer via paired implementer+reviewer agents with direct communication",
+      "version": "99b15f4",
       "author": {
         "name": "HollandDM"
       },
