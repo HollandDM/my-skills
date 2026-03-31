@@ -1,231 +1,68 @@
 ---
 name: stargazer-subagent-dev
 description: >
-  Plan and execute implementations for the Stargazer codebase. Phase 1 writes a detailed
-  implementation plan with Stargazer-specific task structure. Phase 2 executes it by
-  dispatching team-based agents per task with two-stage review (spec compliance then code
-  quality). Use when the user wants to implement a feature, fix a bug, or build something
-  in the Stargazer repo — whether they have a plan already or need one written first.
-  Triggers on: "execute plan", "implement plan", "subagent dev", "stargazer implement",
-  "build this feature", "implement this", or when the user has a spec/requirements and
-  wants to start building. Also trigger when the user has an approved plan ready for
-  execution. This skill is specific to the Stargazer Scala/ZIO/FoundationDB codebase —
-  for non-Stargazer work, this skill is not applicable.
+  Execute implementation plans for the Stargazer codebase by dispatching team-based agents
+  per task with code quality review. Use when the user has
+  an approved plan ready for execution. Triggers on: "execute plan", "implement plan",
+  "subagent dev", "stargazer implement", or when the user has a plan and wants to start
+  building. This skill is specific to the Stargazer Scala/ZIO/FoundationDB codebase —
+  for non-Stargazer work, this skill is not applicable. If the user does not have a plan,
+  tell them to create one first (e.g., using the writing-plans skill or plan mode).
 ---
 
 # Stargazer Subagent-Driven Development
 
-Plan and execute implementations for the Stargazer codebase.
-
-**Two phases:**
-- **Phase 1: Write the Plan** — research the codebase, design tasks, get plan reviewed
-- **Phase 2: Execute the Plan** — dispatch team members per task with two-stage review
+Execute implementation plans for the Stargazer codebase.
 
 ---
 
-## Step 0: Start Scala LSP
+## Step 0: Verify Scala Code Intelligence
 
-Start the LSP daemon before anything else — it's needed for both plan writing (codebase
-research) and implementation (agents use it extensively).
+This skill depends on the `scala-code-intelligence` skill which provides IntelliJ-powered
+MCP tools (`definition`, `references`, `implementations`, `hover`, `workspace_symbols`,
+`document_symbols`, `diagnostics`, `rename_symbol`, `format`, `organize_imports`, etc.).
 
-```bash
-/home/hoangdinh/OSS/intellij-scala-lsp/launcher/launch-lsp.sh --daemon
-```
+Before proceeding, verify the MCP tools are available by invoking the `scala-code-intelligence`
+skill. If the MCP tools are not available, check whether the `cellar` CLI is installed
+(`which cellar`). `cellar` is a fallback for symbol lookup when the MCP tools are unavailable:
 
-Verify it's up:
-```bash
-kill -0 $(cat ~/.cache/intellij-scala-lsp/daemon.pid) 2>/dev/null && echo "LSP running on port $(cat ~/.cache/intellij-scala-lsp/daemon.port)" || echo "LSP failed to start"
-```
+- `cellar search -m <module> <query>` — substring search for symbol names
+- `cellar get -m <module> <fully-qualified-symbol>` — fetch symbol info (signature, type)
+- `cellar list -m <module> <fully-qualified-symbol>` — list members of a package/class
+- `cellar get-source <maven-coordinate> <fully-qualified-symbol>` — read source of external deps
 
-If it fails to start, warn the user but proceed — LSP is helpful but not blocking.
+`cellar` requires a `-m <module>` flag for project symbols (e.g., `-m fundsub.jvm`).
+It works from bytecode so it doesn't need a running LSP, but it cannot find references,
+implementations, or diagnostics — only definitions and symbol listings.
 
-## Entry Point: Ask the User
+If neither MCP tools nor `cellar` are available, warn the user but proceed — fall back to
+grep/glob for code navigation.
 
-Use **AskUserQuestion** to determine the workflow:
+## Entry Point: Get the Plan
 
-```
-question: "How would you like to proceed?"
-header: "Stargazer Development"
-options:
-  - label: "Execute approved plan"
-    description: "I already have a plan ready — skip to implementation"
-  - label: "Draft a plan"
-    description: "Research the codebase and write an implementation plan first"
-```
+This skill requires an existing, approved implementation plan. Ask the user for the plan
+file path.
 
-- **"Execute approved plan":** Ask the user for the plan file path, then skip to **Phase 2**.
-- **"Draft a plan":** Continue with **Phase 1** below.
+If the user does not have a plan yet, tell them:
 
----
+> "This skill executes existing plans — it doesn't write them. Please create a plan first
+> (e.g., using plan mode or the writing-plans skill), then come back with the plan file path."
 
-# Phase 1: Writing the Plan
-
-## 1.1 Understand the Requirements
-
-Before writing anything, understand what needs to be built. Sources:
-- User's description / spec / ticket
-- Existing code in the area (use LSP and grep to explore)
-
-If the spec covers multiple independent subsystems, suggest breaking into separate plans —
-one per subsystem. Each plan should produce working, testable software on its own.
-
-## 1.2 Research the Codebase
-
-Use LSP and codebase exploration to understand:
-- **Existing patterns** in the area you'll be working in — find similar implementations
-- **File structure** — where new files should go, what naming conventions exist
-- **Dependencies** — what modules/services already exist that the feature needs
-- **Test patterns** — how similar features are tested (base classes, fixtures, utilities)
-
-This research directly informs the plan. Don't write tasks in a vacuum.
-
-## 1.3 Design File Structure
-
-Before defining tasks, map out which files will be created or modified:
-
-- Each file should have one clear responsibility with a well-defined interface
-- Prefer smaller, focused files over large ones
-- Files that change together should live together
-- Follow established Stargazer patterns (Endpoint -> Service -> Store layers,
-  `shared/src/` for models, `jvm/src/` for backend, `js/src/` for frontend)
-- In existing codebases, follow the patterns already there
-
-This structure drives the task decomposition.
-
-## 1.4 Write the Plan
-
-Save to: `/tmp/YYYY-MM-DD-<feature-name>-plan.md`
-
-### Plan Header
-
-Every plan starts with:
-
-```markdown
-# [Feature Name] Implementation Plan
-
-> **For agentic workers:** This plan is designed for stargazer-subagent-dev execution.
-> Steps use checkbox (`- [ ]`) syntax for tracking.
-
-**Goal:** [One sentence describing what this builds]
-
-**Architecture:** [2-3 sentences about approach]
-
-**Tech Stack:** [Key Stargazer technologies involved — e.g., ZIO, FDB, Temporal, Tapir, Laminar]
-
-**Domains:** [Which review domains apply — e.g., scala-quality, zio-patterns, fdb-patterns, testing]
-
----
-```
-
-The **Domains** field tells Phase 2 which quality review checklists to load.
-
-### Task Structure
-
-Each task is a self-contained unit of work that produces a compilable, testable increment.
-
-````markdown
-### Task N: [Component Name]
-
-**Domain:** [fdb | temporal | tapir | frontend | zio | general]
-
-**Files:**
-- Create: `exact/path/to/file.scala`
-- Modify: `exact/path/to/existing.scala:123-145`
-- Test: `tests/exact/path/to/TestSpec.scala`
-
-**Context:**
-[What the implementer needs to know — which existing patterns to follow, which types to
-use, how this connects to other tasks. Reference specific files and line numbers.]
-
-- [ ] **Step 1: Write the failing test**
-
-```scala
-// In tests/exact/path/to/TestSpec.scala
-test("specific behavior description") {
-  for {
-    result <- service.method(input)
-  } yield assertTrue(
-    result.field == expectedValue
-  )
-}
-```
-
-- [ ] **Step 2: Run test to verify it fails**
-
-Run: `./mill module.test -- -t "specific behavior description"`
-Expected: FAIL — method not defined
-
-- [ ] **Step 3: Write minimal implementation**
-
-```scala
-// In exact/path/to/file.scala
-// Copyright (C) 2014-2026 Anduin Transactions Inc.
-
-// ... implementation code
-```
-
-- [ ] **Step 4: Compile and run tests**
-
-Run: `./mill module.compile && ./mill module.test`
-Expected: PASS
-
-- [ ] **Step 5: Run checkStyle**
-
-Run: `./mill module.checkStyleDirty`
-Expected: No violations
-
-- [ ] **Step 6: Commit**
-
-```bash
-git add <specific files>
-git commit -m "feat(module): add specific feature"
-```
-````
-
-### Writing Guidelines
-
-- **Exact file paths** — always. Use LSP to verify paths exist.
-- **Complete code** — not "add validation here". Show the actual code.
-- **Exact commands** — with expected output so the implementer can verify.
-- **Stargazer patterns** — reference existing implementations by file path.
-  "Follow the pattern in `modules/fundsub/jvm/src/.../FundSubService.scala:45-80`"
-- **TDD** — test first, implement second, always.
-- **Bite-sized steps** — each step is one action (2-5 minutes).
-- **DRY, YAGNI** — don't over-build. Only what the spec requires.
-- **Copyright header** — every new `.scala` file needs it.
-- **Domain tag** — each task gets a domain tag for quality review routing.
-
-## 1.5 Plan Review
-
-After writing the complete plan, dispatch a plan reviewer subagent using
-`./plan-reviewer-prompt.md`. This is a one-shot agent (not a team member).
-
-- If **Issues Found**: fix the issues, re-dispatch reviewer
-- If **Approved**: proceed to Phase 2
-- If loop exceeds 3 iterations: surface to user for guidance
-
-## 1.6 Confirm with User
-
-Present the plan and ask:
-
-> "Plan written and saved to `/tmp/<filename>.md`.
-> Ready to start execution (Phase 2)?"
-
-Wait for user confirmation before proceeding.
+Do **not** proceed without a plan.
 
 ---
 
-# Phase 2: Executing the Plan
+# Executing the Plan
 
 ## Overview
 
 You are the **controller**. You never write implementation code yourself. You:
 1. Read the plan and extract all tasks
 2. Create a team for the session
-3. For each task: dispatch implementer -> spec reviewer -> quality reviewer
+3. For each task: dispatch implementer -> quality reviewer
 4. After all tasks: final review, then finish the branch
 
-LSP is already running from Step 0.
+Scala code intelligence MCP tools are available from Step 0.
 
 Each team member is scoped to a single task — created when the task starts, shutdown when
 the task's review cycle completes.
@@ -250,107 +87,73 @@ description: "Stargazer plan execution session"
 
 This team persists for the entire plan execution. Members join and leave per task.
 
-## Step 3: Dispatch and Review Tasks
+## Step 3: Dispatch Task Pairs
 
 ### Parallelism Strategy
 
-Tasks run in parallel where possible. **As soon as an implementer finishes, immediately
-dispatch its spec reviewer** — don't wait for other implementers to finish.
+- **Independent tasks** (no shared files, no dependency): dispatch task pairs in parallel
+- **Dependent tasks** (task B needs task A's output): dispatch B only after A's pair completes
 
-- **Independent tasks** (no shared files, no dependency): dispatch implementers in parallel
-- **Dependent tasks** (task B needs task A's output): dispatch B only after A's full review
-  cycle completes
-- Review chains are always sequential per task: implementer → spec reviewer → quality reviewer
+### 3a. Dispatch Implementer + Reviewer Pair
 
-### 3a. Dispatch Implementers
+For each task, spawn **both** an implementer and a reviewer as named team members
+simultaneously. They work as a pair — the reviewer watches, reviews, and communicates
+directly with the implementer without going through the team lead.
 
-For each task (or batch of independent tasks), spawn implementer agents as **named team
-members** using the template in `./implementer-prompt.md`. Use `team_name: "stargazer-dev"`
-and `name: "implementer-N"` (where N is the task number).
+**Implementer:** Use the template in `./implementer-prompt.md`.
+- `team_name: "stargazer-dev"`, `name: "implementer-N"`
+- Tell the implementer their reviewer is `"reviewer-N"` — they should message the reviewer
+  when done and respond to reviewer feedback directly.
 
-**Model selection:**
+**Reviewer:** Use the template in `./code-quality-reviewer-prompt.md`.
+- `team_name: "stargazer-dev"`, `name: "reviewer-N"`, `model: "sonnet"`
+- Tell the reviewer their implementer is `"implementer-N"` — they should wait for the
+  implementer to message them, then review and message the implementer directly with
+  any issues. The review-fix loop runs autonomously between the pair.
+
+**Before dispatching the reviewer**, determine which checklists apply by scanning the
+plan's task for domain/tech indicators — see the routing table in
+`./code-quality-reviewer-prompt.md`. Only pass checklists that match.
+
+**Implementer model selection:**
 - Touches 1-2 files with clear spec -> `model: "sonnet"`
 - Multi-file coordination, integration concerns -> default (no override)
 - Requires architectural judgment or broad codebase understanding -> `model: "opus"`
 
-**Key context to include in the prompt:**
-- Full task text from the plan (never make the implementer read the plan file)
+**Key context to include in both prompts:**
+- Full task text from the plan (never make agents read the plan file)
 - Where this task fits in the overall plan
 - Dependencies on previous tasks and what changed
 - The working directory
-- Which domain skills are relevant (e.g., `zio-skill`, `tapir-endpoint`, `foundationdb`)
+- Their partner's name (`implementer-N` / `reviewer-N`)
 
-### 3b. Handle Implementer Status
+### 3b. Handle Escalations
 
-As each implementer reports back, handle it immediately:
+The pair runs autonomously. Only intervene when an agent messages the team lead:
 
 | Status | Action |
 |--------|--------|
-| **DONE** | Immediately dispatch spec reviewer for this task |
-| **DONE_WITH_CONCERNS** | Read concerns. If correctness/scope, address before review. If observations, note and proceed to spec review |
-| **NEEDS_CONTEXT** | Answer questions via SendMessage, let implementer continue |
+| **NEEDS_CONTEXT** | Answer questions via SendMessage, let agent continue |
 | **BLOCKED** | Assess: provide context, re-dispatch with stronger model, break task down, or escalate to user |
 
-When using **SendMessage** to answer questions or provide context:
+### 3c. Wait for Pair Completion
+
+The reviewer sends the final report to the team lead: **APPROVED** or **NEEDS_CHANGES**.
+
+- **APPROVED**: Shutdown both members, mark task complete.
+- **NEEDS_CHANGES** (after 3 fix rounds): Escalate to user for guidance.
+
+### 3d. Shutdown Task Pair
 
 ```
-to: "implementer-N"
-message: <answer to their question with full context>
-summary: "Providing context for [topic]"
-```
-
-### 3c. Dispatch Spec Reviewer (immediately when implementer finishes)
-
-As soon as implementer-N reports DONE, spawn a spec reviewer as a team member using
-`./spec-reviewer-prompt.md`. Use `name: "spec-reviewer-N"`.
-
-**Always use `model: "sonnet"`** — spec compliance is a focused comparison task.
-
-Pass:
-- Full task requirements (from plan)
-- Implementer's report (what they claim they built)
-
-The spec reviewer messages the implementer directly to fix issues and re-verifies.
-This loop runs autonomously — you don't need to mediate. Wait for the spec reviewer's
-final report (PASS or FAIL).
-
-### 3d. Dispatch Code Quality Reviewer (immediately when spec passes)
-
-As soon as spec reviewer-N reports PASS, spawn a code quality reviewer as a team member
-using `./code-quality-reviewer-prompt.md`. Use `name: "quality-reviewer-N"`.
-
-**Always use `model: "sonnet"`** — code quality review is checklist-driven.
-
-**Before dispatching**, determine which checklists apply by scanning the diff
-(`git diff <base>..<head>`) for trigger patterns — see the routing table in
-`./code-quality-reviewer-prompt.md`. Only pass checklists that match actual file content.
-
-Pass:
-- Task summary
-- Implementer's report
-- Git SHAs (base and head) for the task's changes
-- Which checklist files to load (determined by file-content routing, not domain tags)
-
-The quality reviewer messages the implementer directly to fix blockers/suggestions and
-re-reviews. This loop runs autonomously — you don't need to mediate. Wait for the quality
-reviewer's final report (APPROVED or NEEDS_CHANGES).
-
-### 3e. Shutdown Task Members
-
-After a task's full review cycle completes (quality reviewer reports):
-
-```
-to: "spec-reviewer-N"
-message: {"type": "shutdown_request", "reason": "Task N review complete"}
-
-to: "quality-reviewer-N"
+to: "reviewer-N"
 message: {"type": "shutdown_request", "reason": "Task N review complete"}
 
 to: "implementer-N"
 message: {"type": "shutdown_request", "reason": "Task N complete"}
 ```
 
-Mark the task complete in TodoWrite. Other tasks may still be running their cycles.
+Mark the task complete in TodoWrite. Other task pairs may still be running.
 
 ## Step 4: Final Review
 
@@ -369,12 +172,6 @@ TeamDelete: team_name: "stargazer-dev"
 Wrap up the development branch: review all changes, decide whether to merge, create a PR,
 or clean up. Present the user with options.
 
-**Last action — stop the Scala LSP daemon:**
-
-```bash
-/home/hoangdinh/OSS/intellij-scala-lsp/launcher/launch-lsp.sh --stop
-```
-
 ## Handling Cross-Task Dependencies
 
 When task B depends on task A's output:
@@ -389,20 +186,16 @@ When task B depends on task A's output:
 **Never:**
 - Write implementation code yourself (you are the controller)
 - Start implementation on main/master without user consent
-- Skip either review stage (spec compliance AND code quality are both required)
+- Skip the quality review stage
 - Dispatch dependent implementers in parallel (they'll conflict on shared files)
 - Make implementers read the plan file (provide full text)
 - Ignore implementer questions or BLOCKED status
-- Accept spec non-compliance ("close enough" = not done)
-- Start quality review before spec review passes
 - Skip the re-review loop (reviewer found issues -> fix -> review again)
 - Wait for all implementers before starting any reviews
-- Write a plan without researching the codebase first
+- Proceed without a plan
 
 **Always:**
-- Research existing patterns before writing the plan
-- Include exact file paths and complete code in the plan
-- Start LSP at the beginning, stop it when done
+- Verify scala-code-intelligence MCP tools (or cellar fallback) are available at the start
 - Provide full task text and context to every agent
 - Let implementers ask questions before starting
 - Shutdown task members before moving to next task
