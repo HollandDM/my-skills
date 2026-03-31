@@ -26,32 +26,23 @@ anything else before Step 1.
    yourself; just pass it to the orchestrator.
 3. **NO STOP CONDITION FOR PR SIZE.** Handle all PRs regardless of file count or line count.
 
-## Step 1: Ask for Context
+## Step 1: Gather Session Context
 
-Use the **AskUserQuestion** tool as your first action (do NOT run any git commands or analyze
-files before this):
+Do NOT ask the user for context. Instead, infer it from the current session:
+- Use the conversation history to understand what the user has been working on
+- Note any files they've been editing, features they've been building, or bugs they've been fixing
+- This becomes the `user_context` passed to the orchestrator and reviewers
 
-```
-question: "I'm about to review your latest changes. Want to add context first?"
-header: "Context"
-options:
-  - label: "Skip"
-    description: "Start reviewing now without additional context"
-  - label: "Add context"
-    description: "Tell me what these changes are about before I start"
-```
+## Step 2: Verify Scala Code Intelligence
 
-- **User selects "Skip":** Proceed to Step 2.
-- **User selects "Add context":** Stop and wait for their context. Then proceed to Step 2.
-- **User selects "Other" and types context:** Use it and proceed to Step 2.
+Invoke the `scala-code-intelligence` skill to check if IntelliJ-powered MCP tools are available.
+If not, check for `cellar` CLI (`which cellar`). Build a short tool availability note:
 
----
+- **MCP available:** `"scala-code-intelligence MCP tools available (definition, references, hover, etc.)"`
+- **cellar only:** `"cellar CLI available (cellar search/get/list -m <module>). No references/diagnostics."`
+- **neither:** `"No Scala intelligence tools. Use grep/glob only."`
 
-## Step 2: Discover Available Tools
-
-Scan `../../.claude-plugin/marketplace.json` for installed plugins with tools (LSP, etc.).
-Build a JSON array of relevant tools (`[{"plugin", "tool", "description", "capabilities"}]`).
-Set to `[]` if none found — tool availability is optional.
+Pass this note to the orchestrator and all reviewers so they know what tools they can use.
 
 ---
 
@@ -76,8 +67,8 @@ Read your full instructions from: agents/orchestrator.md
 
 Scope: [user's verbatim scope]
 Branch context: [branch name, recent commits, file count]
-User context: [user-provided context or "none"]
-Available tools: [discovered tools JSON]
+User context: [session context inferred from conversation]
+Scala tools: [tool availability note from Step 2]
 ```
 
 The orchestrator returns a JSON routing plan with `diff_ref`, `routing`, `workload`, and `depth`.
@@ -150,7 +141,7 @@ Do NOT invoke the Skill tool or any skills — you are already inside a workflow
 
 Then include:
 - `Read your checklist from: [checklist path from roster]`
-- Diff ref, assigned file paths, user context, discovered tools JSON
+- Diff ref, assigned file paths, session context, scala tool availability note
 - **No build commands** — read only
 - **Diff-bound** — only flag changed lines
 - For each file: `git diff -U3 <diff_ref> -- <file>`, read full file, blame changed lines
