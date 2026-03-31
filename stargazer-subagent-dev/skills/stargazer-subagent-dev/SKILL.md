@@ -12,6 +12,9 @@ description: >
 
 # Stargazer Subagent-Driven Development
 
+**Capture the skill base directory** from the "Base directory for this skill:" line above.
+Store it as `SKILL_DIR` — all file references below are relative to it.
+
 Execute implementation plans for the Stargazer codebase.
 
 ---
@@ -100,12 +103,12 @@ For each task, spawn **both** an implementer and a reviewer as named team member
 simultaneously. They work as a pair — the reviewer watches, reviews, and communicates
 directly with the implementer without going through the team lead.
 
-**Implementer:** Use the template in `./implementer-prompt.md`.
+**Implementer:** Use the template in `${SKILL_DIR}/implementer-prompt.md`.
 - `team_name: "stargazer-dev"`, `name: "implementer-N"`
 - Tell the implementer their reviewer is `"reviewer-N"` — they should message the reviewer
   when done and respond to reviewer feedback directly.
 
-**Reviewer:** Use the template in `./code-quality-reviewer-prompt.md`.
+**Reviewer:** Use the template in `${SKILL_DIR}/code-quality-reviewer-prompt.md`.
 - `team_name: "stargazer-dev"`, `name: "reviewer-N"`, `model: "sonnet"`
 - Tell the reviewer their implementer is `"implementer-N"` — they should wait for the
   implementer to message them, then review and message the implementer directly with
@@ -113,7 +116,7 @@ directly with the implementer without going through the team lead.
 
 **Before dispatching the reviewer**, determine which checklists apply by scanning the
 plan's task for domain/tech indicators — see the routing table in
-`./code-quality-reviewer-prompt.md`. Only pass checklists that match.
+`${SKILL_DIR}/code-quality-reviewer-prompt.md`. Only pass checklists that match.
 
 **Implementer model selection:**
 - Touches 1-2 files with clear spec -> `model: "sonnet"`

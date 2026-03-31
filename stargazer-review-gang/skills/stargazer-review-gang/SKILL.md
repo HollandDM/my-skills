@@ -8,6 +8,9 @@ description: >
 
 # Stargazer Review Gang
 
+**Capture the skill base directory** from the "Base directory for this skill:" line above.
+Store it as `SKILL_DIR` — all file references below (agents/, reviewers/) are relative to it.
+
 **Say exactly:** "Starting the stargazer-review-gang."
 
 **Then immediately proceed to Step 1.** Do NOT gather diffs. Do NOT read files. Do NOT do
@@ -63,7 +66,7 @@ the user's words intact as the primary scope.
 You are a subagent dispatched to execute a specific routing task.
 Do NOT invoke the Skill tool or any skills — you are already inside a workflow.
 
-Read your full instructions from: agents/orchestrator.md
+Read your full instructions from: ${SKILL_DIR}/agents/orchestrator.md
 
 Scope: [user's verbatim scope]
 Branch context: [branch name, recent commits, file count]
@@ -116,17 +119,17 @@ because another reviewer has 3000.
 
 | ID | Reviewer | Checklist | Default Model |
 |----|----------|-----------|---------------|
-| 1 | Scala Quality | `reviewers/01-scala-quality.md` | standard |
-| 2 | ZIO Patterns | `reviewers/02-zio-patterns.md` | standard |
-| 3 | Architecture | `reviewers/03-foundations.md` | haiku |
-| 5 | FDB Patterns | `reviewers/05-fdb-patterns.md` | standard |
-| 6 | Temporal | `reviewers/06-temporal.md` | standard |
-| 7 | Tapir | `reviewers/07-tapir-endpoints.md` | standard |
-| 8a | Laminar | `reviewers/08-laminar.md` | standard |
-| 8b | Frontend Styling | `reviewers/08-frontend.md` | haiku |
-| 9 | scalajs-react | `reviewers/09-react.md` | standard |
-| 10 | Observability | `reviewers/10-observability.md` | haiku |
-| 11 | Testing | `reviewers/11-testing.md` | standard |
+| 1 | Scala Quality | `${SKILL_DIR}/reviewers/01-scala-quality.md` | standard |
+| 2 | ZIO Patterns | `${SKILL_DIR}/reviewers/02-zio-patterns.md` | standard |
+| 3 | Architecture | `${SKILL_DIR}/reviewers/03-foundations.md` | haiku |
+| 5 | FDB Patterns | `${SKILL_DIR}/reviewers/05-fdb-patterns.md` | standard |
+| 6 | Temporal | `${SKILL_DIR}/reviewers/06-temporal.md` | standard |
+| 7 | Tapir | `${SKILL_DIR}/reviewers/07-tapir-endpoints.md` | standard |
+| 8a | Laminar | `${SKILL_DIR}/reviewers/08-laminar.md` | standard |
+| 8b | Frontend Styling | `${SKILL_DIR}/reviewers/08-frontend.md` | haiku |
+| 9 | scalajs-react | `${SKILL_DIR}/reviewers/09-react.md` | standard |
+| 10 | Observability | `${SKILL_DIR}/reviewers/10-observability.md` | haiku |
+| 11 | Testing | `${SKILL_DIR}/reviewers/11-testing.md` | standard |
 
 ### 4c. Spawn Reviewers as Named Team Members
 
@@ -168,14 +171,14 @@ Use `team_name: "review-gang"` for all.
 
 ### Per-batch aggregator prompt
 
-Each batch aggregator reads and follows `agents/aggregator.md` — it validates findings, re-queries
+Each batch aggregator reads and follows `${SKILL_DIR}/agents/aggregator.md` — it validates findings, re-queries
 reviewers, filters, and produces a report.
 
 ```
 You are a subagent dispatched to execute a specific task.
 Do NOT invoke the Skill tool or any skills — you are already inside a workflow.
 
-Read your instructions from: agents/aggregator.md
+Read your instructions from: ${SKILL_DIR}/agents/aggregator.md
 Diff ref: <diff_ref>
 Team Members: <list of reviewer names in this batch>
 Findings to Aggregate: <paste findings>
@@ -183,7 +186,7 @@ Findings to Aggregate: <paste findings>
 
 ### Final merge aggregator prompt
 
-The final merge aggregator does **NOT** read `agents/aggregator.md`. It does **NOT** validate,
+The final merge aggregator does **NOT** read `${SKILL_DIR}/agents/aggregator.md`. It does **NOT** validate,
 re-query, or filter. It only concatenates batch reports and deduplicates across batches.
 Spawn **exactly one** — never spawn additional aggregators after this.
 
@@ -192,7 +195,7 @@ You are a subagent dispatched to execute a specific task.
 Do NOT invoke the Skill tool or any skills — you are already inside a workflow.
 
 You are the final merge aggregator. Your name is "aggregator-final".
-Do NOT read agents/aggregator.md — you are NOT a validation aggregator.
+Do NOT read ${SKILL_DIR}/agents/aggregator.md — you are NOT a validation aggregator.
 
 Your ONLY job:
 1. Concatenate the batch reports below into one report
