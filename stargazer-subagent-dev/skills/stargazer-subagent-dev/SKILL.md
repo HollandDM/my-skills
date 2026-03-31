@@ -158,13 +158,28 @@ message: {"type": "shutdown_request", "reason": "Task N complete"}
 
 Mark the task complete in TodoWrite. Other task pairs may still be running.
 
-## Step 4: Final Review
+## Step 4: Compile & Test
 
-After all tasks complete, dispatch a final code quality reviewer (`name: "final-reviewer"`)
+After all tasks complete, run `./mill` **once** from the controller. Multiple agents must
+never run `./mill` concurrently — mill commands block each other.
+
+1. Compile all affected modules: `./mill <module>.compile` (or `./mill __.compile` for all)
+2. If compilation fails, identify which task introduced the error and dispatch a fix agent
+   (reuse the implementer template, provide the compile error and relevant files)
+3. After clean compile, run tests: `./mill <module>.test`
+4. If tests fail, dispatch fix agents for the failing modules
+5. Run `./mill <module>.checkStyleDirty` on all affected modules and fix violations
+6. Repeat until compile + tests + checkStyle all pass
+
+Only proceed to the final review after a clean build.
+
+## Step 5: Final Review
+
+After the build is green, dispatch a final code quality reviewer (`name: "final-reviewer"`)
 that reviews the **entire implementation** across all tasks. This catches cross-task
 integration issues that per-task reviews miss.
 
-## Step 5: Finish
+## Step 6: Finish
 
 Delete the team:
 
@@ -196,6 +211,7 @@ When task B depends on task A's output:
 - Skip the re-review loop (reviewer found issues -> fix -> review again)
 - Wait for all implementers before starting any reviews
 - Proceed without a plan
+- Let agents run `./mill` commands — only the controller runs mill, once, after all tasks
 
 **Always:**
 - Verify scala-code-intelligence MCP tools (or cellar fallback) are available at the start

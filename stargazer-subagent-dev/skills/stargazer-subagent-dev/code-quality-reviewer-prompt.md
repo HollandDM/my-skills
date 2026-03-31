@@ -81,8 +81,10 @@ Agent tool:
     - `cellar search -m <module> <query>` — find symbols by substring
     If neither is available, use grep/glob and Read.
 
-    You CAN run `./mill <module>.compile` to verify compilability.
-    You CANNOT run tests.
+    **DO NOT run any `./mill` commands** (compile, test, checkStyle, etc.).
+    Multiple agents running `./mill` concurrently will block each other.
+    The controller runs a single compilation pass after all tasks complete.
+    Use `diagnostics` (MCP tool) to check for type errors instead.
 
     ## Review Rules
 

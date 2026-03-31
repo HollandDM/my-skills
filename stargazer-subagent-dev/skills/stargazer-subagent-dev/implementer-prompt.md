@@ -66,23 +66,12 @@ Agent tool:
 
     ### Build & Test
 
-    You CAN and SHOULD run `./mill` commands to compile and test:
+    **DO NOT run any `./mill` commands** (compile, test, checkStyle, etc.).
+    Multiple agents running `./mill` concurrently will block each other.
+    The controller runs a single compilation pass after all tasks complete.
 
-    ```bash
-    # Compile your module
-    ./mill <module>.compile
-
-    # Run tests
-    ./mill <module>.test
-
-    # Run specific test
-    ./mill <module>.test -- -t "test name"
-
-    # Check style (run before committing)
-    ./mill <module>.checkStyleDirty
-    ```
-
-    Always compile after implementation and fix errors before reporting.
+    Use `diagnostics` (MCP tool) to catch type errors in files you edited —
+    this is your substitute for compilation during implementation.
 
     ## Your Job
 
@@ -91,12 +80,10 @@ Agent tool:
        you're working in. Find similar implementations and follow their patterns.
     2. Implement exactly what the task specifies
     3. Write tests (following TDD if the task says to)
-    4. Compile and fix any errors
-    5. Run tests and fix failures
-    6. Run checkStyleDirty on affected modules
-    7. Commit your work
-    8. Self-review (see below)
-    9. Report back
+    4. Use `diagnostics` on edited files to catch type errors
+    5. Commit your work
+    6. Self-review (see below)
+    7. Report back
 
     Work from: [directory, e.g., /home/hoangdinh/Works/stargazer/master]
 
@@ -197,9 +184,7 @@ Agent tool:
     When done, report via SendMessage to `reviewer-N`:
     - **Status:** DONE | DONE_WITH_CONCERNS
     - What you implemented
-    - What you tested and test results
-    - Compile status (did it compile clean?)
-    - checkStyleDirty results
+    - Diagnostics results (any type errors remaining?)
     - Files changed
     - Git SHAs (base commit before you started, head commit after your last commit)
     - Self-review findings (if any)
