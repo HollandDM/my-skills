@@ -72,6 +72,38 @@ This is the most commonly missed area. Every activity has a trait, companion, an
 The companion configures **activity attributes** that control timeout, retry, and heartbeat behavior.
 Missing or wrong attributes cause silent production failures.
 
+### CRITICAL: Activity Method Parameters Must Be Protobuf Messages
+
+All Temporal activity method parameters must be **protobuf messages**, not raw JVM types (`String`,
+`Int`, `Boolean`, `Long`, etc.). The codebase uses a protobuf-based `DataConverter` — it cannot
+serialize plain values. Using raw types compiles fine but **fails at runtime** with:
+
+```
+DataConverterException: No PayloadConverter is registered that accepts value: ...
+```
+
+This error is further obscured because the Temporal SDK's error-wrapping code (`StatusUtils.getFailure`)
+itself crashes with `NoClassDefFoundError` due to a protobuf version mismatch
+(`proto-google-common-protos:2.66.0` needs `protobuf-java 4.x`, runtime has `3.25.8`), making the
+real error invisible in logs.
+
+**Rule:** Always wrap activity arguments in a protobuf message. If you need to pass a single string,
+wrap it in an existing message (like `ComputeGaiaStateCacheInput`) or create a new one.
+
+```scala
+// BAD — compiles but fails at runtime
+@activityMethod
+def process(id: String): Empty
+
+// GOOD — protobuf message wrapper
+@activityMethod
+def process(input: ProcessInput): Empty
+```
+
+Flag:
+- **Activity method with raw JVM type parameters (`String`, `Int`, `Boolean`, `Long`, etc.)** — `[BLOCKER]` — will crash at runtime with `DataConverterException`
+- **Activity method with raw JVM type return values** — same issue, must return protobuf messages
+
 ### Activity Interface
 
 ```scala
