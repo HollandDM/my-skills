@@ -74,6 +74,7 @@ current state, then determine the correct diff strategy:
 | 1 | Scala Quality | Any `.scala` file |
 | 2 | ZIO & Streams | `ZIO`, `Task`, `UIO`, `URIO`, `IO`, `ZLayer`, `Scope`, `Schedule`, `Ref`, `ZStream`, `ZSink`, `ZPipeline`, `ZIO.foreachPar`, `collectAllPar`, `Semaphore`, `Queue`, `Cache`, `forkDaemon`, `forkScoped`, `attemptBlocking`, `Unsafe.unsafely`, imports from `zio.*` |
 | 3 | Architecture & Serialization | Any file — checks module boundaries. Also: `JsoniterCodec`, `JsonCodecMaker`, `JsonValueCodec`, `derives`, `TypeMapper`, `.proto` files, protobuf imports |
+| 4 | Code Health | Any `.scala` file — checks code reuse, quality patterns, efficiency |
 | 5 | FDB Patterns | `FDBRecord`, `FDBStore`, `RecordIO`, `RecordReadIO`, `RecordTask`, `transact`, `FDBOperations`, `FDBRecordEnum`, `StoreProvider`, `FDBChunkSubspace`, `splitTransaction`, `batchTransact`, `largeScan`, `scanIndexRecords`, `scanAllL`, `TupleRange`, `transactRead` |
 | 6 | Temporal | `TemporalWorkflow`, `TemporalActivity`, `WorkflowTask`, `@workflowInterface`, `@activityInterface`, `BatchAction`, `FDBCdcEventListener`, `AsyncEndpoint` |
 | 7 | Tapir Endpoints | Server: `EndpointServer`, `AuthenticatedEndpoint`, `authRoute`, `validateRoute` in `/jvm/`. Client: `EndpointClient`, `AuthenticatedEndpointClient`, `AsyncEndpointClient` in `/js/`. Also: server wiring files (`*Server.scala` in `apps/`) that register `.services` or `.asyncServices` — checks registration completeness |
@@ -87,15 +88,16 @@ current state, then determine the correct diff strategy:
 
 1. **Always include 1** for any `.scala` file
 2. **Always include 3** for any file
-3. For all other reviewers, include them **only if** their trigger patterns appear in the diff
-4. **Build files** (`build.mill`, `package.mill`, `dependency.mill`): only route to **3**
-5. **Proto files** (`.proto`): route to **3**. Also **5** if proto contains `RecordTypeUnion`
-6. A single file may route to many reviewers — that's expected
-7. When uncertain, **include the reviewer**
-8. **Test files**: always route to **11** plus **1** and relevant domain reviewers
-9. **Observability** (10): include for `/jvm/` files with service logic. Skip pure model/DTO files
-10. **Laminar** (8a): include for `/js/` files with Laminar/Airstream reactive patterns
-11. **Frontend Styling** (8b): include for `/js/` files with `tw.*`, design system components, or layout
+3. **Always include 4** for any `.scala` file
+4. For all other reviewers, include them **only if** their trigger patterns appear in the diff
+5. **Build files** (`build.mill`, `package.mill`, `dependency.mill`): only route to **3**
+6. **Proto files** (`.proto`): route to **3**. Also **5** if proto contains `RecordTypeUnion`
+7. A single file may route to many reviewers — that's expected
+8. When uncertain, **include the reviewer**
+9. **Test files**: always route to **11** plus **1** and relevant domain reviewers
+10. **Observability** (10): include for `/jvm/` files with service logic. Skip pure model/DTO files
+11. **Laminar** (8a): include for `/js/` files with Laminar/Airstream reactive patterns
+12. **Frontend Styling** (8b): include for `/js/` files with `tw.*`, design system components, or layout
 
 ## Workload Splitting
 

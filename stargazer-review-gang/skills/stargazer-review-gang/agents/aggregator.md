@@ -96,7 +96,7 @@ Priority order (highest wins):
 2. Data loss / correctness (5 FDB, 6 Temporal, 2 ZIO) — silent failures, corruption
 3. Performance (2 ZIO, 5 FDB) — thread starvation, OOM, timeout
 4. Observability (10) — secrets in logs, silent errors, missing tracing
-5. Code quality / patterns (1 Scala, 2 ZIO, 8 Frontend) — idiom violations, memory leaks
+5. Code quality / patterns (1 Scala, 2 ZIO, 4 Code Health, 8 Frontend) — idiom violations, reuse, memory leaks
 6. Testing (11) — flaky tests, missing assertions
 7. Style / formatting (3 Architecture) — mechanical checks
 

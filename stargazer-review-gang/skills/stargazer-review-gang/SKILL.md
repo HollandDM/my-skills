@@ -122,6 +122,7 @@ because another reviewer has 3000.
 | 1 | Scala Quality | `${SKILL_DIR}/reviewers/01-scala-quality.md` | standard |
 | 2 | ZIO Patterns | `${SKILL_DIR}/reviewers/02-zio-patterns.md` | standard |
 | 3 | Architecture | `${SKILL_DIR}/reviewers/03-foundations.md` | haiku |
+| 4 | Code Health | `${SKILL_DIR}/reviewers/04-code-health.md` | standard |
 | 5 | FDB Patterns | `${SKILL_DIR}/reviewers/05-fdb-patterns.md` | standard |
 | 6 | Temporal | `${SKILL_DIR}/reviewers/06-temporal.md` | standard |
 | 7 | Tapir | `${SKILL_DIR}/reviewers/07-tapir-endpoints.md` | standard |
