@@ -11,7 +11,7 @@
       "name": "stargazer-review-gang",
       "source": "./stargazer-review-gang",
       "description": "Multi-perspective code review with 11 specialized reviewer agents, validation layer, and confidence scoring for the Stargazer codebase",
-      "version": "a460216",
+      "version": "2aa42fb",
       "author": {
         "name": "HollandDM"
       },
