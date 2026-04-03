@@ -59,7 +59,15 @@ version sequence. The framework validates this at startup. For composite primary
 `Key.Expressions.concatenateFields("field1", "field2")`. The protobuf file **must** contain a
 message named exactly `RecordTypeUnion` — FDB Record Layer looks up this name at runtime.
 
+**Initializer registration:** Every new `FDBRecordStoreProvider` must be added to
+`Initializer.rebuildAllFdbRecordIndexes` (in `Initializer.scala`). Without this, the FDB
+store/index is never built — reads return empty and writes silently fail. This is especially
+dangerous with cache-first patterns: a workflow writes to the uninitialized store (error
+swallowed by fire-and-forget), then a polling loop waits for the entry that never appears,
+causing hangs until test/request timeout.
+
 Flag:
+- `[BLOCKER]` New `FDBRecordStoreProvider` not registered in `Initializer.rebuildAllFdbRecordIndexes` — store will silently fail at runtime
 - `[BLOCKER]` Missing companion object extending `FDBStoreProviderCompanion`
 - `[BLOCKER]` Index version numbers not sequential (1, 2, 3...)
 - `[BLOCKER]` Missing `given` for primary key mapping in companion
