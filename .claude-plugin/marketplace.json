@@ -31,7 +31,7 @@
       "name": "stargazer-batch-dev",
       "source": "./stargazer-batch-dev",
       "description": "Batch-parallel plan execution for Stargazer via advisor (opus) + implementers (sonnet) per batch, autonomous loop until all tasks done",
-      "version": "74d92e3",
+      "version": "6451141",
       "author": {
         "name": "HollandDM"
       },

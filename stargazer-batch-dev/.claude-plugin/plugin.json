@@ -1,5 +1,5 @@
 {
   "name": "stargazer-batch-dev",
   "description": "Batch-parallel plan execution for the Stargazer codebase — advisor (opus) + implementers (sonnet) per batch, autonomous loop until all tasks done",
-  "version": "74d92e3"
+  "version": "6451141"
 }
