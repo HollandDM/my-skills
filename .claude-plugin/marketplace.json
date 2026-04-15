@@ -28,6 +28,16 @@
       "keywords": ["implementation", "subagent", "scala", "zio", "stargazer", "plan-execution"]
     },
     {
+      "name": "stargazer-batch-dev",
+      "source": "./stargazer-batch-dev",
+      "description": "Batch-parallel plan execution for Stargazer via advisor (opus) + implementers (sonnet) per batch, autonomous loop until all tasks done",
+      "version": "74d92e3",
+      "author": {
+        "name": "HollandDM"
+      },
+      "keywords": ["implementation", "subagent", "scala", "zio", "stargazer", "plan-execution", "batch"]
+    },
+    {
       "name": "prove",
       "source": "./prove",
       "description": "Adversarial verification skill: prover vs disprover agents argue, then a judge synthesizes a verdict",
