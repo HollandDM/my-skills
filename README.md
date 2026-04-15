@@ -39,6 +39,16 @@ Multi-perspective code review swarm. A fast router agent reads each file's diff 
 
 Adversarial verification skill. Spawns prover and disprover agents that argue from opposing sides, then synthesizes a verdict. Enters a combat loop if undecided. Use for verifying code properties, architectural claims, runtime behavior, or any technical assertion.
 
+### [stargazer-batch-dev](./stargazer-batch-dev/) `v1.0.0`
+
+Batch-parallel plan execution for the Stargazer codebase. Lighter alternative to `stargazer-subagent-dev` — groups independent tasks into batches, spawns one advisor (opus) + one implementer (sonnet) per task per batch, loops autonomously through all batches without stopping. Team lead handles all `./mill` commands after each batch completes.
+
+**Key behaviors:**
+- No user questions (except once for plan file path)
+- Implementers communicate with advisor for complex problems
+- Compile errors fed back to implementers — team lead never touches code
+- Reformat + batch-done commit after each clean compile
+
 ## Installation
 
 Add the marketplace, then install individual plugins:
@@ -46,5 +56,6 @@ Add the marketplace, then install individual plugins:
 ```
 /plugin marketplace add git@github.com:HollandDM/my-skills.git
 /plugin install stargazer-review-gang@HollandDM-Skills
+/plugin install stargazer-batch-dev@HollandDM-Skills
 /plugin install prove@HollandDM-Skills
 ```

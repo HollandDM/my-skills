@@ -1,0 +1,11 @@
+{
+  "name": "local-batch-dev",
+  "description": "Local development marketplace for stargazer-batch-dev plugin",
+  "plugins": [
+    {
+      "name": "stargazer-batch-dev",
+      "source": "./..",
+      "description": "Batch-parallel plan execution for the Stargazer codebase with advisor-implementer team model"
+    }
+  ]
+}
