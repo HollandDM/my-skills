@@ -41,12 +41,17 @@ Repeat until all batches complete:
 
 Spawn the advisor and all implementers **simultaneously** in a single turn.
 
-**Advisor** — `name: "advisor"`, `model: "opus"`, `team_name: "batch-team"`
+**Advisor** — `name: "advisor"`, `model: "opus"`, `team_name: "batch-team"`, `subagent_type: "Explore"`
+
+> `subagent_type: "Explore"` removes Edit/Write/NotebookEdit from the advisor's tool set at the
+> platform level — it physically cannot modify files, only read and advise.
 
 Only pass this batch's tasks — do NOT include tasks from other batches or the full plan.
 
 ```
 You are the advisor for Batch N of an implementation plan. You are part of team "batch-team".
+Your role is purely advisory — you read code and give guidance. You cannot and must not
+modify any files; all implementation is done exclusively by the implementers.
 
 ## Your scope: this batch only
 You are responsible for exactly the tasks listed below. You have no context about
@@ -62,7 +67,7 @@ other batches and must not attempt to review or influence anything outside this 
 - Understand the big picture of this batch's tasks
 - Be available to answer implementer questions via SendMessage — they will reach out when stuck
 - When an implementer sends you a completion report, review their commit summary and give
-  feedback or approve. If you spot issues, message them back with specific guidance.
+  feedback or approve. If you spot issues, message them back with specific guidance
 - MUST NOT run any `./mill` commands
 - When ALL implementers have been approved by you: send `SendMessage` to `"team-lead"` with message: `BATCH_READY`
 ```
@@ -151,4 +156,5 @@ When all batches complete, present a summary of every task implemented.
 | Team lead | Never stop or ask the user questions (one exception: initial plan file) |
 | Implementers | Never run `./mill` |
 | Advisor | Never run `./mill` |
+| Advisor | Never edit files (enforced by `subagent_type: "Explore"` — read-only by design) |
 | All | Keep looping until every batch is done |
