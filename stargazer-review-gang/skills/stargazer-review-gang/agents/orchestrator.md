@@ -64,47 +64,37 @@ current state, then determine the correct diff strategy:
    - ≤100 +/- → `lite`
    - 101–2000 +/- → `medium`
    - >2000 +/- → `heavy`
-7. Sum +/- per reviewer across all assigned files.
-8. If a reviewer's total exceeds 4000 +/-, split into sub-reviewers.
+7. Sum +/- per reviewer group (A/B/C/D) across all assigned files.
+8. If a reviewer group's total exceeds 4000 +/-, split into sub-reviewers (e.g., Aa, Ab).
 
 ## Reviewer Reference
 
+Route to at most 4 reviewer groups total.
+
 | ID | Reviewer | Trigger when diff contains |
 |----|----------|---------------------------|
-| 1 | Scala Quality | Any `.scala` file |
-| 2 | ZIO & Streams | `ZIO`, `Task`, `UIO`, `URIO`, `IO`, `ZLayer`, `Scope`, `Schedule`, `Ref`, `ZStream`, `ZSink`, `ZPipeline`, `ZIO.foreachPar`, `collectAllPar`, `Semaphore`, `Queue`, `Cache`, `forkDaemon`, `forkScoped`, `attemptBlocking`, `Unsafe.unsafely`, imports from `zio.*` |
-| 3 | Architecture & Serialization | Any file — checks module boundaries. Also: `JsoniterCodec`, `JsonCodecMaker`, `JsonValueCodec`, `derives`, `TypeMapper`, `.proto` files, protobuf imports |
-| 4 | Code Health | Any `.scala` file — checks code reuse, quality patterns, efficiency |
-| 5 | FDB Patterns | `FDBRecord`, `FDBStore`, `RecordIO`, `RecordReadIO`, `RecordTask`, `transact`, `FDBOperations`, `FDBRecordEnum`, `StoreProvider`, `FDBChunkSubspace`, `splitTransaction`, `batchTransact`, `largeScan`, `scanIndexRecords`, `scanAllL`, `TupleRange`, `transactRead` |
-| 6 | Temporal | `TemporalWorkflow`, `TemporalActivity`, `WorkflowTask`, `@workflowInterface`, `@activityInterface`, `BatchAction`, `FDBCdcEventListener`, `AsyncEndpoint` |
-| 7 | Tapir Endpoints | Server: `EndpointServer`, `AuthenticatedEndpoint`, `authRoute`, `validateRoute` in `/jvm/`. Client: `EndpointClient`, `AuthenticatedEndpointClient`, `AsyncEndpointClient` in `/js/`. Also: server wiring files (`*Server.scala` in `apps/`) that register `.services` or `.asyncServices` — checks registration completeness |
-| 8a | Laminar | `Laminar`, `Signal`, `EventStream`, `Var`, `Observer`, `splitSeq`, `splitOption`, `splitMatchOne`, `child <--`, `children <--`, `-->`, `L.`, `flatMapSwitch`, `flatMapMerge`, `taskToStream`, `LaminarComponent` |
-| 8b | Frontend Styling | `tw.`, `AnduinButton`, `AnduinTag`, `Modal`, `ModalL`, `Table`, `TableL`, `TextBox`, `TextBoxL`, `Dropdown`, `DropdownL`, `Tooltip`, `AnduinTooltipL`, `Tab`, `TabL`, `testId`, `testIdL` |
-| 9 | scalajs-react | `ScalaComponent`, `BackendScope`, `Callback`, `VdomElement`, `<.div`, `^.onClick`, `WrapperR`, `QueryComponent` |
-| 10 | Observability | `ZIO.logInfo`, `ZIO.logWarning`, `ZIO.logError`, `ZIO.logErrorCause`, `ZIOLoggingUtils`, `ZIOTelemetryUtils.injectMetrics`, `ZIOTelemetryUtils.injectTracing`, `injectOutgoingOtelContext`, `ActionLoggerService`, `Metric.histogram`, `Metric.counter`, `Metric.gauge`, `scribe.`, `.ignore`, `.catchAll(_ =>`, `println` |
-| 11 | Testing Quality | Test files only (`**/test/src/**`, `**/it/src/**`, `**/multiregionit/**`): `assertTrue`, `assertCompletes`, `ZIOBaseInteg`, `BaseInteg`, `TemporalFixture`, `TestAspect`, `aroundAllWith`, `Thread.sleep`, `var ` in test class, `.either`, `.isRight`, `.isLeft`, `.toOption.get` |
+| A | Scala Core (quality + ZIO + architecture + code health) | Any `.scala` file, `.proto` file, or build file |
+| B | Backend Domain (FDB + Temporal + observability) | `FDBRecord`, `FDBStore`, `RecordIO`, `RecordReadIO`, `RecordTask`, `transact`, `FDBOperations`, `FDBRecordEnum`, `StoreProvider`, `FDBChunkSubspace`, `splitTransaction`, `batchTransact`, `largeScan`, `scanIndexRecords`, `scanAllL`, `TupleRange`, `transactRead`, `TemporalWorkflow`, `TemporalActivity`, `WorkflowTask`, `@workflowInterface`, `@activityInterface`, `BatchAction`, `FDBCdcEventListener`, `AsyncEndpoint`, `ZIO.logInfo`, `ZIO.logWarning`, `ZIO.logError`, `ZIO.logErrorCause`, `ZIOLoggingUtils`, `ZIOTelemetryUtils`, `injectOutgoingOtelContext`, `ActionLoggerService`, `Metric.histogram`, `Metric.counter`, `Metric.gauge` |
+| C | API & Tests (Tapir endpoints + testing quality) | `EndpointServer`, `AuthenticatedEndpoint`, `authRoute`, `validateRoute`, `EndpointClient`, `AuthenticatedEndpointClient`, `AsyncEndpointClient`, `*Server.scala` files in `apps/`, test files (`**/test/src/**`, `**/it/src/**`, `**/multiregionit/**`) |
+| D | Frontend (Laminar + styling + scalajs-react) | Any `/js/` file |
 
 ## Routing Rules
 
-1. **Always include 1** for any `.scala` file
-2. **Always include 3** for any file
-3. **Always include 4** for any `.scala` file
-4. For all other reviewers, include them **only if** their trigger patterns appear in the diff
-5. **Build files** (`build.mill`, `package.mill`, `dependency.mill`): only route to **3**
-6. **Proto files** (`.proto`): route to **3**. Also **5** if proto contains `RecordTypeUnion`
-7. A single file may route to many reviewers — that's expected
-8. When uncertain, **include the reviewer**
-9. **Test files**: always route to **11** plus **1** and relevant domain reviewers
-10. **Observability** (10): include for `/jvm/` files with service logic. Skip pure model/DTO files
-11. **Laminar** (8a): include for `/js/` files with Laminar/Airstream reactive patterns
-12. **Frontend Styling** (8b): include for `/js/` files with `tw.*`, design system components, or layout
+1. **Always include A** for any `.scala`, `.proto`, or build file
+2. **Include B** only when FDB, Temporal, or observability trigger patterns appear in the diff
+3. **Include C** when Tapir patterns appear in `/jvm/` or `/js/` files, server wiring files (`*Server.scala`) are changed, or test files are present
+4. **Include D** for any `/js/` file
+5. **Build files** (`build.mill`, `package.mill`, `dependency.mill`): only route to **A**
+6. **Proto files** (`.proto`): route to **A**. Also **B** if proto contains `RecordTypeUnion`
+7. When uncertain, **include the reviewer**
+8. **Test files**: always route to **C** plus **A** and **B** if domain patterns appear
 
 ## Workload Splitting
 
-If a reviewer's total +/- exceeds **4000**, split into sub-reviewers:
+If a reviewer group's total +/- exceeds **4000**, split into sub-reviewers:
 - Target **≤4000 +/- per sub-reviewer**: `ceil(total / 4000)`
-- Divide the reviewer's checklist sections into equal groups across sub-reviewers
-- Each sub-reviewer gets a label like `"2a"`, `"2b"` with a `focus` field
+- Assign whole checklist files to each sub-reviewer (e.g., Aa gets checklists 01+02, Ab gets 03+04)
+- Each sub-reviewer gets a label like `"Aa"`, `"Ab"` with a `focus` field listing its checklist files
 
 ## Output Format
 
@@ -115,24 +105,26 @@ Return JSON only:
   "diff_ref": "abc123..def456",
   "total_files": 12,
   "total_changes": 2982,
-  "depth": "deep",
+  "depth": "medium",
   "routing": {
-    "path/to/Service.scala": ["1", "2", "3", "5"],
-    "path/to/Page.scala": ["1", "3", "8"]
+    "path/to/Service.scala": ["A", "B"],
+    "path/to/ServiceEndpoint.scala": ["A", "B", "C"],
+    "path/to/Page.scala": ["A", "D"]
   },
   "workload": {
-    "1": {"changes": 850},
-    "2": {
-      "changes": 3200,
+    "A": {"changes": 850},
+    "B": {
+      "changes": 4800,
       "split": [
-        {"id": "2a", "focus": "Sections 1-9: ..."},
-        {"id": "2b", "focus": "Sections 10-18: ..."}
+        {"id": "Ba", "focus": "05-fdb-patterns.md + 06-temporal.md"},
+        {"id": "Bb", "focus": "10-observability.md"}
       ]
     },
-    "3": {"changes": 900}
+    "C": {"changes": 320},
+    "D": {"changes": 410}
   }
 }
 ```
 
 The `diff_ref` field is the exact git diff argument you used (e.g., `HEAD~1`, `abc123..def456`,
-`HEAD`). The main agent passes this to reviewers and aggregators.
+`HEAD`). The main agent passes this to reviewers.

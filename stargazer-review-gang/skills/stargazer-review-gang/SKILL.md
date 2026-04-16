@@ -94,43 +94,38 @@ description: "Stargazer code review session"
 
 ### 4b. Determine Reviewer Set
 
-Using the routing output, determine the **union of all reviewer IDs** across all files.
+Using the routing output, determine the **union of all reviewer group IDs** (A/B/C/D) across all files.
 
 #### Workload Splits
 
 From `workload`:
-- **≤4000 +/-:** One reviewer agent per ID.
-- **>4000 +/- with split:** Spawn sub-reviewers (2a, 2b, etc.) with focused scope.
-  Prepend: `> FOCUSED REVIEW: You are sub-reviewer {id}. Review ONLY: {focus}`
+- **≤4000 +/-:** One reviewer agent per group ID (A/B/C/D).
+- **>4000 +/- with split:** Spawn sub-reviewers (Aa, Ab, etc.) with focused scope.
+  Prepend: `> FOCUSED REVIEW: You are sub-reviewer {id}. Review ONLY the following checklist sections: {focus}`
+  Split across the group's checklists — assign whole checklist files to each sub-reviewer.
 
 #### Model Selection — Per-Reviewer Workload
 
 Use each reviewer's **own workload** from the orchestrator's `workload` output to pick its model.
-Do NOT apply one model to all reviewers — a reviewer with 50 changes shouldn't get opus just
-because another reviewer has 3000.
+Reviewer D (Frontend) is always `haiku` regardless of workload.
 
 | Reviewer's +/- | Model |
 |----------------|-------|
 | ≤100 | `model: "haiku"` |
-| 101–1500 | roster default |
-| >1500 | `model: "opus"` |
+| 101–3000 | roster default |
+| >3000 | `model: "opus"` |
 
 ### Reviewer Roster
 
-| ID | Reviewer | Checklist | Default Model |
-|----|----------|-----------|---------------|
-| 1 | Scala Quality | `${SKILL_DIR}/reviewers/01-scala-quality.md` | standard |
-| 2 | ZIO Patterns | `${SKILL_DIR}/reviewers/02-zio-patterns.md` | standard |
-| 3 | Architecture | `${SKILL_DIR}/reviewers/03-foundations.md` | haiku |
-| 4 | Code Health | `${SKILL_DIR}/reviewers/04-code-health.md` | standard |
-| 5 | FDB Patterns | `${SKILL_DIR}/reviewers/05-fdb-patterns.md` | standard |
-| 6 | Temporal | `${SKILL_DIR}/reviewers/06-temporal.md` | standard |
-| 7 | Tapir | `${SKILL_DIR}/reviewers/07-tapir-endpoints.md` | standard |
-| 8a | Laminar | `${SKILL_DIR}/reviewers/08-laminar.md` | standard |
-| 8b | Frontend Styling | `${SKILL_DIR}/reviewers/08-frontend.md` | haiku |
-| 9 | scalajs-react | `${SKILL_DIR}/reviewers/09-react.md` | standard |
-| 10 | Observability | `${SKILL_DIR}/reviewers/10-observability.md` | haiku |
-| 11 | Testing | `${SKILL_DIR}/reviewers/11-testing.md` | standard |
+Each reviewer agent covers multiple checklists. **Spawn at most 4 reviewers total.**
+Each agent reads all of its assigned checklists and applies all checks.
+
+| ID | Reviewer | Checklists (read all) | Default Model |
+|----|----------|-----------------------|---------------|
+| A | Scala Core | `${SKILL_DIR}/reviewers/01-scala-quality.md`, `${SKILL_DIR}/reviewers/02-zio-patterns.md`, `${SKILL_DIR}/reviewers/03-foundations.md`, `${SKILL_DIR}/reviewers/04-code-health.md` | sonnet |
+| B | Backend Domain | `${SKILL_DIR}/reviewers/05-fdb-patterns.md`, `${SKILL_DIR}/reviewers/06-temporal.md`, `${SKILL_DIR}/reviewers/10-observability.md` | sonnet |
+| C | API & Tests | `${SKILL_DIR}/reviewers/07-tapir-endpoints.md`, `${SKILL_DIR}/reviewers/11-testing.md` | sonnet |
+| D | Frontend | `${SKILL_DIR}/reviewers/08-laminar.md`, `${SKILL_DIR}/reviewers/08-frontend.md`, `${SKILL_DIR}/reviewers/09-react.md` | haiku |
 
 ### 4c. Spawn Reviewers as Named Team Members
 
@@ -144,77 +139,37 @@ Do NOT invoke the Skill tool or any skills — you are already inside a workflow
 ```
 
 Then include:
-- `Read your checklist from: [checklist path from roster]`
+- `Read your checklists from: [all checklist paths for this group, in order]`
+- `Apply ALL checklists to the assigned files. Skip any checklist that declares its scope doesn't match (e.g., FDB checklist when no FDB code is present).`
 - Diff ref, assigned file paths, session context, scala tool availability note
 - **No build commands** — read only
 - **Diff-bound** — only flag changed lines
 - For each file: `git diff -U3 <diff_ref> -- <file>`, read full file, blame changed lines
 - Checklist files already define the output format and triage rules — do not override them
-- After initial review, stay idle for aggregator re-queries or team lead fix requests
+- After initial review, stay idle for team lead fix requests
 
 ---
 
 ## Step 5: Aggregate, Validate, and Filter
 
-Count **all** reviewer agents that responded — including those that reported "Clean — no issues
-found" (sub-reviewers like 1a, 1b count separately). Every reviewer response counts as one output.
+Collect all reviewer outputs. **You (the team lead) are the aggregator — do NOT spawn any
+aggregator agents.**
 
-- **≤4 outputs:** Spawn **one aggregator** as a team member.
-- **>4 outputs:** Split into batches of ≤4 and spawn **one aggregator per batch** as team members.
-  Group related reviewers together (e.g., FDB + ZIO + Temporal). After all batch aggregators
-  complete, spawn **exactly one** final merge aggregator.
+### Aggregation steps
 
-**Model selection:**
-- **Per-batch aggregators** (`aggregator-1`, `aggregator-2`, etc.): always `model: "sonnet"`
-- **Final merge aggregator** (`aggregator-final`): always `model: "haiku"`
-
-Use `team_name: "review-gang"` for all.
-
-### Per-batch aggregator prompt
-
-Each batch aggregator reads and follows `${SKILL_DIR}/agents/aggregator.md` — it validates findings, re-queries
-reviewers, filters, and produces a report.
-
-```
-You are a subagent dispatched to execute a specific task.
-Do NOT invoke the Skill tool or any skills — you are already inside a workflow.
-
-Read your instructions from: ${SKILL_DIR}/agents/aggregator.md
-Diff ref: <diff_ref>
-Team Members: <list of reviewer names in this batch>
-Findings to Aggregate: <paste findings>
-```
-
-### Final merge aggregator prompt
-
-The final merge aggregator does **NOT** read `${SKILL_DIR}/agents/aggregator.md`. It does **NOT** validate,
-re-query, or filter. It only concatenates batch reports and deduplicates across batches.
-Spawn **exactly one** — never spawn additional aggregators after this.
-
-```
-You are a subagent dispatched to execute a specific task.
-Do NOT invoke the Skill tool or any skills — you are already inside a workflow.
-
-You are the final merge aggregator. Your name is "aggregator-final".
-Do NOT read ${SKILL_DIR}/agents/aggregator.md — you are NOT a validation aggregator.
-
-Your ONLY job:
-1. Concatenate the batch reports below into one report
-2. Deduplicate: if the same file:line appears in multiple batches, keep the highest-priority one
-3. Preserve all code blocks, emoji indicators, and formatting verbatim
-4. Do NOT re-validate, re-query reviewers, or drop any findings
-
-Batch reports:
-<paste all batch aggregator reports>
-```
-
-**Present the aggregator's report to the user verbatim.** Do NOT rewrite, reformat, summarize,
-or strip any part of it — including severity emoji indicators (🔴🟡🔵), code blocks, confidence
-scores, and reviewer attributions. The report is the deliverable; your job is to pass it through.
+1. **Validate:** For each finding, verify it references a line that actually exists in the diff
+   (not pre-existing code). Drop findings that cite lines not in the diff.
+2. **Deduplicate:** If the same `file:line` appears in multiple reviewer outputs, keep the
+   highest-priority finding (prefer `[BLOCKER]` > `[SUGGESTION]` > `[NITPICK]`).
+3. **Merge:** Concatenate all validated findings into one report, grouped by file.
+4. **Preserve verbatim:** Keep all code blocks, severity labels, confidence scores, and reviewer
+   attributions exactly as written. Do NOT summarize, paraphrase, or strip code blocks.
 
 This applies even when all findings are nitpicks — still show the full report with code blocks.
-Never reduce a finding to a one-liner summary like "[NITPICK] description (confidence N)".
+Never reduce a finding to a one-liner like "[NITPICK] description (confidence N)".
 The code blocks ARE the report.
+
+**Present the merged report directly to the user.**
 
 ---
 
@@ -248,7 +203,7 @@ message: |
   After applying all fixes, report what you changed.
 
   Fixes to apply (blockers first):
-  [list the specific findings from the aggregator report that belong to this reviewer,
+  [list the specific findings from the merged report that belong to this reviewer,
    including file:line, issue description, and suggested fix]
 summary: "Apply N fixes to reviewed files"
 ```
