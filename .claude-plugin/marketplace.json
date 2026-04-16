@@ -10,8 +10,8 @@
     {
       "name": "stargazer-review-gang",
       "source": "./stargazer-review-gang",
-      "description": "Multi-perspective code review with 11 specialized reviewer agents, validation layer, and confidence scoring for the Stargazer codebase",
-      "version": "2aa42fb",
+      "description": "Multi-perspective code review with 4 grouped reviewer agents (Scala/Backend/API/Frontend), team-lead aggregation, and confidence scoring for the Stargazer codebase",
+      "version": "4002036",
       "author": {
         "name": "HollandDM"
       },
