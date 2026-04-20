@@ -143,18 +143,128 @@ Then include:
 
 Collect all reviewer outputs. **You (team lead) are aggregator — do NOT spawn aggregator agents.**
 
-### Aggregation steps
+Reviewers are still active team members — message them directly for clarification. They have full file context.
 
-1. **Validate:** For each finding, verify it references line that exists in diff (not pre-existing code). Drop findings citing lines not in diff.
-2. **Deduplicate:** Same `file:line` in multiple outputs → keep highest-priority finding (prefer `[BLOCKER]` > `[SUGGESTION]` > `[NITPICK]`).
-3. **Merge:** Concatenate validated findings into one report, grouped by file.
-4. **Preserve verbatim:** Keep all code blocks, severity labels, confidence scores, reviewer attributions exactly as written. Do NOT summarize, paraphrase, or strip code blocks.
+### 5a. Validate Findings
 
-Applies even when all findings are nitpicks — show full report with code blocks.
-Never reduce finding to one-liner like "[NITPICK] description (confidence N)".
-Code blocks ARE the report.
+For every finding (BLOCKER, SUGGESTION, NITPICK): confirm it has both **Current code** and **Suggested fix** code blocks. If missing, message reviewer to provide before proceeding.
 
-**Present merged report directly to user.**
+For every BLOCKER/SUGGESTION, verify against actual source:
+
+1. **Read file** at cited line via Read tool
+2. **Check diff** — confirm flagged line added/modified: `git diff -U0 <diff_ref> -- <file>`
+3. **Verdict**: CONFIRMED, FALSE_POSITIVE, or NEEDS_CLARIFICATION
+
+Rules:
+- **FALSE_POSITIVE**: line doesn't exist, wasn't changed in diff, issue already handled by surrounding code, reviewer misread logic
+- **CONFIRMED**: issue real + flagged line changed in diff
+- **NEEDS_CLARIFICATION**: can see code but unsure if valid, fix incomplete, description ambiguous
+- **Fail-open**: can't read file → treat as CONFIRMED
+- **Skip diff validation** for NITPICKs — pass through, but reject if lacking code blocks
+
+Drop FALSE_POSITIVEs. Keep CONFIRMEDs. NEEDS_CLARIFICATION → 5b.
+
+### 5b. Clarify with Reviewers
+
+Message reviewers for:
+
+| Situation | What to ask |
+|-----------|------------|
+| **Ambiguous finding** | "I see `<code>` at file:line. Actually a problem? Surrounding code suggests `<observation>`." |
+| **Fix vague or missing** | "Finding at file:line lacks concrete fix. What code change?" |
+| **Fix looks wrong** | "Fix at file:line would `<problem>`. Revise?" |
+| **Borderline confidence (50-59)** | "Finding at confidence N. Strengthen with detail or concrete fix?" |
+| **Contradiction between reviewers** | Ask both: "Reviewer-X flagged file:line as `<issue>` but you flagged differently. Take?" |
+| **Uncertain false positive** | "Think false positive because `<reason>`. Wrong?" |
+
+Batch questions per reviewer into one message. Wait for response before finalizing.
+
+```
+to: "reviewer-{ID}"
+message: |
+  Validating findings — questions:
+
+  1. **file:line** — [question]
+  2. **file:line** — [question]
+
+  For each: clarify with detail / revised fix, or confirm to drop.
+summary: "Clarify N findings from review"
+```
+
+Reviewer clarifies → update finding. Confirms drop → drop.
+
+### 5c. Deduplicate
+
+Same `file:line` flagged by multiple reviewers → keep highest-priority, cross-reference: "Also flagged by: [reviewer] — [reason]"
+
+Priority (highest wins):
+1. Security (7 Tapir) — auth bypass, data leaks
+2. Data loss / correctness (5 FDB, 6 Temporal, 2 ZIO) — silent failures, corruption
+3. Performance (2 ZIO, 5 FDB) — thread starvation, OOM, timeout
+4. Observability (10) — secrets in logs, silent errors, missing tracing
+5. Code quality / patterns (1 Scala, 2 ZIO, 4 Code Health, 8 Frontend) — idiom violations, memory leaks
+6. Testing (11) — flaky tests, missing assertions
+7. Style / formatting (3 Architecture) — mechanical checks
+
+### 5d. Final Filter
+
+Reassess confidence scores — adjust up or down. Then:
+
+1. **Drop confidence < 50** — noise.
+2. **Retain everything >= 50** — keep every non-duplicate >= 50. Cannot drop, downgrade, or omit for being minor, borderline, or stylistic.
+3. **Drop duplicates** — per 5c rules.
+4. **Request missing code blocks** — finding >= 50 missing Current code / Suggested fix → message reviewer. Do NOT drop for vague — fix it.
+
+### 5e. Present Report
+
+**Preserve reviewer code blocks verbatim.** Copy Current code and Suggested fix exactly. Do NOT rewrite, summarize, shorten, or paraphrase.
+
+Never reduce finding to one-liner. Code blocks ARE the report.
+
+````markdown
+# Code Review Report
+
+## Files Reviewed
+- file list with platform classification
+
+## 🔴 Blockers (must fix)
+
+### 🔴 [BLOCKER] (confidence: N) Title — `file:line`
+**Reviewer:** Name
+**Issue:** What's wrong and why it matters
+**Current code:**
+```scala
+// actual code at flagged location (3-5 lines context)
+```
+**Suggested fix:**
+```scala
+// concrete replacement, copy-paste ready
+```
+Also flagged by: [reviewer] — [reason] *(only if deduplicated)*
+
+## 🟡 Suggestions (should fix)
+
+### 🟡 [SUGGESTION] (confidence: N) Title — `file:line`
+**Reviewer:** Name
+**Issue:** ...
+**Current code:** ...
+**Suggested fix:** ...
+
+## 🔵 Nitpicks
+
+### 🔵 [NITPICK] Title — `file:line`
+**Reviewer:** Name
+**Issue:** Brief explanation
+**Current code:** ...
+**Suggested fix:** ...
+
+## Summary
+- X blockers, Y suggestions, Z nitpicks across N reviewers
+- Validated: X confirmed, Y false positives dropped
+- Clarified with reviewers: X findings queried, Y strengthened, Z dropped
+````
+
+0 blockers + 0 suggestions + few nitpicks → shorter report OK, but still show code blocks per nitpick.
 
 ---
 
