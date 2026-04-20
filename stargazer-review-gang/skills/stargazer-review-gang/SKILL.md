@@ -8,59 +8,48 @@ description: >
 
 # Stargazer Review Gang
 
-**Capture the skill base directory** from the "Base directory for this skill:" line above.
-Store it as `SKILL_DIR` — all file references below (agents/, reviewers/) are relative to it.
+**Capture skill base directory** from "Base directory for this skill:" line above.
+Store as `SKILL_DIR` — all file refs below (agents/, reviewers/) relative to it.
 
 **Say exactly:** "Starting the stargazer-review-gang."
 
-**Then immediately proceed to Step 1.** Do NOT gather diffs. Do NOT read files. Do NOT do
-anything else before Step 1.
+**Proceed immediately to Step 1.** Do NOT gather diffs. Do NOT read files. Do NOT do anything else before Step 1.
 
 ## Constraints
 
-1. **NO BUILD COMMANDS.** You and all team members are FORBIDDEN from running `./mill`, `compile`,
-   `test`, `checkStyle`, `checkStyleDirty`, `reformat`, `checkUnused`, `WarnUnusedCode`, or any
-   build/lint command.
-2. **YOU DO NOT READ DIFFS, SOURCE FILES, OR AGENT INSTRUCTION FILES.** Do NOT run
-   `git diff` or `git merge-base`. Do NOT use the Read tool on any `.md` file in this skill.
-   The orchestrator determines the diff ref itself from the user's review scope.
-   **Exception:** You MAY run `git log --oneline` and `git status` (short form) in Step 3 to
-   gather branch/history context for the orchestrator prompt — but do NOT analyze the output
-   yourself; just pass it to the orchestrator.
+1. **NO BUILD COMMANDS.** You and all team members FORBIDDEN from running `./mill`, `compile`, `test`, `checkStyle`, `checkStyleDirty`, `reformat`, `checkUnused`, `WarnUnusedCode`, or any build/lint command.
+2. **DO NOT READ DIFFS, SOURCE FILES, OR AGENT INSTRUCTION FILES.** Do NOT run `git diff` or `git merge-base`. Do NOT use Read tool on any `.md` file in this skill. Orchestrator determines diff ref itself from user's review scope.
+   **Exception:** MAY run `git log --oneline` and `git status` (short form) in Step 3 for branch/history context — do NOT analyze output yourself; pass it to orchestrator.
 3. **NO STOP CONDITION FOR PR SIZE.** Handle all PRs regardless of file count or line count.
 
 ## Step 1: Gather Session Context
 
-Do NOT ask the user for context. Instead, infer it from the current session:
-- Use the conversation history to understand what the user has been working on
-- Note any files they've been editing, features they've been building, or bugs they've been fixing
-- This becomes the `user_context` passed to the orchestrator and reviewers
+Do NOT ask user for context. Infer from current session:
+- Use conversation history to understand what user has been working on
+- Note files edited, features built, or bugs fixed
+- Becomes `user_context` passed to orchestrator and reviewers
 
 ## Step 2: Verify Scala Code Intelligence
 
-Invoke the `scala-code-intelligence` skill to check if IntelliJ-powered MCP tools are available.
-If not, check for `cellar` CLI (`which cellar`). Build a short tool availability note:
+Invoke `scala-code-intelligence` skill to check if IntelliJ-powered MCP tools available.
+If not, check for `cellar` CLI (`which cellar`). Build short tool availability note:
 
 - **MCP available:** `"scala-code-intelligence MCP tools available (definition, references, hover, etc.)"`
 - **cellar only:** `"cellar CLI available (cellar search/get/list -m <module>). No references/diagnostics."`
 - **neither:** `"No Scala intelligence tools. Use grep/glob only."`
 
-Pass this note to the orchestrator and all reviewers so they know what tools they can use.
+Pass note to orchestrator and all reviewers.
 
 ---
 
 ## Step 3: Spawn Routing Orchestrator
 
-Spawn a **single plain agent** (not a team member) using the exact prompt template below.
-Use `model: "sonnet"` — the orchestrator interprets the scope, determines diff refs, reads
-all diffs, and routes files. It is a one-shot job that does not need to persist.
+Spawn **single plain agent** (not team member) using exact prompt template below.
+Use `model: "sonnet"` — orchestrator interprets scope, determines diff refs, reads all diffs, routes files. One-shot job, no persistence needed.
 
-**Pass the user's scope verbatim** — do NOT interpret it into base/head refs. The
-orchestrator determines the correct git diff strategy itself. **Add surrounding context** (branch
-name, recent commit summaries, number of files) to help the orchestrator orient quickly, but keep
-the user's words intact as the primary scope.
+**Pass user's scope verbatim** — do NOT interpret into base/head refs. Orchestrator determines correct git diff strategy. **Add surrounding context** (branch name, recent commit summaries, file count) to orient orchestrator quickly, but keep user's words intact as primary scope.
 
-**Prompt template** (fill in the bracketed sections):
+**Prompt template** (fill bracketed sections):
 
 ```
 You are a subagent dispatched to execute a specific routing task.
@@ -74,18 +63,18 @@ User context: [session context inferred from conversation]
 Scala tools: [tool availability note from Step 2]
 ```
 
-The orchestrator returns a JSON routing plan with `diff_ref`, `routing`, `workload`, and `depth`.
+Orchestrator returns JSON routing plan with `diff_ref`, `routing`, `workload`, `depth`.
 **Wait for completion before proceeding.**
 
 ---
 
 ## Step 4: Create Team and Spawn Reviewers
 
-> **ROUTING IS FINAL.** Spawn exactly the reviewers the orchestrator assigned — no more, no less.
+> **ROUTING IS FINAL.** Spawn exactly reviewers orchestrator assigned — no more, no less.
 
-### 4a. Create the Review Team
+### 4a. Create Review Team
 
-Use **TeamCreate** to create a team for this review session:
+Use **TeamCreate**:
 
 ```
 team_name: "review-gang"
@@ -94,7 +83,7 @@ description: "Stargazer code review session"
 
 ### 4b. Determine Reviewer Set
 
-Using the routing output, determine the **union of all reviewer group IDs** (A/B/C/D) across all files.
+From routing output, determine **union of all reviewer group IDs** (A/B/C/D) across all files.
 
 #### Workload Splits
 
@@ -102,12 +91,12 @@ From `workload`:
 - **≤4000 +/-:** One reviewer agent per group ID (A/B/C/D).
 - **>4000 +/- with split:** Spawn sub-reviewers (Aa, Ab, etc.) with focused scope.
   Prepend: `> FOCUSED REVIEW: You are sub-reviewer {id}. Review ONLY the following checklist sections: {focus}`
-  Split across the group's checklists — assign whole checklist files to each sub-reviewer.
+  Split across group's checklists — assign whole checklist files to each sub-reviewer.
 
 #### Model Selection — Per-Reviewer Workload
 
-Use each reviewer's **own workload** from the orchestrator's `workload` output to pick its model.
-Reviewer D (Frontend) is always `haiku` regardless of workload.
+Use each reviewer's **own workload** from orchestrator's `workload` output to pick model.
+Reviewer D (Frontend) always `haiku` regardless of workload.
 
 | Reviewer's +/- | Model |
 |----------------|-------|
@@ -117,8 +106,8 @@ Reviewer D (Frontend) is always `haiku` regardless of workload.
 
 ### Reviewer Roster
 
-Each reviewer agent covers multiple checklists. **Spawn at most 4 reviewers total.**
-Each agent reads all of its assigned checklists and applies all checks.
+Each reviewer covers multiple checklists. **Spawn at most 4 reviewers total.**
+Each agent reads all assigned checklists and applies all checks.
 
 | ID | Reviewer | Checklists (read all) | Default Model |
 |----|----------|-----------------------|---------------|
@@ -130,7 +119,7 @@ Each agent reads all of its assigned checklists and applies all checks.
 ### 4c. Spawn Reviewers as Named Team Members
 
 Name pattern: `reviewer-{ID}` (sub-reviewers: `reviewer-{ID}{letter}`).
-Use `team_name: "review-gang"`. Spawn all in a **single message** for parallelism.
+Use `team_name: "review-gang"`. Spawn all in **single message** for parallelism.
 
 Each reviewer prompt must start with:
 ```
@@ -145,37 +134,33 @@ Then include:
 - **No build commands** — read only
 - **Diff-bound** — only flag changed lines
 - For each file: `git diff -U3 <diff_ref> -- <file>`, read full file, blame changed lines
-- Checklist files already define the output format and triage rules — do not override them
+- Checklist files define output format and triage rules — do not override them
 - After initial review, stay idle for team lead fix requests
 
 ---
 
 ## Step 5: Aggregate, Validate, and Filter
 
-Collect all reviewer outputs. **You (the team lead) are the aggregator — do NOT spawn any
-aggregator agents.**
+Collect all reviewer outputs. **You (team lead) are aggregator — do NOT spawn aggregator agents.**
 
 ### Aggregation steps
 
-1. **Validate:** For each finding, verify it references a line that actually exists in the diff
-   (not pre-existing code). Drop findings that cite lines not in the diff.
-2. **Deduplicate:** If the same `file:line` appears in multiple reviewer outputs, keep the
-   highest-priority finding (prefer `[BLOCKER]` > `[SUGGESTION]` > `[NITPICK]`).
-3. **Merge:** Concatenate all validated findings into one report, grouped by file.
-4. **Preserve verbatim:** Keep all code blocks, severity labels, confidence scores, and reviewer
-   attributions exactly as written. Do NOT summarize, paraphrase, or strip code blocks.
+1. **Validate:** For each finding, verify it references line that exists in diff (not pre-existing code). Drop findings citing lines not in diff.
+2. **Deduplicate:** Same `file:line` in multiple outputs → keep highest-priority finding (prefer `[BLOCKER]` > `[SUGGESTION]` > `[NITPICK]`).
+3. **Merge:** Concatenate validated findings into one report, grouped by file.
+4. **Preserve verbatim:** Keep all code blocks, severity labels, confidence scores, reviewer attributions exactly as written. Do NOT summarize, paraphrase, or strip code blocks.
 
-This applies even when all findings are nitpicks — still show the full report with code blocks.
-Never reduce a finding to a one-liner like "[NITPICK] description (confidence N)".
-The code blocks ARE the report.
+Applies even when all findings are nitpicks — show full report with code blocks.
+Never reduce finding to one-liner like "[NITPICK] description (confidence N)".
+Code blocks ARE the report.
 
-**Present the merged report directly to the user.**
+**Present merged report directly to user.**
 
 ---
 
 ## Step 6: Auto-Fix
 
-If only nitpicks, skip this step entirely. Otherwise, use the **AskUserQuestion** tool:
+Only nitpicks → skip entirely. Otherwise use **AskUserQuestion** tool:
 
 ```
 question: "Would you like me to auto-fix the findings?"
@@ -191,10 +176,9 @@ options:
 
 ### Dispatch Fixes to Reviewers
 
-Instead of applying fixes yourself, dispatch them to the **original reviewers** who flagged the
-issues. They already have full file context from their review, making their fixes more accurate.
+Dispatch to **original reviewers** who flagged issues — they have full file context, fixes more accurate.
 
-For each reviewer that has findings to fix, use **SendMessage** to the reviewer:
+For each reviewer with findings to fix, use **SendMessage**:
 
 ```
 to: "reviewer-{ID}"
@@ -208,15 +192,13 @@ message: |
 summary: "Apply N fixes to reviewed files"
 ```
 
-Wait for all dispatched reviewers to respond with their changes, then tell the user to run
-`checkStyleDirty` on affected modules.
+Wait for all dispatched reviewers to respond, then tell user to run `checkStyleDirty` on affected modules.
 
 ---
 
 ## Step 7: Shutdown Team
 
-After the review is complete (either after presenting the report if user skipped auto-fix, or
-after auto-fix is applied):
+After review complete (after report if user skipped auto-fix, or after auto-fix applied):
 
 1. Send shutdown requests to all active team members:
    ```
@@ -224,4 +206,4 @@ after auto-fix is applied):
    message: {"type": "shutdown_request", "reason": "Review complete"}
    ```
 
-2. After all members have shut down, use **TeamDelete** to clean up.
+2. After all members shut down, use **TeamDelete** to clean up.

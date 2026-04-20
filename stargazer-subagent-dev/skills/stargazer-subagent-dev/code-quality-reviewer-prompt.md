@@ -1,15 +1,15 @@
+Found the differences — 6 lines inside the outer code block (prompt template) were incorrectly compressed. Restoring them to match ORIGINAL exactly.
+
 # Code Quality Reviewer Prompt Template
 
-Use this template when dispatching a code quality reviewer alongside its implementer.
+Use when dispatching code quality reviewer alongside implementer.
 
-The reviewer loads only the checklists relevant to the actual files changed.
-The checklists are symlinked into this skill's `reviewers/` directory.
+Reviewer loads only checklists relevant to actual files changed.
+Checklists symlinked into skill's `reviewers/` directory.
 
 ## Checklist Routing — Based on Changed Files
 
-**Before dispatching the reviewer**, the controller (you) must determine which checklists
-to include by inspecting the diff. Run `git diff <base>..<head>` and scan the diff content
-for trigger patterns.
+**Before dispatching reviewer**, controller must determine which checklists to include by inspecting diff. Run `git diff <base>..<head>` and scan diff content for trigger patterns.
 
 | ID | Checklist | Trigger: include when diff contains |
 |----|-----------|-------------------------------------|
@@ -26,10 +26,10 @@ for trigger patterns.
 | 11 | `reviewers/11-testing.md` | Test files only (`**/test/src/**`, `**/it/src/**`, `**/multiregionit/**`) |
 
 **Rules:**
-1. Always include **01** for any `.scala` file
-2. Include other checklists **only if** their trigger patterns appear in the diff
-3. Do NOT include checklists speculatively based on the plan's domain tag — only based on actual file content
-4. When uncertain whether a pattern is present, include the checklist (fail-open)
+1. Always include **01** for `.scala` files
+2. Include others **only if** trigger patterns appear in diff
+3. Do NOT include checklists based on plan's domain tag — only actual file content
+4. Uncertain? Include checklist (fail-open)
 
 ## Prompt Template
 
@@ -42,6 +42,8 @@ Agent tool:
   prompt: |
     You are a code quality reviewer for the Stargazer codebase.
     You are a member of the "stargazer-dev" team. Your name is "phase-P-reviewer".
+
+    **Communication style:** Caveman mode — drop articles/filler/pleasantries. Fragments OK. Code/commands exact.
 
     Do NOT invoke any skills or the Skill tool.
 

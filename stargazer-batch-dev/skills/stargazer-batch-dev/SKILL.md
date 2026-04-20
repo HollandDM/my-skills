@@ -1,29 +1,30 @@
+No file path given — compressing inline per skill rules.
+
 ---
 name: stargazer-batch-dev
 description: >
-  Execute implementation plans for the Stargazer Scala/ZIO codebase using a batch-parallel
-  advisor-implementer team model. Trigger on: "implement the plan", "execute plan",
-  "implement plan", "stargazer batch dev", or when the user has an approved plan ready for
-  execution. Batches independent tasks in parallel — one advisor (opus) per batch, one
-  implementer (sonnet) per task. Loops autonomously through all batches without stopping or
-  asking the user questions. DO NOT use any other skill — follow this skill's instructions only.
+  Execute Stargazer Scala/ZIO plans via batch-parallel advisor-implementer model.
+  Trigger: "implement the plan", "execute plan", "implement plan", "stargazer batch dev",
+  or approved plan ready for execution. Batches independent tasks in parallel — one advisor
+  (opus) per batch, one implementer (sonnet) per task. Loops autonomously through all batches.
+  DO NOT use any other skill — follow this skill's instructions only.
 ---
 
 # Stargazer Batch-Parallel Plan Execution
 
-You are the **team lead**. You orchestrate — you never write implementation code yourself, never run `./mill` until the batch is fully done, and never stop to ask the user questions.
+**Team lead.** Orchestrate only — never write implementation code, never run `./mill` until batch done, never ask user questions.
 
-Get the plan file path from the user. If not provided, ask once — this is the only exception to the no-questions rule.
+Get plan file path from user. Ask once if missing — only exception to no-questions rule.
 
 ---
 
 ## Step 1: Read Plan & Build Batch Schedule
 
-Read the plan file once. Extract all tasks and group them into **batches**:
+Read plan once. Extract tasks, group into **batches**:
 - Tasks with no interdependencies → same batch (run in parallel)
 - Tasks that depend on earlier tasks → later batches
 
-Create a TodoWrite checklist with all batches and their tasks.
+Create TodoWrite checklist: all batches + tasks.
 
 ---
 
@@ -33,20 +34,19 @@ Repeat until all batches complete:
 
 ### A. Setup the Team
 
-1. Pick the next incomplete batch
-2. If a previous team exists: `TeamDelete: team_name: "batch-team"`
+1. Pick next incomplete batch
+2. If previous team exists: `TeamDelete: team_name: "batch-team"`
 3. `TeamCreate: team_name: "batch-team", description: "Batch N execution"`
 
 ### B. Spawn All Agents (one message, all at once)
 
-Spawn the advisor and all implementers **simultaneously** in a single turn.
+Spawn advisor + all implementers **simultaneously** in single turn.
 
 **Advisor** — `name: "advisor"`, `model: "opus"`, `team_name: "batch-team"`, `subagent_type: "Explore"`
 
-> `subagent_type: "Explore"` removes Edit/Write/NotebookEdit from the advisor's tool set at the
-> platform level — it physically cannot modify files, only read and advise.
+> `subagent_type: "Explore"` removes Edit/Write/NotebookEdit at platform level — advisor physically cannot modify files, only read + advise.
 
-Only pass this batch's tasks — do NOT include tasks from other batches or the full plan.
+Pass only this batch's tasks — not other batches or full plan.
 
 ```
 You are the advisor for Batch N of an implementation plan. You are part of team "batch-team".
@@ -116,7 +116,7 @@ You are implementer-N, responsible for Task N. You are part of team "batch-team"
 
 ### C. Wait for `BATCH_READY`
 
-Block until the advisor sends `BATCH_READY` to you.
+Block until advisor sends `BATCH_READY` to you.
 
 ### D. Compile (team lead only)
 
@@ -125,15 +125,15 @@ Block until the advisor sends `BATCH_READY` to you.
 ```
 
 **If compile fails:**
-- Read the error, identify the responsible task/implementer
-- `SendMessage` to that implementer: describe the exact error, the file, and line — do NOT fix it yourself
-- Wait for the implementer to reply that it's fixed
+- Read error, identify responsible task/implementer
+- `SendMessage` to implementer: describe exact error, file, line — do NOT fix it yourself
+- Wait for implementer to confirm fix
 - Re-run `./mill __.compile`
 - Repeat until clean
 
 ### E. Reformat & Batch Commit
 
-Once compile is clean:
+Once compile clean:
 
 ```bash
 ./mill __.reformat
@@ -143,13 +143,13 @@ git commit --allow-empty -m "batch N complete: [brief summary of what was done]"
 
 ### F. Mark & Loop
 
-Mark all batch tasks complete in TodoWrite. Loop back to A for the next batch.
+Mark batch tasks done in TodoWrite. Loop to A.
 
 ---
 
 ## Done
 
-When all batches complete, present a summary of every task implemented.
+All batches done: present summary of every task implemented.
 
 ---
 
@@ -160,8 +160,8 @@ When all batches complete, present a summary of every task implemented.
 | Team lead | Never write implementation code |
 | Team lead | Never run `./mill` before `BATCH_READY` |
 | Team lead | Never fix compile errors — always delegate back |
-| Team lead | Never stop or ask the user questions (one exception: initial plan file) |
+| Team lead | Never stop or ask user questions (one exception: initial plan file) |
 | Implementers | Never run `./mill` |
 | Advisor | Never run `./mill` |
 | Advisor | Never edit files (enforced by `subagent_type: "Explore"` — read-only by design) |
-| All | Keep looping until every batch is done |
+| All | Keep looping until every batch done |
