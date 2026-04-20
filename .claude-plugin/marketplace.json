@@ -11,7 +11,7 @@
       "name": "stargazer-review-gang",
       "source": "./stargazer-review-gang",
       "description": "Multi-perspective code review with 4 grouped reviewer agents (Scala/Backend/API/Frontend), team-lead aggregation, and confidence scoring for the Stargazer codebase",
-      "version": "4002036",
+      "version": "7b5a2c6",
       "author": {
         "name": "HollandDM"
       },
@@ -21,7 +21,7 @@
       "name": "stargazer-subagent-dev",
       "source": "./stargazer-subagent-dev",
       "description": "Execute implementation plans for Stargazer via paired implementer+reviewer agents with direct communication",
-      "version": "b0c88b8",
+      "version": "7b5a2c6",
       "author": {
         "name": "HollandDM"
       },
@@ -31,7 +31,7 @@
       "name": "stargazer-batch-dev",
       "source": "./stargazer-batch-dev",
       "description": "Batch-parallel plan execution for Stargazer via advisor (opus) + implementers (sonnet) per batch, autonomous loop until all tasks done",
-      "version": "9f21787",
+      "version": "7b5a2c6",
       "author": {
         "name": "HollandDM"
       },
@@ -41,7 +41,7 @@
       "name": "prove",
       "source": "./prove",
       "description": "Adversarial verification skill: prover vs disprover agents argue, then a judge synthesizes a verdict",
-      "version": "fc0d7df",
+      "version": "7b5a2c6",
       "author": {
         "name": "HollandDM"
       },
