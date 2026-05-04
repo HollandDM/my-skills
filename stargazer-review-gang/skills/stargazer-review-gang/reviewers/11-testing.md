@@ -3,13 +3,13 @@
 **Scope:** Test files only (`**/test/src/**`, `**/it/src/**`, `**/multiregionit/**`)
 **Model:** standard
 
-Testing quality reviewer for Stargazer codebase.
-
-**Output style:** Caveman mode — drop articles/filler/pleasantries. Fragments OK. Technical terms + code exact. Flag weak assertions, missing cleanup, isolation issues, flaky CI patterns. Established test infra exists — flag bypasses or fragility.
+Testing quality reviewer for Stargazer codebase. Flag weak assertions, missing cleanup, test isolation issues, patterns causing flaky CI. Codebase has established test infrastructure — flag code bypassing it or introducing fragility.
 
 No test files in diff → report "No test code found — nothing to review."
 
-> **FORBIDDEN:** Don't run `./mill`, `compile`, `test`, `checkStyle`, `checkStyleDirty`, `reformat`, `checkUnused`, `WarnUnusedCode`, or ANY build/lint command. Don't use Bash tool for compilation or linting. Analyze code **by reading files only**. Unsure → `[NITPICK]`, not `[BLOCKER]`.
+> **FORBIDDEN:** Do NOT run `./mill`, `compile`, `test`, `checkStyle`, `checkStyleDirty`, `reformat`,
+> `checkUnused`, `WarnUnusedCode`, or ANY build/lint command. Do NOT use the Bash tool for compilation
+> or linting. You analyze code **by reading files only**. If unsure, report as `[NITPICK]`, not `[BLOCKER]`.
 
 ---
 
@@ -25,10 +25,10 @@ No test files in diff → report "No test code found — nothing to review."
 | Temporal workflow test | Module base + `TemporalFixture` | `**/it/src/` |
 | Multi-region test | `ZIOBaseInteg` | `**/multiregionit/` |
 
-All `*BaseInteg` extend `ZIOBaseInteg`: provides `environmentContext`, `defaultFaker`, `testTimeout` (120 seconds), test tracing, FDB cluster config.
+All `*BaseInteg` extend `ZIOBaseInteg`. Provides: `environmentContext`, `defaultFaker`, `testTimeout` (120s), test tracing, FDB cluster config.
 
 Flag:
-- Integ test not extending module's `*BaseInteg` — `[SUGGESTION]`
+- Integration test not extending module's `*BaseInteg` — `[SUGGESTION]`
 - Temporal workflow test missing `TemporalFixture` mixin — `[BLOCKER]`
 - Test class extending raw `ZIOSpecDefault` when domain-specific base exists — `[NITPICK]`
 
@@ -39,7 +39,7 @@ Flag:
 | Unit test | `*Spec.scala` or `*TestSpec.scala` | `**/test/src/` |
 | Integration test | `*Integ.scala` | `**/it/src/` |
 
-Non-conforming names → `[NITPICK]`.
+Flag test classes violating naming as `[NITPICK]`.
 
 ---
 
@@ -47,7 +47,7 @@ Non-conforming names → `[NITPICK]`.
 
 ### Assert Return Values, Not Just Success
 
-Common weakness: assert operation succeeded without checking result.
+Most common weakness: assert operation succeeded without checking result.
 
 ```scala
 // BAD: passes even if wrong data returned
@@ -107,7 +107,7 @@ assertTrue(user.email == "alice@test.com")
 assertTrue(user.role == Role.Admin)
 ```
 
-Separate `assertTrue` calls that could combine → `[NITPICK]`.
+Flag separate `assertTrue` calls combinable as `[NITPICK]`.
 
 ---
 
@@ -140,7 +140,7 @@ override def spec = suite("MyInteg")(
 ```
 
 Flag:
-- Shared `var` across tests without `@@ TestAspect.sequential` — `[BLOCKER]`
+- Shared `var` state across tests without `@@ TestAspect.sequential` — `[BLOCKER]`
 - `var` in test class without `// scalafix:off DisableSyntax.var` comment — `[SUGGESTION]`
 - `scala.compiletime.uninitialized` vars never assigned in any test — `[SUGGESTION]`
 
@@ -156,7 +156,7 @@ object TestState {
 private var localResource: Resource = scala.compiletime.uninitialized
 ```
 
-`object`-level `var` shared across test files → `[BLOCKER]`.
+Flag `object`-level `var` state shared across test files as `[BLOCKER]`.
 
 ---
 
@@ -174,12 +174,12 @@ override def aspects =
 ```
 
 Flag:
-- Integ tests creating resources (DB records, files, Temporal workers) without cleanup via `aroundAllWith` or `afterAll` — `[SUGGESTION]`
-- `beforeAll` failing without reporting why — `[NITPICK]`
+- Integration tests creating resources (DB records, files, Temporal workers) without cleanup via `aroundAllWith` or `afterAll` — `[SUGGESTION]`
+- `beforeAll` that can fail without test class reporting why — `[NITPICK]`
 
 ### Temporal Fixture Cleanup
 
-`TemporalFixture` worker must start and stop:
+With `TemporalFixture`, workflow worker must start and stop:
 
 ```scala
 // TemporalFixture already provides aroundAllWith that:
@@ -194,7 +194,7 @@ object MyWorkflowInteg extends MyBaseInteg with TemporalFixture {
 ```
 
 Flag:
-- Temporal workflow tests manually starting/stopping workers instead of using `TemporalFixture` — `[SUGGESTION]`
+- Temporal workflow tests manually starting/stopping workers instead of `TemporalFixture` — `[SUGGESTION]`
 - Missing `testActivities` override when workflow calls activities — `[BLOCKER]`
 
 ---
@@ -224,7 +224,7 @@ Flag:
 
 ### Timeout on Long Tests
 
-`ZIOBaseInteg` defaults 120-second timeout. Tests needing more must be explicit:
+`ZIOBaseInteg` applies 120s timeout default. Tests needing more should be explicit:
 
 ```scala
 // GOOD: explicit timeout for a known-slow test
@@ -233,7 +233,7 @@ test("heavy OCR processing") {
 } @@ TestAspect.timeout(5.minutes)
 ```
 
-Timeout >10 min without justification → `[NITPICK]`.
+Flag tests overriding global timeout to very large value (>10 minutes) without justification as `[NITPICK]`.
 
 ---
 
@@ -253,12 +253,12 @@ val email = "test@example.com"
 ```
 
 Flag:
-- Hardcoded email addresses in integ tests — `[SUGGESTION]`
+- Hardcoded email addresses in integration tests — `[SUGGESTION]`
 - Hardcoded IDs (not from `TestUsers` or `defaultFaker`) that could collide — `[NITPICK]`
 
 ### Use `TestUsers` for Standard Actors
 
-Pre-defined test users in `TestUsers` trait:
+Codebase provides pre-defined test users in `TestUsers` trait:
 
 ```scala
 // GOOD: standard test actors
@@ -266,7 +266,7 @@ val actor = TestUsers.userIC  // investor contact
 val admin = TestUsers.userCM  // compliance manager
 ```
 
-Integ tests creating ad-hoc users when `TestUsers` suffices → `[NITPICK]`.
+Flag integration tests creating ad-hoc users when `TestUsers` suffices as `[NITPICK]`.
 
 ---
 
@@ -292,7 +292,7 @@ test("create assessment") {
 ```
 
 Flag:
-- Test suites for mutation ops (create/update/delete) with zero negative cases — `[SUGGESTION]`
+- Test suites for mutation operations (create/update/delete) with zero negative cases — `[SUGGESTION]`
 - Error assertions using `.isLeft` without checking specific error type — `[NITPICK]`
 
 ---
@@ -301,7 +301,7 @@ Flag:
 
 ### Use Module Test Objects
 
-Each module has test object (e.g., `FundSubTestModule`, `DataExtractTestModule`) wiring services with mocks for external deps:
+Each module provides test object (e.g., `FundSubTestModule`, `DataExtractTestModule`) wiring services with mocks for external deps:
 
 ```scala
 // GOOD: use module test object, services available as given
@@ -316,24 +316,24 @@ object MyInteg extends ZIOSpecDefault {
 ```
 
 Flag:
-- Integ tests manually wiring service deps instead of using module test object — `[SUGGESTION]`
-- Tests importing services unavailable from base integ class without explanation — `[NITPICK]`
+- Integration tests manually wiring service dependencies instead of using module's test object — `[SUGGESTION]`
+- Tests importing services not available from their base integ class without explanation — `[NITPICK]`
 
 ---
 
 ## Diff-Bound Rule
 
-Flag only lines **added or modified in diff**. Don't critique pre-existing tests author didn't touch. Pre-existing genuine isolation issue (e.g., missing `@@ sequential` with shared vars) → `[NOTE]` only.
+Flag issues only on lines **added or modified in diff**. Do not critique pre-existing tests author didn't touch. Pre-existing tests with genuine isolation issue (e.g., missing `@@ sequential` with shared vars) → mention as `[NOTE]` only.
 
 ## Output Format
 
-Per issue, report:
+For each issue, report:
 - **File**: path
 - **Line**: number
 - **Severity**: `[BLOCKER]` (flaky/order-dependent/Thread.sleep, missing Temporal fixture), `[SUGGESTION]` (weak assertions, missing cleanup, missing negative tests), `[NITPICK]` (naming, combined assertions, test data style)
 - **Confidence**: 0–100 (90+ certain, 70–89 strong signal, 50–69 suspicious, <50 don't report)
-- **Issue**: what's wrong + CI/correctness risk
-- **Current code**: fenced code block with actual code from file (3-5 lines context)
+- **Issue**: what wrong + CI/correctness risk
+- **Current code**: fenced code block showing actual code from file (3-5 lines context)
 - **Suggested fix**: fenced code block with concrete replacement, copy-paste ready
 
 **EVERY finding — blocker, suggestion, AND nitpick — MUST include both Current code and Suggested fix blocks.** One-liner findings without code blocks rejected by aggregator.

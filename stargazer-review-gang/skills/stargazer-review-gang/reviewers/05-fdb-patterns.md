@@ -3,26 +3,25 @@
 **Scope:** Backend only (jvm/)
 **Model:** standard
 
-FDB patterns/performance reviewer for Stargazer.
+FDB patterns + performance reviewer for Stargazer codebase. Codebase use FoundationDB Record Layer with ZIO. Job: ensure FDB code follow established patterns for store providers, operations, IDs, transactions, effect types. Catch perf issues that cause prod incidents.
 
-**Output style:** Caveman mode — drop articles/filler/pleasantries. Fragments OK. Technical terms + code exact. Codebase uses FoundationDB Record Layer + ZIO. Ensure FDB code follows patterns for store providers, operations, IDs, transactions, effect types. Catch performance issues causing production incidents.
-
-FDB hard constraints (dangerous at scale):
-- **5-second transaction time limit** — exceeding = killed
-- **10MB transaction size limit** — exceeded = `FDBStoreTransactionSizeException`
-- **100KB value size limit** — can't exceed (use `FDBChunkSubspace` for larger)
+FDB hard constraints make some patterns dangerous at scale:
+- **5-second transaction time limit** — tx exceeding killed
+- **10MB transaction size limit** — exceeded fail with `FDBStoreTransactionSizeException`
+- **100KB value size limit** — values can't exceed (use `FDBChunkSubspace` for larger)
 
 > **FORBIDDEN:** Do NOT run `./mill`, `compile`, `test`, `checkStyle`, `checkStyleDirty`, `reformat`,
-> `checkUnused`, `WarnUnusedCode`, or ANY build/lint command. Do NOT use the Bash tool for compilation
-> or linting. You analyze code **by reading files only**. If unsure, report as `[NITPICK]`, not `[BLOCKER]`.
+> `checkUnused`, `WarnUnusedCode`, or ANY build/lint command. Do NOT use Bash tool for compilation
+> or linting. Analyze code **by reading files only**. If unsure, report as `[NITPICK]`, not `[BLOCKER]`.
 
-Focus: correctness (patterns, effect types, registrations) + performance (patterns failing/degrading under prod load). No FDB code → report "No FDB code found — nothing to review."
+Focus both correctness (right patterns, effect types, registrations) + performance (patterns that fail/degrade under prod load). No FDB code present → report
+"No FDB code found — nothing to review."
 
 ---
 
 ## 1. Store Provider Structure
 
-Every FDB record type: case class extending `FDBRecordStoreProvider` + companion object extending `FDBStoreProviderCompanion`.
+Every FDB record type follow two-part pattern: case class extending `FDBRecordStoreProvider` + companion object extending `FDBStoreProviderCompanion`.
 
 ```scala
 final case class MyStoreProvider(
@@ -50,18 +49,18 @@ object MyStoreProvider extends FDBStoreProviderCompanion[FDBRecordEnum.MyRecord.
 }
 ```
 
-Index versions sequential from 1. Active + removed indexes share version sequence. Framework validates at startup. Composite primary keys: `Key.Expressions.concatenateFields("field1", "field2")`. Proto file **must** have message named exactly `RecordTypeUnion` — FDB Record Layer looks up at runtime.
+Index versions sequential from 1. Active + removed indexes share same version sequence. Framework validates at startup. Composite primary keys → use `Key.Expressions.concatenateFields("field1", "field2")`. Protobuf file **must** contain message named exactly `RecordTypeUnion` — FDB Record Layer look up this name at runtime.
 
-**Initializer registration:** Every new `FDBRecordStoreProvider` must be added to `Initializer.rebuildAllFdbRecordIndexes` (`Initializer.scala`). Without this, store/index never built — reads return empty, writes silently fail. Especially dangerous with cache-first: workflow writes to uninitialized store (error swallowed by fire-and-forget), polling loop waits for entry that never appears → hangs until timeout.
+**Initializer registration:** Every new `FDBRecordStoreProvider` must be added to `Initializer.rebuildAllFdbRecordIndexes` (in `Initializer.scala`). Without this, FDB store/index never built — reads return empty, writes silently fail. Especially dangerous with cache-first patterns: workflow writes to uninitialized store (error swallowed by fire-and-forget), polling loop wait for entry that never appears, hangs until test/request timeout.
 
 Flag:
-- `[BLOCKER]` New `FDBRecordStoreProvider` not registered in `Initializer.rebuildAllFdbRecordIndexes` — store silently fails at runtime
+- `[BLOCKER]` New `FDBRecordStoreProvider` not registered in `Initializer.rebuildAllFdbRecordIndexes` — store silently fail at runtime
 - `[BLOCKER]` Missing companion object extending `FDBStoreProviderCompanion`
 - `[BLOCKER]` Index version numbers not sequential (1, 2, 3...)
 - `[BLOCKER]` Missing `given` for primary key mapping in companion
 - `[BLOCKER]` Record type not registered in `FDBRecordEnum`
 - `[BLOCKER]` Removed indexes not moved to `removedIndexes` (version gap)
-- `[BLOCKER]` Proto file missing `RecordTypeUnion` or using wrong name
+- `[BLOCKER]` Proto file missing `RecordTypeUnion` or wrong name
 
 ---
 
@@ -83,14 +82,16 @@ final case class MyStoreOperations(store: FDBRecordStore[FDBRecordEnum.MyRecord.
 }
 ```
 
-Multiple FDB stores in one transaction: use `FDBOperations.Multi` variants (Multi2–Multi7) — both opened in same transaction.
+Service need multiple FDB stores in single transaction → use `FDBOperations.Multi` variants (Multi2 through Multi7) to combine — both opened in same tx.
 
 Flag:
-- `[BLOCKER]` Store operations returning `Task` instead of `RecordTask` / `RecordReadTask` — `RecordTask` for writes, `RecordReadTask` for reads
-- `[SUGGESTION]` Read-only operations using `RecordTask` instead of `RecordReadTask`
-- `[SUGGESTION]` Business logic (conditionals, orchestration) in store operations — belongs in service layer
-- `[SUGGESTION]` Direct `FDBRecordDatabase` access outside of store operations
-- `[BLOCKER]` Two stores needing transactional consistency using separate `FDBOperations.Single` — use `FDBOperations.Multi`
+- `[BLOCKER]` Store ops returning `Task` instead of `RecordTask` / `RecordReadTask`
+  — `RecordTask` for writes, `RecordReadTask` for reads
+- `[SUGGESTION]` Read-only ops using `RecordTask` instead of `RecordReadTask`
+- `[SUGGESTION]` Business logic (conditionals, orchestration) in store ops — belong in service layer
+- `[SUGGESTION]` Direct `FDBRecordDatabase` access outside store ops
+- `[BLOCKER]` Two stores need transactional consistency but use separate `FDBOperations.Single`
+  — use `FDBOperations.Multi` to combine in one tx
 
 ---
 
@@ -103,9 +104,9 @@ Flag:
 | `FDBRecordDatabase.transactC(ops)` | Need `FDBRecordContext` | Access to transaction ID, approximate size, etc. |
 | `FDBRecordDatabase.batchTransact(ops, items)` | Bulk writes with auto-batching | Monitors size (80% of 10MB) and time (50% of 5s) |
 
-Use `getProviderCached` with `given FDBKeySpaceEnum` in scope (or `.Production`/`.Test`). Never `getProvider(keySpace)` — creates fresh provider each time.
+Always use `getProviderCached` with `given FDBKeySpaceEnum` in scope (or direct `.Production`/`.Test`). Never use `getProvider(keySpace)` — creates fresh provider each time.
 
-**Read-then-write consistency:** Read used to make write decision must happen inside `transact`, not `read`/`transactRead`. `read` returns stale data — concurrent write between read + transact = write uses outdated value. If read/write in separate methods, pass read value as parameter so caller controls transactional context.
+**Read-then-write consistency:** Value read from FDB used to make write decision (e.g., reading `latestVersionId` to set `parentVersionIdOpt`) → read **must** happen inside `transact`, not `read`/`transactRead`. `read` can return stale data, concurrent write between read + transact could cause write to use outdated value. Read + write in separate methods → pass read value as parameter rather than reading internally — makes data flow explicit, lets caller control transactional context.
 
 ```scala
 // BAD: read can return stale latestVersionId, then transact uses it
@@ -128,9 +129,9 @@ def commitDuplicated(docId: DocId, parentVersionIdOpt: Option[VersionId]): Recor
 ```
 
 Flag:
-- `[BLOCKER]` Value read via `read`/`transactRead` used to make write decision in subsequent `transact` — stale read risk. Must be in same `transact` block
-- `[SUGGESTION]` Method internally reading FDB to get value driving its own write logic — parameterize so caller controls transactional context
-- `[SUGGESTION]` Read-only operations using `transact` instead of `transactRead`
+- `[BLOCKER]` Value read via `read`/`transactRead` used for write decision in subsequent `transact` — stale read risk. Must be in same `transact` block
+- `[SUGGESTION]` Method internally reading FDB to get value that drives own write logic — parameterize so caller controls tx context
+- `[SUGGESTION]` Read-only ops using `transact` instead of `transactRead`
 - `[SUGGESTION]` `getProvider(keySpace)` instead of `getProviderCached` or `.Production`/`.Test`
 
 ---
@@ -159,16 +160,16 @@ Flag:
 - `[BLOCKER]` `ZIO.foreach` / `ZIO.foreachPar` / `ZIO.collectAllPar` inside FDB transactions
 - `[BLOCKER]` `ZIO.logInfo` / `ZIO.logError` inside transactions (use `RecordIO.logInfo`)
 - `[BLOCKER]` Raw ZIO effects mixed with RecordIO without proper lifting
-- `[SUGGESTION]` `RecordIO` used in read-only transaction (should be `RecordReadIO`)
+- `[SUGGESTION]` `RecordIO` used in read-only tx (should be `RecordReadIO`)
 
 ---
 
 ## 5. ID Patterns
 
-All FDB record IDs typed via `RadixId`, registered in `ModelIdRegistry`. FDB tuple keys: `summon[FDBTupleConverter[MyId]].toTuple(myId)`. Parsing: `ModelIdRegistry.parser.parseAs[MyId](idString)`. New ID types: `RadixId` subclass + `given FDBTupleConverter[MyId]`, registered in `ModelIdRegistry`.
+All FDB record IDs typed via `RadixId` + registered in `ModelIdRegistry`. Use `summon[FDBTupleConverter[MyId]].toTuple(myId)` for FDB tuple keys, `ModelIdRegistry.parser.parseAs[MyId](idString)` for parsing. New ID types need `RadixId` subclass registered in `ModelIdRegistry` + `given FDBTupleConverter[MyId]` instance.
 
 Flag:
-- `[BLOCKER]` Untyped string IDs used as FDB keys (use typed `RadixId` subclasses)
+- `[BLOCKER]` Untyped string IDs as FDB keys (use typed `RadixId` subclasses)
 - `[BLOCKER]` Missing `FDBTupleConverter` given instance for new ID types
 - `[BLOCKER]` ID types not registered in `ModelIdRegistry`
 - `[SUGGESTION]` Manual `Tuple.from(id.idString)` instead of `FDBTupleConverter`
@@ -206,7 +207,7 @@ Flag:
 
 ## 7. FDB Chunk Subspace (Large Values)
 
-FDB has ~100KB value size limit. Larger values: use `FDBChunkSubspace` — auto-splits data across multiple keys:
+FDB ~100KB value size limit. Larger values → use `FDBChunkSubspace` — auto-splits data across multiple keys:
 
 ```scala
 val chunkSubspace = FDBChunkSubspace[MyId, MyLargeMessage](
@@ -223,9 +224,9 @@ Flag:
 
 ## 8. Transaction Size & Splitting
 
-FDB transactions: ~10MB size limit. All bulk ops on unbounded input MUST use transaction splitting. Three utilities in `ZIOUtils`:
+FDB tx ~10MB size limit. All bulk ops on unbounded input MUST use tx splitting. Codebase provides three utilities (all in `ZIOUtils`):
 
-- **`splitTransaction`** — auto-splits with error recovery. Default batch: 1000. On failure, recursively halves + retries (catches `FDBStoreTransactionSizeException`, `FDBStoreTransactionTimeoutException`, `FDBStoreTransactionIsTooOldException`).
+- **`splitTransaction`** — auto-splits with error recovery. Default batch: 1000 items. On failure, recursively halves batch + retries (catches `FDBStoreTransactionSizeException`, `FDBStoreTransactionTimeoutException`, `FDBStoreTransactionIsTooOldException`).
 - **`splitTransactionDiscard`** — same but returns `Unit`.
 - **`foreachGrouped`** — fixed-size batching, no error recovery.
 
@@ -236,7 +237,7 @@ ZIOUtils.splitTransaction(items) { batch =>
 }
 ```
 
-`FDBRecordDatabase.batchTransact` monitors transaction health — commits early at 80% of 10MB size, 50% of 5s elapsed, or item count limit.
+`FDBRecordDatabase.batchTransact` monitors tx health during execution — commits early when size reaches 80% of 10MB, elapsed time reaches 50% of 5s, or item count limit hit.
 
 ```scala
 // BAD: entire list in one transaction — fails when items > ~1000
@@ -245,15 +246,15 @@ storeOps.transact { ops => ZIO.foreach(largeList)(item => ops.create(item)) }
 
 Flag:
 - `[BLOCKER]` Bulk create/update/delete without `splitTransaction`, `splitTransactionDiscard`, or `batchTransact`
-- `[BLOCKER]` `ZIO.foreach` / `RecordIO.foreach` inside single transaction on unbounded or large input
-- `[SUGGESTION]` Custom batch sizes > 1000 without justification (default is 1000 for reason)
-- `[SUGGESTION]` Manual `grouped(n)` without error recovery — use `splitTransaction` which auto-halves on failure
+- `[BLOCKER]` `ZIO.foreach` / `RecordIO.foreach` inside single tx on unbounded/large input
+- `[SUGGESTION]` Custom batch sizes > 1000 without justification (default 1000 for reason)
+- `[SUGGESTION]` Manual `grouped(n)` without error recovery — use `splitTransaction` (auto-halves on failure)
 
 ---
 
 ## 9. N+1 Query Patterns
 
-Each `transact`/`read` opens new FDB transaction (network round-trip + setup). Calling in loop = N separate transactions.
+Each `transact`/`read` call open new FDB tx (network round-trip + setup). Calling in loop creates N separate tx instead of one.
 
 ```scala
 // BAD: N separate transactions
@@ -265,18 +266,18 @@ FDBRecordDatabase.transactRead(MyStoreOperations.getProviderCached) { ops =>
 }
 ```
 
-Reads across callers in same request: use `ZQuery` to auto-batch FDB lookups via `ZQueryDataSource.fromFunctionBatchedTask`.
+Reads across different callers in same request → use `ZQuery` to auto-batch FDB lookups via `ZQueryDataSource.fromFunctionBatchedTask`.
 
 Flag:
 - `[BLOCKER]` `transact` / `transactRead` / `read` called inside `ZIO.foreach` / `ZIOUtils.foreachPar` / any loop
-- `[BLOCKER]` Sequential `get()` calls across multiple transactions that could be single `parTraverseN`
-- `[SUGGESTION]` Multiple callers independently reading same store where `ZQuery` could batch them
+- `[BLOCKER]` Sequential `get()` calls across multiple tx that could be single `parTraverseN`
+- `[SUGGESTION]` Multiple callers independently reading same store where `ZQuery` could batch
 
 ---
 
 ## 10. Unbounded Scans
 
-All FDB scans must be bounded. Unbounded scan on millions of records = timeout or OOM.
+All FDB scans must be bounded. Unbounded scan on table with millions of records → timeout or OOM.
 
 | Method | Memory | Bounded? | Use When |
 |--------|--------|----------|----------|
@@ -309,7 +310,7 @@ Flag:
 
 ## 11. Streaming vs In-Memory Methods
 
-FDB provides streaming (`RecordStream[A]` = `ZStream`) and in-memory (`List[A]`) variants of most read ops.
+FDB provides streaming (`RecordStream[A]` = `ZStream`) + in-memory (`List[A]`) variants of most read ops.
 
 | Streaming (safe for large data) | In-Memory (small bounded data only) |
 |--------------------------------|-------------------------------------|
@@ -318,7 +319,7 @@ FDB provides streaming (`RecordStream[A]` = `ZStream`) and in-memory (`List[A]`)
 | `store.query(fdbQuery)` -> `RecordStream[M]` | `store.queryL(query)` -> `List[M]` |
 | — | `store.scanAllL()` -> `List[M]` (**avoid entirely**) |
 
-Datasets too large for 5s transaction: use `large*` family — auto-handles continuation tokens across multiple transactions:
+Datasets too large for single 5-second tx → use `large*` family — auto-handles continuation tokens across multiple tx:
 
 | Method | Returns | Use When |
 |--------|---------|----------|
@@ -326,24 +327,24 @@ Datasets too large for 5s transaction: use `large*` family — auto-handles cont
 | `largeScanStream` / `largeScanIndexStream` | `ZStream` | Lazy streaming, bounded memory |
 | `largeQuery` / `largeQueryStream` | `List[M]` / `ZStream[M]` | Query with continuation |
 
-All `large*Stream` use `ZStream.unfoldChunkZIO` — each chunk = separate read transaction, no single transaction exceeds 5s.
+All `large*Stream` methods use `ZStream.unfoldChunkZIO` — each chunk separate read tx, no single tx exceeds 5-second limit.
 
-**`.runCollect` safety:** Safe when stream from `large*Stream`, bounded by `TupleRange`/filter/`.take(n)`, or known small (< 10K). Dangerous on `scan(mapping, TupleRange.ALL)` without bounds or `query` without `.setLimit()`.
+**`.runCollect` safety:** Safe when stream comes from `large*Stream` methods, bounded by `TupleRange`/filter/`.take(n)`, or results known small (< 10K). Dangerous on `scan(mapping, TupleRange.ALL)` without bounds or `query` without `.setLimit()`.
 
-**Continuation token pagination:** Use `scanWithContinue` for API endpoints with page tokens. Returns `(List[M], Option[Array[Byte]])` — `None` = no more results. `large*` methods handle continuation internally — prefer unless building paginated APIs.
+**Continuation token pagination:** Use `scanWithContinue` for API endpoints with page tokens. Returns `(List[M], Option[Array[Byte]])` — `None` continuation means no more results. `large*` methods handle continuation internally — prefer them unless building paginated APIs.
 
 Flag:
-- `[BLOCKER]` `scanL` / `queryL` / `scanAllL` on potentially large or unbounded data — use streaming variants
+- `[BLOCKER]` `scanL` / `queryL` / `scanAllL` on potentially large/unbounded data — use streaming variants
 - `[BLOCKER]` `scan` / `query` (streaming) with `.runCollect` on unbounded streams without `.take(n)` or filter
-- `[SUGGESTION]` Missing `large*Stream` methods for cross-transaction large dataset processing
-- `[SUGGESTION]` `scan(mapping, TupleRange.ALL)` in single transaction for large tables — use `largeScanStream`
+- `[SUGGESTION]` Missing `large*Stream` methods for cross-tx large dataset processing
+- `[SUGGESTION]` `scan(mapping, TupleRange.ALL)` in single tx for large tables — use `largeScanStream`
 - `[NITPICK]` In-memory `*L` methods on growing tables where data size will increase over time
 
 ---
 
 ## 12. Timeout Risks (5-Second Transaction Limit)
 
-FDB kills transactions exceeding 5s. Unpredictable latency inside transaction = timeout risk.
+FDB kills tx exceeding 5 seconds. Any work with unpredictable latency inside tx = timeout risk.
 
 ```scala
 // BAD: external API call inside FDB transaction
@@ -363,7 +364,7 @@ for {
 } yield ()
 ```
 
-FDB has no nested transactions. `transact` inside `transact` = deadlock or separate transaction (lost atomicity). Use `FDBOperations.Multi` to combine stores.
+FDB no support nested tx. `transact` inside another `transact` either deadlocks or creates separate tx (loses atomicity). Use `FDBOperations.Multi` to combine stores.
 
 Flag:
 - `[BLOCKER]` External API/HTTP/gRPC calls inside FDB transactions
@@ -376,28 +377,28 @@ Flag:
 
 ## 13. Parallelism Inside Transactions
 
-Use `RecordIO.parTraverseN` / `RecordReadIO.parTraverseN` with explicit bound. Standard: **8** (`ZIOUtils.defaultParallelism`), 4 for lighter workloads.
+Always use `RecordIO.parTraverseN` / `RecordReadIO.parTraverseN` with explicit bound. Standard: **8** (`ZIOUtils.defaultParallelism`), or 4 for lighter workloads.
 
 | Workload | Recommended | Why |
 |----------|-------------|-----|
 | FDB reads within transaction | 8 | Balanced throughput vs FDB pressure |
-| FDB writes within transaction | 4-8 | Writes heavier, more contention |
+| FDB writes within transaction | 4-8 | Writes are heavier, more contention |
 | Across transactions (batch processing) | 4-8 | Each transaction uses FDB resources |
-| FDB with rate-limited downstream | Match downstream | Don't overwhelm bottleneck |
+| FDB with rate-limited downstream | Match downstream | Don't overwhelm the bottleneck |
 
 Flag:
 - `[BLOCKER]` `ZIO.foreachPar` / `ZIO.collectAllPar` inside FDB transactions (unbounded parallelism)
-- `[SUGGESTION]` Missing parallelism bound on FDB operations
-- `[NITPICK]` Parallelism > 16 for FDB operations without documented justification
+- `[SUGGESTION]` Missing parallelism bound on FDB ops
+- `[NITPICK]` Parallelism > 16 for FDB ops without documented justification
 
 ---
 
 ## 14. Transaction Conflict & Retry
 
-FDB uses optimistic concurrency — overlapping read-write ranges cause `FDBStoreTransactionConflictException`. Framework auto-retries conflicts. High-contention keys (counters, global state) cause retry storms — update hot keys in small, separate transactions.
+FDB use optimistic concurrency — overlapping read-write ranges cause `FDBStoreTransactionConflictException`. Framework auto-retries. High-contention keys (counters, global state) cause retry storms — minimize contention scope by updating hot keys in small, separate tx.
 
 Flag:
-- `[SUGGESTION]` Large transaction bodies touching known hot keys (counters, global config)
+- `[SUGGESTION]` Large tx bodies touching known hot keys (counters, global config)
 - `[NITPICK]` Manual retry logic for `FDBStoreTransactionConflictException` (framework handles this)
 
 ---
@@ -412,29 +413,29 @@ Flag:
 | `FDBStoreTransactionConflictException` | Read-write conflict | `FDBRecordDatabase.transact` (auto-retries) |
 
 Flag:
-- `[BLOCKER]` Missing error handling for FDB exceptions in bulk operations (use `splitTransaction`)
+- `[BLOCKER]` Missing error handling for FDB exceptions in bulk ops (use `splitTransaction`)
 - `[SUGGESTION]` Catching `FDBStoreTransactionConflictException` manually (let framework retry)
-- `[SUGGESTION]` Generic `catchAll` swallowing FDB exceptions without proper handling
+- `[SUGGESTION]` Generic `catchAll` swallows FDB exceptions without proper handling
 
 ---
 
 ## Diff-Bound Rule
 
-Flag only lines **added or modified in diff**. Don't critique pre-existing code author didn't touch. Pre-existing code with genuine data integrity or prod failure risk: mention as `[NOTE]` only.
+Only flag issues on lines **added or modified in diff**. No critique pre-existing code author didn't touch. Pre-existing code with genuine data integrity / prod failure risk → mention as `[NOTE]` only.
 
 ## Output Format
 
-Each issue:
+For each issue found, report:
 - **File**: path
 - **Line**: number (if identifiable)
-- **Severity**: `[BLOCKER]` (wrong effect type, missing registration, data integrity risk, fails at scale), `[SUGGESTION]` (wrong transaction type, pattern deviation, suboptimal performance), `[NITPICK]` (style, minor convention)
+- **Severity**: `[BLOCKER]` (wrong effect type, missing registration, data integrity risk, will fail at scale), `[SUGGESTION]` (wrong tx type, pattern deviation, suboptimal perf), `[NITPICK]` (style, minor convention)
 - **Confidence**: 0–100 (90+ certain, 70–89 strong signal, 50–69 suspicious, <50 don't report)
-- **Issue**: what FDB pattern or performance rule violated and why dangerous
-- **Current code**: fenced code block showing actual code from file (3-5 lines of context)
+- **Issue**: what FDB pattern / perf rule violated, why dangerous
+- **Current code**: fenced code block with actual code from file (3-5 lines context)
 - **Suggested fix**: fenced code block with concrete replacement, copy-paste ready
 
-**EVERY finding — blocker, suggestion, AND nitpick — MUST include both Current code and Suggested fix blocks.** One-liner findings without code blocks will be rejected by aggregator.
+**EVERY finding — blocker, suggestion, AND nitpick — MUST include both Current code and Suggested fix blocks.** One-liner findings without code blocks rejected by aggregator.
 
-Focus: correctness (patterns, effect types, registrations) + performance (N+1 queries, unbounded scans, missing splits, timeout risks, external calls inside transactions).
+Focus both correctness (right patterns, effect types, registrations) + performance (N+1 queries, unbounded scans, missing splits, timeout risks, external calls inside tx).
 
-No issues → report "FDB patterns and performance look clean — standard conventions followed."
+No issues found → report "FDB patterns and performance look clean — standard conventions followed."

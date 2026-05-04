@@ -3,13 +3,11 @@
 **Scope:** Backend (jvm/) and Frontend (js/)
 **Model:** standard
 
-Review Tapir endpoint patterns for server (jvm/) and client (js/).
-
-**Output style:** Caveman mode — drop articles/filler/pleasantries. Fragments OK. Technical terms + code exact. Apply Part A → jvm/, Part B → js/. No Tapir code? Report "No Tapir endpoint code found — nothing to review."
+Review Tapir endpoint patterns for server (jvm/) and client (js/). Apply Part A to jvm files, Part B to js files. No Tapir code → report "No Tapir endpoint code found — nothing to review."
 
 > **FORBIDDEN:** Do NOT run `./mill`, `compile`, `test`, `checkStyle`, `checkStyleDirty`, `reformat`,
-> `checkUnused`, `WarnUnusedCode`, or ANY build/lint command. Do NOT use the Bash tool for compilation
-> or linting. Analyze code **by reading files only**. If unsure, report as `[NITPICK]`, not `[BLOCKER]`.
+> `checkUnused`, `WarnUnusedCode`, or ANY build/lint command. Do NOT use Bash for compile/lint.
+> Analyze **by reading files only**. Unsure → `[NITPICK]`, not `[BLOCKER]`.
 
 ---
 
@@ -17,23 +15,24 @@ Review Tapir endpoint patterns for server (jvm/) and client (js/).
 
 ### A1. Endpoint & Server Base Classes
 
-Endpoints extend `AuthenticatedEndpoints` (or `PublicEndpoints` with justification). Servers extend `AuthenticatedValidationEndpointServer`.
+Endpoint def must extend `AuthenticatedEndpoints` (or `PublicEndpoints` w/ justification).
+Server must extend `AuthenticatedValidationEndpointServer`.
 
 Flag:
 - Raw Tapir `endpoint` bypassing `authEndpoint` — missing auth
-- Direct HTTP handling (Armeria handlers, raw servlet, manual request parsing) — use Tapir endpoints
+- Direct HTTP handling (Armeria, raw servlet, manual parsing) instead of Tapir endpoints
 - Server not extending `AuthenticatedValidationEndpointServer`
 - Missing `using val authorizationService: AuthorizationService`
-- `PublicEndpoints` without comment explaining why auth isn't needed
+- `PublicEndpoints` w/o comment explaining why no auth
 
 ### A2. Authorization Validators
 
-User-scoped resource endpoints need `AuthenticatedEndpointValidator`. Runs *before* service logic via `validateRoute*`.
+Endpoints touching user-scoped resources need `AuthenticatedEndpointValidator`. Validator runs *before* service logic via `validateRoute*` handlers.
 
 Flag:
 - Mutation endpoints (create/update/delete) using `authRoute*` instead of `validateRoute*`
-- `AuthenticatedEndpointValidator.empty` on sensitive operations
-- Missing environment validation on multi-tenant endpoints
+- `AuthenticatedEndpointValidator.empty` on sensitive ops
+- Missing env validation on multi-tenant endpoints
 
 ### A3. Route Handler Selection
 
@@ -46,26 +45,26 @@ Flag:
 
 Flag:
 - `authRouteForwardError` on endpoints calling internal services — may leak SQL/stack traces
-- `authRoute` (without CatchError) when errors could expose internals
+- `authRoute` (no CatchError) when errors could expose internals
 
 ### A4. Server Registration Completeness
 
-Server files (e.g. `GondorServer.scala`, `ItoolsServer.scala`) wire modules into HTTP server. Module with **both** sync + async services → register both.
+App server files (e.g. `GondorServer.scala`, `ItoolsServer.scala`) wire module services into HTTP server. Module registers **both** sync and async → both must be present.
 
 Flag:
-- `module.X.services` registered but `module.X.asyncServices.flatMap(_.tapirServices)` missing — async HTTP endpoints silently unreachable. Scan for modules registering both (e.g. `dataExtractServer.services` + `dataExtractServer.asyncServices.flatMap(_.tapirServices)`); verify ALL modules with async services match.
-- `asyncServices` in `*WorkflowModule` but **not** in `*Server` — reachable via Temporal, not HTTP.
-- Inconsistent registration order — sync + async services should be adjacent.
+- `module.X.services` registered but `module.X.asyncServices.flatMap(_.tapirServices)` missing — async HTTP endpoints silently unreachable. **Scan other modules registering both patterns** (e.g. `dataExtractServer.services` + `dataExtractServer.asyncServices.flatMap(_.tapirServices)`) and verify same pattern across ALL modules w/ async services.
+- `asyncServices` registered in `*WorkflowModule` (Temporal) but **not** in matching `*Server` file (HTTP) — async reachable via Temporal but not HTTP.
+- Inconsistent registration order — sync and async services should sit adjacent for readability.
 
-To check: read full server file, grep `.asyncServices` in module defs. Every module with `asyncServices` → verify server includes both `.services` and `.asyncServices.flatMap(_.tapirServices)`.
+Check: read full server file, grep `.asyncServices` in module defs. Every module defining `asyncServices` → verify server file has both `.services` and `.asyncServices.flatMap(_.tapirServices)`.
 
 ### A5. Identity & Input
 
 Flag:
-- User identity from request body/params instead of `ctx.actor.userId` — allows impersonation
-- Missing size/length limits on text fields and collections (DoS risk)
-- Missing allowlist validation on enum-like string parameters
-- Error messages containing internal paths, SQL, stack traces, or class names
+- User identity from body/params instead of `ctx.actor.userId` — allows impersonation
+- Missing size/length limits on text fields, collections (DoS risk)
+- Missing allowlist validation on enum-like string params
+- Error messages with internal paths, SQL, stack traces, class names
 
 ---
 
@@ -73,18 +72,18 @@ Flag:
 
 ### B1. Client Base Classes
 
-All API clients extend appropriate base:
+API clients must extend appropriate base:
 
 | Base class | When |
 |-----------|------|
 | `PublicEndpointClient` | Public endpoints (no auth) |
 | `AuthenticatedEndpointClient` | Endpoints requiring auth |
-| `AsyncEndpointClient` | Long-running operations with polling |
+| `AsyncEndpointClient` | Long-running ops w/ polling |
 
 Flag:
-- Raw `Fetch.fetch()`, `XMLHttpRequest`, `Ajax`, or custom HTTP calls bypassing base clients — loses auth, rate limiting, telemetry
+- Raw `Fetch.fetch()`, `XMLHttpRequest`, `Ajax`, custom HTTP calls bypassing base clients — loses auth, rate limiting, telemetry
 - Hand-built request/response parsing instead of Tapir-generated client methods (`toClientThrowDecodeAndSecurityFailures`)
-- `PublicEndpointClient` used for endpoints requiring authentication
+- `PublicEndpointClient` used for auth-required endpoints
 - Manual token handling (`localStorage.getItem("token")`) instead of `AuthenticationTokenService`
 
 ### B2. Error Handling
@@ -94,16 +93,16 @@ Client returns `Task[Either[E, O]]`. Both branches must be handled.
 Flag:
 - Missing `Left` branch — errors silently dropped
 - `.toOption.get` or `.foreach` on Either results
-- Swallowing errors with `.ignore` or empty catch
+- Swallowing errors w/ `.ignore` or empty catch
 - Missing `Toast.error()` or equivalent user notification on failures
 
 ### B3. Loading State
 
-Every API call tracks loading state with `Var[Boolean]`.
+Every API call should track loading state w/ `Var[Boolean]`.
 
 Flag:
-- API calls without corresponding loading state
-- Loading flag not cleared in error path (stays loading forever)
+- API calls w/o loading state
+- Loading flag not cleared on error path (stuck loading)
 - Buttons/forms not disabled during loading
 
 ### B4. Task-to-Laminar Bridge
@@ -111,23 +110,23 @@ Flag:
 Flag:
 - `Unsafe.unsafely` or `runtime.unsafe.run` in component code — use `AirStreamUtils.taskToStream` or `ZIOUtils.runAsync`
 - Missing `flatMapSwitch` for cancellation on navigation/re-trigger
-- Rapid-fire API calls without debouncing (e.g., on every keystroke)
+- Rapid-fire API calls w/o debouncing (e.g. every keystroke)
 
 ---
 
 ## Diff-Bound Rule
 
-Flag only lines **added or modified in diff**. Don't critique pre-existing code author didn't touch. Pre-existing genuine issue (auth bypass, data leak, silent errors) → `[NOTE]` only.
+Flag only issues on lines **added or modified in diff**. No critique of pre-existing untouched code. Pre-existing genuine issue (auth bypass, data leak, silent errors) → mention as `[NOTE]` only.
 
 ## Output Format
 
-For each issue found, report:
+Per issue, report:
 - **File**: path
 - **Line**: number
 - **Severity**: `[BLOCKER]` (auth bypass/data leak/silent error), `[SUGGESTION]` (missing validation/authz/error handling/loading), `[NITPICK]` (pattern deviation)
 - **Confidence**: 0–100 (90+ certain, 70–89 strong signal, 50–69 suspicious, <50 don't report)
-- **Issue**: what convention is violated
-- **Current code**: fenced block from file (3-5 lines context)
-- **Suggested fix**: fenced block, concrete replacement, copy-paste ready
+- **Issue**: convention violated
+- **Current code**: fenced block w/ actual code from file (3-5 lines context)
+- **Suggested fix**: fenced block w/ concrete replacement, copy-paste ready
 
-**EVERY finding — blocker, suggestion, AND nitpick — MUST include both Current code and Suggested fix blocks.** One-liner findings without code blocks rejected by aggregator.
+**EVERY finding — blocker, suggestion, nitpick — MUST include both Current code and Suggested fix blocks.** One-liner findings w/o code blocks rejected by aggregator.

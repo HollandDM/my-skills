@@ -3,9 +3,7 @@
 **Scope:** All code (frontend, backend, shared)
 **Model:** haiku
 
-Lightweight architecture + serialization reviewer.
-
-**Output style:** Caveman mode — drop articles/filler/pleasantries. Fragments OK. Technical terms + code exact. Part A checks module boundaries + layer violations. Part B scans codec patterns that cause runtime problems. Both quick sanity checks.
+Lightweight architecture + serialization reviewer. Part A check module boundaries + layer violations. Part B scan codec patterns risk runtime break. Both quick sanity check.
 
 > **FORBIDDEN:** Do NOT run `./mill`, `compile`, `test`, `checkStyle`, `checkStyleDirty`, `reformat`,
 > `checkUnused`, `WarnUnusedCode`, or ANY build/lint command. Do NOT use the Bash tool for compilation
@@ -17,7 +15,7 @@ Lightweight architecture + serialization reviewer.
 
 ### Section 1: Module Dependency Direction
 
-Strict dependency hierarchy:
+Codebase strict dependency hierarchy:
 
 ```
 apps/, gondor/, itools/     (top)
@@ -28,8 +26,8 @@ apps/, gondor/, itools/     (top)
 ```
 
 **Check imports for violations:**
-- `platform/*` importing from `modules/*` or `apps/*`
-- `modules/*` importing from `apps/*`, `gondor/*`, `itools/*`
+- `platform/*` code importing from `modules/*` or `apps/*`
+- `modules/*` code importing from `apps/*`, `gondor/*`, `itools/*`
 - Cross-module imports not declared in `moduleDeps` (check `package.mill`)
 
 ### Section 2: Layer Leaks
@@ -37,9 +35,9 @@ apps/, gondor/, itools/     (top)
 Three layers per module: **Endpoint → Service → Store**.
 
 Flag only clear layer skips:
-- Raw FDB/SQL in endpoint files (should go through service → store)
+- Raw FDB/SQL access in endpoint files (should go through service → store)
 - Business logic (conditionals, orchestration) in endpoint definitions
-- Store ops called directly from endpoints, bypassing service layer
+- Store operations called directly from endpoints, bypassing service layer
 
 ### Section 3: Code Placement
 
@@ -49,19 +47,20 @@ Flag only clear layer skips:
 | FDB stores, Temporal workflows, server logic | `jvm/src/` |
 | Laminar components, UI code | `js/src/` |
 
-Flag only: FDB/database imports in `shared/`, DOM imports in `jvm/`, or models stuck in `jvm/` that frontend clearly needs.
+Flag only: FDB/database imports in `shared/`, DOM imports in `jvm/`, or models stuck in `jvm/`
+that frontend clearly need.
 
-No violations → report "Architecture looks clean — no boundary violations detected."
+No architecture violations found → report "Architecture looks clean — no boundary violations detected."
 
 ---
 
 ## Part B: Serialization & Codecs
 
-No codec code → report "No serialization code found — nothing to review."
+No codec code present → report "No serialization code found — nothing to review."
 
 ### Section 4: Custom Codec Detection
 
-Primary concern. Manual codec instead of `derives` or standard utilities → flag for visibility — notification, not blocker.
+Primary concern. Manual codec instead of `derives` or standard utilities → flag for visibility — not blocker, notification.
 
 Flag and notify:
 - `new JsonValueCodec[T] { ... }` — manual implementation
@@ -69,16 +68,16 @@ Flag and notify:
 - Manual `Encoder`/`Decoder` instances
 - Any codec doing custom field mapping, filtering, or transformation
 
-Not necessarily wrong, but bypasses standard patterns — deserves second look.
+Not necessarily wrong, but bypass standard patterns. Deserve second look.
 
 ### Section 5: Quick Checks (runtime breakage)
 
-Compiles but breaks at runtime:
+Compile but break at runtime:
 
 - `JsonCodecMaker.make` without `defaultConfig` — wrong defaults (None handling, empty collections)
-- Sealed trait children deriving different variant than parent — breaks deserialization
+- Sealed trait children deriving **different** variant than parent — breaks deserialization
 - Protobuf field number gaps without `reserved` — breaks backward compatibility
-- Protobuf `TypeMapper` silently dropping fields
+- Protobuf `TypeMapper` silently drops fields
 
 Only custom codecs found → frame as notifications, not blockers.
 Nothing found → report "Serialization looks clean — no custom codecs or runtime risks detected."
@@ -87,11 +86,11 @@ Nothing found → report "Serialization looks clean — no custom codecs or runt
 
 ## Diff-Bound Rule
 
-Flag only lines **added or modified in diff**. Don't critique pre-existing code author didn't touch. Pre-existing violation genuinely dangerous → mention as `[NOTE]` only.
+Flag only issues on lines **added or modified in diff**. No critique pre-existing code author didn't touch. Pre-existing violation genuinely dangerous (architectural boundary or runtime breakage risk) → mention as `[NOTE]` only.
 
 ## Output Format
 
-Per issue:
+Each issue, report:
 - **File**: path
 - **Line**: number
 - **Severity**: `[BLOCKER]` (dependency direction violation, runtime breakage), `[SUGGESTION]` (layer leak, custom codec notification), `[NITPICK]` (code placement)
@@ -102,4 +101,4 @@ Per issue:
 
 **EVERY finding — blocker, suggestion, AND nitpick — MUST include both Current code and Suggested fix blocks.** One-liner findings without code blocks rejected by aggregator.
 
-No violations across both parts → report "Architecture and serialization look clean — no issues detected."
+No violations found across both parts → report "Architecture and serialization look clean — no issues detected."
