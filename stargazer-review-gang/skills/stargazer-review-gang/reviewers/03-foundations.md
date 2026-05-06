@@ -102,3 +102,27 @@ Each issue, report:
 **EVERY finding — blocker, suggestion, AND nitpick — MUST include both Current code and Suggested fix blocks.** One-liner findings without code blocks rejected by aggregator.
 
 No violations found across both parts → report "Architecture and serialization look clean — no issues detected."
+
+---
+
+## Part C: API Pattern Selection
+
+When reviewing new endpoints or operations, verify the chosen pattern matches the workload.
+
+### Section 6: Default API vs Async API vs Batch Action
+
+| Pattern | Use When | Do NOT Use When |
+|---------|----------|-----------------|
+| **Normal/Default API** | Operation completes in < few seconds, single resource, no user review needed, idempotent or simple failure acceptable | Operation can exceed HTTP timeout, requires progress visibility, or involves bulk multi-item work |
+| **Async API** | Long-running background task (seconds to minutes), single logical operation, caller only needs final result/status, can be queued by workload weight (`Fast` / `Heavy` / `ExtraHeavy`) | Operation needs per-item user approval/rejection, or is naturally a collection of independent sub-operations |
+| **Batch Action** | Bulk multi-item operation where user may review/accept/reject individual items, needs per-item progress tracking, cancelable by user, or bounded/unbounded cursor-driven processing | Single simple operation without bulk semantics, or internal background task without user-facing progress |
+
+**Red flags — flag as `[SUGGESTION]`:**
+- Default API for operations that poll external services or run LLM inference — risk of gateway timeout; prefer Async API
+- Async API for bulk user-facing imports/updates where user needs per-row review — prefer Batch Action with review UI semantics
+- Batch Action for simple single-record updates — unnecessary Temporal + FDB overhead; prefer Default API
+- Missing `frontendTracking` on user-initiated Batch Actions — user won't see progress
+- Async API handler not registered in `AsyncApiRegistry` — workflow fails with "No handler found"
+- Batch Action without cancel path or without handling workflow termination — orphaned running work
+
+No API pattern issues found → report "API pattern selection looks clean — no mismatches detected."

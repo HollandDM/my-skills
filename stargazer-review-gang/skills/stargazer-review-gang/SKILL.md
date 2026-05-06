@@ -50,8 +50,8 @@ Pass note to orchestrator + all reviewers so they know available tools.
 ## Step 3: Spawn Routing Orchestrator
 
 Spawn **single plain agent** (not team member) using exact prompt template below.
-Use `model: "sonnet"` — orchestrator interpret scope, determine diff refs, read
-all diffs, route files. One-shot job, no persistence needed.
+Orchestrator interpret scope, determine diff refs, read all diffs, route files.
+One-shot job, no persistence needed.
 
 **Pass user's scope verbatim** — no interpret into base/head refs. Orchestrator
 determine correct git diff strategy itself. **Add surrounding context** (branch
@@ -62,7 +62,7 @@ user's words intact as primary scope.
 
 ```
 You are a subagent dispatched to execute a specific routing task.
-First, invoke the `caveman:caveman` skill via the Skill tool to enable caveman output mode.
+First, invoke the `/caveman ultra` skill via the Skill tool to enable caveman output mode.
 After invoking caveman, do NOT invoke any other skills — you are already inside a workflow.
 
 Read your full instructions from: ${SKILL_DIR}/agents/orchestrator.md
@@ -102,33 +102,21 @@ From `workload`:
 - **>4000 +/- with split:** Spawn sub-reviewers (2a, 2b, etc.) with focused scope.
   Prepend: `> FOCUSED REVIEW: You are sub-reviewer {id}. Review ONLY: {focus}`
 
-#### Model Selection — Per-Reviewer Workload
-
-Use each reviewer's **own workload** from orchestrator's `workload` output to pick model.
-No applying one model to all reviewers — reviewer with 50 changes shouldn't get opus
-just because another reviewer has 3000.
-
-| Reviewer's +/- | Model |
-|----------------|-------|
-| ≤100 | `model: "haiku"` |
-| 101–1500 | roster default |
-| >1500 | `model: "opus"` |
-
 ### Reviewer Roster (8 groups, single checklist each)
 
 Each group spawned as **single agent** reading exactly **one merged checklist file**.
 Related concerns merged into single file per group.
 
-| ID | Group | Checklist | Default Model |
-|----|-------|-----------|---------------|
-| 1 | Scala Quality | `${SKILL_DIR}/reviewers/01-scala-quality.md` | sonnet |
-| 2 | ZIO & Observability | `${SKILL_DIR}/reviewers/02-zio-patterns.md` | sonnet |
-| 3 | Architecture | `${SKILL_DIR}/reviewers/03-foundations.md` | haiku |
-| 4 | FDB | `${SKILL_DIR}/reviewers/05-fdb-patterns.md` | sonnet |
-| 5 | Temporal | `${SKILL_DIR}/reviewers/06-temporal.md` | sonnet |
-| 6 | Tapir | `${SKILL_DIR}/reviewers/07-tapir-endpoints.md` | sonnet |
-| 7 | Frontend | `${SKILL_DIR}/reviewers/08-frontend.md` | haiku |
-| 8 | Testing | `${SKILL_DIR}/reviewers/11-testing.md` | sonnet |
+| ID | Group | Checklist |
+|----|-------|-----------|
+| 1 | Scala Quality | `${SKILL_DIR}/reviewers/01-scala-quality.md` |
+| 2 | ZIO & Observability | `${SKILL_DIR}/reviewers/02-zio-patterns.md` |
+| 3 | Architecture | `${SKILL_DIR}/reviewers/03-foundations.md` |
+| 4 | FDB | `${SKILL_DIR}/reviewers/05-fdb-patterns.md` |
+| 5 | Temporal | `${SKILL_DIR}/reviewers/06-temporal.md` |
+| 6 | Tapir | `${SKILL_DIR}/reviewers/07-tapir-endpoints.md` |
+| 7 | Frontend | `${SKILL_DIR}/reviewers/08-frontend.md` |
+| 8 | Testing | `${SKILL_DIR}/reviewers/11-testing.md` |
 
 ### 4c. Spawn Reviewers as Named Team Members
 
@@ -138,7 +126,7 @@ Use `team_name: "review-gang"`. Spawn all in **single message** for parallelism.
 Each reviewer prompt must start with:
 ```
 You are a subagent dispatched to execute a specific task.
-First, invoke the `caveman:caveman` skill via the Skill tool to enable caveman output mode.
+First, invoke the `/caveman ultra` skill via the Skill tool to enable caveman output mode.
 After invoking caveman, do NOT invoke any other skills — you are already inside a workflow.
 ```
 
@@ -153,21 +141,21 @@ Then include:
 
 ---
 
-## Step 5: Spawn Single Opus Validator
+## Step 5: Spawn Validator
 
-> **EXACTLY ONE VALIDATOR. ALWAYS OPUS.** No batched validators. No final merge step.
+> **EXACTLY ONE VALIDATOR.** No batched validators. No final merge step.
 
 After all reviewers complete, spawn **one** validator team member:
 
 - `team_name: "review-gang"`
 - `name: "validator"`
-- `model: "opus"` — **always opus regardless of workload**
+- Use the **strongest reasoning model available in your environment** — always the best available regardless of workload
 
 Validator prompt:
 
 ```
 You are a subagent dispatched to execute a specific task.
-First, invoke the `caveman:caveman` skill via the Skill tool to enable caveman output mode.
+First, invoke the `/caveman ultra` skill via the Skill tool to enable caveman output mode.
 After invoking caveman, do NOT invoke any other skills — you are already inside a workflow.
 
 Read your instructions from: ${SKILL_DIR}/agents/validator.md
