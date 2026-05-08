@@ -66,6 +66,19 @@ Flag:
 - Missing allowlist validation on enum-like string params
 - Error messages with internal paths, SQL, stack traces, class names
 
+### A6. JSON Body Codecs (Jsoniter)
+
+Tapir `jsonBody[T]` requires `JsonValueCodec[T]`. Stargazer use **Jsoniter** infra (`anduin.jsoniter.*`). All endpoint request/response types must use Jsoniter derives — see reviewer 01 §10 for full rules.
+
+Flag:
+- Endpoint type missing `derives JsoniterCodec.WithDefaultsValue` (or appropriate marker) → compile fails or wrong wire format
+- Sealed-trait endpoint type with subtype using different `JsoniterCodec.*` marker than parent → wire format mismatch (missing/duplicated discriminator)
+- `import io.circe.*` / `deriveCodec` / `deriveCodecWithDefaults` on endpoint DTO → wrong library, switch to Jsoniter
+- Endpoint payload typed `String` of JSON → use `RawJson`
+- Custom field naming via inline `JsonValueCodec` → `JsoniterCodec.forProduct1/2/5` or `forProduct1WithAliases`
+- Endpoint type also exposed in OpenAPI docs but missing `Schema[T]` → use `JsoniterCodecWithSchema.forProduct*` (combined codec + schema)
+- `JsoniterUtils.encode` / `decode` (or any pooled `writeToString`/`readFromString`) called from inside an endpoint codec transform fn → reentrant corruption; use `RawJson.fromValue` / `RawJson.fromJson(s).as[T]` instead
+
 ---
 
 ## Part B: Client Patterns (js/)

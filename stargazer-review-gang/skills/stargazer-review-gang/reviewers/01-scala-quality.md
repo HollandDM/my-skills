@@ -343,6 +343,177 @@ Flag:
 
 ---
 
+## 10. JSON Codecs (Jsoniter)
+
+Stargazer use **Jsoniter** (NOT Circe). All JSON infra in `anduin.jsoniter.*` (starlink lib). Codecs derived via `JsoniterCodec.*` markers. Serialization via `JsoniterUtils`. Opaque JSON via `RawJson`.
+
+### 10a. Banned patterns
+
+| Pattern | Rule | Fix |
+|---------|------|-----|
+| `JsonCodecMaker.make` direct call | Bypass derives infra | `derives JsoniterCodec.*` |
+| `makeCodecWithDefaults` / any `make*` direct call | `private` in starlink | `derives JsoniterCodec.*` |
+| `import com.github.plokhotnyuk.jsoniter_scala.core.{readFromString, writeToString, readFromArray, writeToArray, readFromStream, writeToStream}` | Bypass pool/reentrant infra | `anduin.jsoniter.JsoniterUtils` |
+| `new JsonValueCodec[X] { ... }` inline at call site | Reinvent codec infra | `JsoniterCommonCodecs.stringCodec` / `stringCodecValidated` / `biMap` / `constCodec` |
+| Inline `JsonValueCodec` for new collection type at call site | Belongs in shared infra | Add reusable fn to `anduin.jsoniter.JsoniterCommonCodecs` in starlink |
+| `JsoniterUtils.encode` / `decode` (or any pooled `writeToString`/`readFromString`/`writeToArray`/`readFromArray`/`writeToStream`/`readFromStream`) inside `encodeValue` / `decodeValue` / codec transform fn (`biMap`, `stringCodec`, `stringCodecValidated`) | Pooled writer reentrant corruption — truncated/swapped JSON under concurrency, non-deterministic `ArrayIndexOutOfBoundsException` / `JsonReaderException` | Use `RawJson.fromValue(x).noSpaces` (encode), `RawJson.fromJson(s).as[T].fold(throw _, identity)` (decode) — both wrap reentrant variants |
+| `io.circe.*` import (`Codec`, `Encoder`, `Decoder`, `Json`, `deriveCodec`, `deriveCodecWithDefaults`) | Wrong JSON library | Switch to Jsoniter equivalents |
+| `import scalapb.json4s.*` / `JsonFormat` / `Printer` / `Parser` for proto-JSON | Wrong proto-JSON path | `anduin.jsoniter.JsoniterProtoCodecs.given` |
+
+### 10b. Sealed trait / ADT marker consistency
+
+If sealed trait derives `JsoniterCodec.X`, **every** subtype (case class, case object, intermediate sealed trait) must derive **same** marker `X`. Mismatched markers → wire format mismatch (missing or duplicated discriminator).
+
+| Marker | Wire format | Required givens |
+|--------|-------------|-----------------|
+| `WithDefaultsValue` | `{"TypeName": {...fields...}}` wrapper-object | none |
+| `WithDefaultsAndTypeNameValue` | `{"__typename__":"TypeName", ...fields...}` flat (`alwaysEmitDiscriminator=true`) | none |
+| `WithDefaultsAndDiscriminatorValue` | `{"<custom>":"TypeName", ...fields...}` flat | `inline given JsoniterDiscriminator["fieldName"] = JsoniterDiscriminator("fieldName")` in companion |
+| `WithDefaultsAndDiscriminatorAndClassNameMapperValue` | Custom discriminator + simple class names (e.g. `com.x.MyADT.FooCase` → `FooCase`) | Both `JsoniterDiscriminator` AND `JsoniterAdtLeafClassNameMapper` (e.g. `JsoniterAdtLeafClassNameMapper.simpleClassName`) |
+| `WithSnakeCaseMemberNamesAndDefaultsAndDiscriminatorValue` | Snake-case fields + custom discriminator | `JsoniterDiscriminator` |
+
+Flag:
+- Subtype marker differs from parent trait marker
+- `case object Foo extends Bar` where `Bar derives JsoniterCodec.*` but `Foo` missing `derives` → macro skips, runtime wire bug
+- `WithDefaultsAndDiscriminatorValue` / `...DiscriminatorAndClassNameMapper...` without matching `JsoniterDiscriminator` (or class-name-mapper) given in scope
+- Mixed `WithDefaultsValue` + `WithDefaultsAndTypeNameValue` across hierarchy → inconsistent wire format
+
+### 10c. Marker selection for value type
+
+| Type | Required marker |
+|------|-----------------|
+| `final case class` | `WithDefaultsValue` default. `WithDefaultsDropNullValue` if `None` should be omitted from wire. `WithSnakeCaseMemberNamesAndDefaultsValue` for snake_case wire fields. `WithSnakeCaseMemberNamesAndDefaultsDropNullValue` for both |
+| Anduin `StringEnum` (`extends StringEnum`) | `StringEnumValue`; also `StringEnumKey` if used as `Map` key |
+| Anduin `IntEnum` | `IntEnumValue` |
+| Anduin `LongEnum` | `LongEnumValue` |
+| Scala 3 `enum` (no StringEnum/IntEnum/LongEnum) | `ScalaEnumValue` |
+| Enumeratum `EnumEntry` | `EnumeratumEnumEntryValue` (serializes by `entryName`) |
+| Enumeratum `StringEnumEntry` | `EnumeratumStringEnumValue`; `EnumeratumStringEnumKey` if map key |
+| Enumeratum `LongEnumEntry` | `EnumeratumLongEnumValue` |
+| Custom string-encoded value type | Hand-rolled via `JsoniterCommonCodecs.stringCodec(encode, decode)` (always succeeds) or `stringCodecValidated(encode, decode)` (decode can fail) in companion |
+| Custom non-string transform | `JsoniterCommonCodecs.biMap[A, B](encode, decode)` |
+| Constant / discard codec | `JsoniterCommonCodecs.constCodec(value)` |
+
+Flag wrong-marker: e.g. `enum X extends StringEnum derives JsoniterCodec.WithDefaultsValue` (should be `StringEnumValue`).
+
+### 10d. Generic types with type parameters
+
+`derives` cannot express context bounds where field types depend on `T`. Use given in companion:
+
+```scala
+object SwitchConfig {
+  given [T: JsonValueCodec]: JsonValueCodec[SwitchConfig[T]] =
+    JsoniterCodec.WithDefaultsValue.derived[SwitchConfig[T]].codec
+}
+```
+
+Flag any `JsonCodecMaker.make[Foo[T]]` workaround for generic codec.
+
+### 10e. Custom field names — `forProduct*`
+
+Use `JsoniterCodec.forProduct1` / `forProduct2` / `forProduct5` in companion for custom JSON field names or field discarding during decode. `forProduct1WithAliases` for backward-compatible field renames (multiple legacy names map to one current field).
+
+```scala
+given JsonValueCodec[OffsetValue] = JsoniterCodec.forProduct1("data")(OffsetValue.apply)(_.data)
+given JsonValueCodec[ChangeKey[K]] =
+  JsoniterCodec.forProduct2[ChangeKey[K], RawJson, K]("schema", "payload")(
+    (_, payload) => ChangeKey(payload)
+  )(key => (RawJson.Null, key.payload))
+given JsonValueCodec[ActionType] =
+  JsoniterCodec.forProduct1WithAliases("actionId", "actionId$access", "actionId$")(
+    ActionType.apply
+  )(_.actionId)
+```
+
+If type also need `Schema[A]` (OpenAPI docs): use `JsoniterCodecWithSchema.forProduct1/2/5` (combined codec + schema) — see openapi-specs skill.
+
+Flag hand-written `JsonValueCodec` doing custom field name when `forProduct*` would cover it.
+
+### 10f. Map encoding strategy
+
+| Strategy | Wire | Required import | Key requirement |
+|----------|------|-----------------|------------------|
+| Default (global) | `{"k": v, ...}` (standard JSON object) | none | `JsonKeyCodec[K]` |
+| `JsoniterMapCodecs` | `[[k, v], [k, v], ...]` (array of pairs) | `import anduin.jsoniter.JsoniterMapCodecs.given` | `JsonValueCodec[K]` + `JsonValueCodec[V]` |
+| `JsoniterMapEntry` | `[{"key": k, "value": v}, ...]` (array of objects) | `import anduin.jsoniter.JsoniterMapEntry.given` | `JsonValueCodec[K]` + `JsonValueCodec[V]` |
+
+`JsoniterMapCodecs` and `JsoniterMapEntry` take priority over `defaultMapCodec` when both in scope. Flag:
+- Switching encoding mid-codebase for same logical type → wire compatibility break
+- New hand-written `JsonValueCodec[Map[K, V]]` when one of the three strategies fits
+- `Map[K, V]` codec missing required `JsonKeyCodec[K]` for default strategy
+
+### 10g. `RawJson` over `String` for opaque JSON
+
+Use `RawJson` for opaque JSON values, not `String` of JSON. `RawJson` provide:
+- Output: `noSpaces`, `noSpacesSortKeys`, `spaces2`, `spaces2SortKeys`, `spaces4SortKeys`
+- Inspection: `isNull`, `isObject`, `isArray`, `asObject`, `asString`, `asBoolean`, `asNumber`, `asArray`, `field("k")`, `keys`
+- Decode: `get[T]("field")`, `getOpt[T]("field")`, `as[T]` (all return `Either[JsonException, _]`)
+- Transform: `mapObject(f)`, `deepMerge(other)`, `dropNullValues`, `fold(...)`
+- Builder: `RawJson.obj(...)`, `RawJson.arr(...)`, `RawJson.fromFields(...)`, `RawJson.fromSortedFields(...)`, `RawJson.fromValue[T: JsonValueCodec](v)`, `RawJson.fromJson(str)`, `RawJson.fromBytes(bytes)`
+- Constants: `RawJson.Null`, `RawJson.EmptyObject`, `RawJson.EmptyArray`, `RawJson.True`, `RawJson.False`, `RawJson.EmptyString`
+- Proto integration: `given TypeMapper[String, RawJson]` for proto string fields holding JSON
+
+Flag:
+- `String`-typed parameter holding JSON payload → `RawJson`
+- Manual JSON building via string concatenation / `s"{\"x\":$v}"` → `RawJson.obj` / `RawJson.fromFields`
+- Custom JSON parsing of unknown shape via regex/`split` → `RawJson.fromJson(s).field(...)`
+- `io.circe.Json` typed value → `RawJson`
+
+### 10h. Proto JSON
+
+Use `import anduin.jsoniter.JsoniterProtoCodecs.given` for auto-derive of `JsonValueCodec` for `GeneratedMessage` / `GeneratedEnum` / `GeneratedSealedOneof`. Provides `TypeMapper[Struct, RawJson]` and `TypeMapper[Value, RawJson]` for proto `Struct`/`Value` ↔ `RawJson`. For Iso-based proto: `JsoniterProtoIsoCodec.codecFromIso(iso)`.
+
+Flag:
+- Manual proto ↔ JSON conversion via scalapb-circe / `JsonFormat` / `Printer` / `Parser` from `scalapb.json4s` → switch to `JsoniterProtoCodecs`
+- Hand-written builder converting proto fields to JSON object → use `JsoniterProtoCodecs` auto-derive
+
+### 10i. `JsoniterUtils` API surface
+
+Public methods (use these, NOT direct `jsoniter_scala.core.*` imports):
+
+| Method | Purpose |
+|--------|---------|
+| `encode(t)` / `decode[T](s)` | `String` round-trip |
+| `encodeSpaces2(t)` / `encodeSpaces2SortKeys(t)` | Pretty-printed output |
+| `decodeEither[T](s)` | `Either[JsonException, T]` — safe variant |
+| `decodeOption[T](s)` | `Option[T]` — discard error |
+| `encodeToArray(t)` / `decodeFromArray[T](bytes)` | `Array[Byte]` round-trip |
+| `decodeFromArrayEither[T](bytes)` | Safe `Array[Byte]` decode |
+| `encodeToStream(t, os)` / `decodeFromStream[T](is)` | Stream round-trip |
+
+Errors caught via `JsonException` (constructable, used in `decodeEither` and `RawJson.as/get/getOpt`).
+
+### 10j. New codec utilities go to starlink
+
+If existing `JsoniterCommonCodecs` / `JsoniterUtils` / `RawJson` API don't fit need — **add new reusable function to `anduin.jsoniter.JsoniterCommonCodecs` (or `JsoniterUtils`) in starlink lib**, not inline at call site. Flag inline reusable codec helpers/util methods that should live in starlink.
+
+### 10k. Avoid unnecessary serialize ↔ deserialize roundtrips
+
+When source already typed (`RawJson`, case class, etc.), don't stringify-then-reparse. Each roundtrip allocates an intermediate `String` / `Array[Byte]` AND runs codec twice. Spot the shape `decode(encode(x))` (or any combination of `JsoniterUtils.encode` / `decode` / direct `writeToString` / `readFromString` / `RawJson.fromJson` / `noSpaces` / `toString` chained back-and-forth).
+
+| Anti-pattern | Fix | Why |
+|--------------|-----|-----|
+| `JsoniterUtils.decodeOption[T](rawJson.toString)` where `rawJson: RawJson` | `rawJson.as[T].toOption` | `RawJson.as[T]` already runs reentrant decode on internal bytes — skip `String` alloc |
+| `JsoniterUtils.decodeEither[T](rawJson.toString)` | `rawJson.as[T]` | Same |
+| `JsoniterUtils.decode[T](rawJson.toString)` / `decode[T](rawJson.noSpaces)` | `rawJson.as[T].fold(throw _, identity)` | Skip `String` alloc |
+| `item.data.flatMap(d => JsoniterUtils.decodeOption[A](d.toString))` (`d: RawJson`) | `item.data.flatMap(_.as[A].toOption)` | Direct typed extract |
+| `RawJson.fromJson(s).as[T]` where `s: String` of JSON, `RawJson` not otherwise used | `JsoniterUtils.decodeEither[T](s)` | Skip `RawJson` wrap when no other use of it |
+| `convertToJsonValue(v).toString` / `RawJson.fromValue(v).noSpaces` (when only need wire `String` of `v`) | `JsoniterUtils.encode(v)` | Skip `RawJson` allocation |
+| `JsoniterUtils.decode[RawJson](writeToString(data))` / `decode[RawJson](JsoniterUtils.encode(data))` | `RawJson.fromBytes(JsoniterUtils.encodeToArray(data))` OR `RawJson.fromValue(data)` | Skip `String` intermediate; `fromBytes` wrap raw bytes; `fromValue` wrap reentrant write directly |
+| `readFromString[T](writeToString(rawJson))` / `JsoniterUtils.decode[T](JsoniterUtils.encode(rawJson))` (`rawJson: RawJson`) | `rawJson.as[T].fold(throw _, identity)` | Roundtrip = encode + decode same value through codec twice |
+| `RawJson.fromJson(JsoniterUtils.encode(v))` | `RawJson.fromValue(v)` | `fromValue` wrap reentrant write directly — no `String` intermediate |
+| `rawJson.noSpaces` → later `RawJson.fromJson(...)` of same string | Pass `RawJson` through unchanged | `RawJson` already opaque-and-reusable |
+| `value.asJson.noSpaces` then `JsoniterUtils.decode[T]` (cross-library bridge) | Use single Jsoniter codec | Don't bridge circe ↔ jsoniter via `String` |
+
+Flag also:
+- `T` → `String` → `T` roundtrip for "validation" / "deep copy" — codec already validates on decode, deep copy unnecessary for immutable types
+- `JsoniterUtils.encode` immediately followed by `JsoniterUtils.decode` of same `T` — dead roundtrip
+- `RawJson` extracted from typed source then re-decoded back to same type without intermediate transform — pass typed value through
+
+**Severity:** `[SUGGESTION]` for perf (allocation + double codec run). `[BLOCKER]` when roundtrip in hot path (per-row, per-event, per-render, streaming pipeline) AND source already typed — measurable cost.
+
+---
+
 ## Diff-Bound Rule
 
 Only flag issues on lines **added or modified in the diff**. Don't critique pre-existing code author didn't touch. If pre-existing code has genuine safety issue, mention as `[NOTE]` only, not blocker or suggestion. If can't identify exact line number from diff, don't report.
