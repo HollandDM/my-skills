@@ -11,6 +11,84 @@ Review Tapir endpoint patterns for server (jvm/) and client (js/). Apply Part A 
 
 ---
 
+## Part 0: Public API Hard Block (HIGHEST PRIORITY — CHECK FIRST)
+
+**Rule:** Our work NEVER touches Stargazer's OpenAPI-exposed public API. That surface is owned by another team. Any diff line that adds, removes, modifies, renames, or reorders public API content → **`[BLOCKER]` confidence 100**, no exceptions, even if change "looks safe" / "just a comment" / "just a type tweak".
+
+**Past incident:** Our work shipped public API changes → broke external consumers (npm `@anduintransaction/public-api-specs`, customer integrations). Hard block now mandatory.
+
+### What counts as public API (flag if ANY match)
+
+A diff touches public API if **any** of these is true on a changed line:
+
+1. **File path** matches any:
+   - `modules/brienne/**/PublicApiEndpoints.scala` (the 6 endpoint def objects: FundSub, DataRoom, Webhook, FundData, File, LongRequest)
+   - `modules/brienne/**/endpoint/PublicApiEndpoints.scala` (base class)
+   - `modules/brienne/**/server/*PublicApiServer.scala` (5 servers: Webhook, FundSub, FundData, DataRoom, Platform)
+   - `modules/brienne/**/PublicApiServerModule.scala`
+   - `modules/brienne/**/tapir/server/PublicApiTapirServerAuthentication.scala`
+   - `apps/gondor/**/GondorPublicApiSchema.scala` (or `GondorPublicApiSchemaApp`)
+   - `js/public-api-specs/**` (any file under generated public spec npm pkg)
+
+2. **Symbol extends** `PublicApiEndpoints` — `object Foo extends PublicApiEndpoints`
+
+3. **Symbol extends** `PublicApiTapirServerAuthentication`
+
+4. **Tapir endpoint path** starts with `"api" / "v1"` — public surface URL prefix; internal endpoints never use this
+
+5. **Method/object referenced** in `GondorPublicApiSchema.scala` `docs` Seq, or registered into `publicAPIServices` block in `GondorServer.scala`, or `PublicApiServerModule`
+
+6. **`publicApiEndpoint` / `publicApiRoute`** call sites (defined in `PublicApiTapirServerAuthentication`)
+
+7. **`BasePublicApiEndpoint`** type alias usages
+
+### What action triggers BLOCKER
+
+ANY mutation on the above:
+- New endpoint def added
+- Existing endpoint signature changed (path, method, request type, response type, error type, query/header params)
+- DTO field added/removed/renamed/retyped on a type used in public endpoint I/O
+- Endpoint removed or path renamed
+- Auth scheme changed on public endpoint
+- Route handler swap (`publicApiRoute` ↔ other handler)
+- Schema/codec change on type reachable from public endpoint
+- Reorder/rewire in `PublicApiServerModule` / `GondorServer.scala` `publicAPIServices`
+- Generated spec under `js/public-api-specs/` modified by hand
+
+### Output template (use verbatim)
+
+```
+- File: <path>
+- Line: <line>
+- Severity: [BLOCKER]
+- Confidence: 100
+- Issue: PUBLIC API CHANGE — out of scope for this team. Stargazer public API (OpenAPI-exposed, npm @anduintransaction/public-api-specs) owned by separate team. Past incident: similar change broke external consumers.
+- Current code:
+  ```scala
+  <changed lines>
+  ```
+- Suggested fix:
+  ```
+  REVERT this change. Hand off to public API owners. Do not edit:
+    - PublicApiEndpoints / *PublicApiEndpoints objects
+    - *PublicApiServer / PublicApiTapirServerAuthentication
+    - GondorPublicApiSchema docs Seq
+    - js/public-api-specs/**
+  If feature genuinely needs public surface change, file ticket with public API team — do not modify in this PR.
+  ```
+```
+
+### NOT public API (skip Part 0, continue to Part A)
+
+- Endpoints extending `AuthenticatedEndpoints` / `PublicEndpoints` (note: `PublicEndpoints` ≠ public API — means "no auth", still internal surface)
+- Endpoints registered via `OpenApiServer` / `allDocumentedEndpoints` (internal docs only, served at `/internal-docs/`)
+- Internal Tapir endpoints under `/api/internal/` or any non-`/api/v1/` path
+- Any file under `js/internal-api-specs/`
+
+> **If Part 0 fires, still run Part A/B for completeness — but Part 0 blocker takes precedence in final report ordering.**
+
+---
+
 ## Part A: Server Patterns (jvm/)
 
 ### A0. Endpoint Pattern Selection
