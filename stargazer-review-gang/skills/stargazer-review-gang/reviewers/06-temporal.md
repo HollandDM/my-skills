@@ -328,7 +328,11 @@ Flag:
 
 Codebase has async endpoint framework wrapping Temporal workflows behind standard HTTP endpoints (synchronous, async-create, async-run, async-fetch). Use when HTTP endpoint work > few seconds.
 
-Use `AsyncEndpoint` when HTTP request triggers 5+ second work (file ops, exports, AI/OCR) and client needs polling with NATS notification. Do NOT use for <5s ops (regular endpoint), batch items (BatchAction), or FDB reactions (CDC).
+Use `AsyncEndpoint` when HTTP request triggers 5+ second work (file ops, exports, AI/OCR) producing a **single durable result** that must survive page reload. Do NOT use for <5s ops (regular endpoint), streaming progress (NDJSON — see reviewer 07 §A7), batch items (BatchAction §9), or FDB reactions (CDC §7).
+
+**Cost vs NDJSON:** AsyncApiV2 = 3 HTTP calls (create + run + fetch) + S3 upload of context/input/output + FDB state row + Temporal workflow + 24h GC. Min wall-clock includes 10s initial poll delay. NDJSON has none of this overhead. **Pick AsyncApiV2 only when durability across reload is required**; otherwise NDJSON.
+
+**No cancel API:** AsyncApiV2 has no client-driven cancellation — `close()` only stops polling, server work continues. If users need to cancel, use BatchAction (which has `cancelBatchAction`) or NDJSON (client disconnect → ZIO interrupt).
 
 ### Async Endpoint Pattern
 
@@ -363,6 +367,8 @@ Flag:
 - Missing `asyncServices` list in server (handler unregistered in `AsyncApiRegistry`)
 - Custom async polling instead of `AsyncEndpoint` framework
 - Async handler not handling errors properly (errors should propagate to `AsyncApiStateFailed`)
+- **New `asyncEndpoint` declaration where the result is a stream / item series** — switch to NDJSON (`authNdjsonEndpoint`, reviewer 07 §A7). AsyncApiV2 is for single durable results; NDJSON for typed item streams.
+- New `asyncEndpoint` where durability is not required (in-flight only, lost-on-reload acceptable) — switch to NDJSON (no FDB/S3/24h GC overhead, native cancel)
 
 ---
 
@@ -426,18 +432,28 @@ Flag:
 | Scenario | Pattern | Why |
 |----------|---------|-----|
 | React to FDB record changes | **CDC** | Checkpoint-based, exactly-once, auto-signaled |
-| Single long-running HTTP request | **AsyncEndpoint** | Built-in polling, NATS notifications, queue-based timeout |
-| Process N known items with tracking | **BatchAction (bounded)** | Per-item status, parallel/sequential, post-execute |
+| Server pushes typed item stream, no durability | **NDJSON** (reviewer 07 §A7) | No Temporal/S3/FDB overhead, native cancel on disconnect, sub-RTT first byte |
+| LLM/agent token stream to browser | **SSE** (reviewer 07 §A8) | Browser `EventSource`, `[DONE]` sentinel |
+| Single long-running HTTP request, **durable across reload** | **AsyncEndpoint** | Built-in polling, NATS push, FDB state, Temporal durability |
+| Process N known items with tracking, **survives reload** | **BatchAction (bounded)** | Per-item Succeeded/Failed/Cancelled, parallel/sequential, post-execute, NATS-pushed status |
 | Process items via cursor | **BatchAction (unbounded)** | Cursor pagination, dynamic item count |
 | Background job, no HTTP trigger | **Direct workflow** | Simple, custom control flow |
 | Scheduled/cron job | **TemporalScheduleUtils** | Schedule spec, cron pattern support |
 
+**Streaming-shape decision (NDJSON vs AsyncApiV2 vs BatchAction):**
+- Multi-item, durable, user-visible per-item status across navigations → **BatchAction**
+- Multi-item, transient, server pushes incrementally → **NDJSON**
+- Single durable result, user can refresh page mid-job → **AsyncApiV2**
+- Multi-item, transient, but typed events go to browser w/ `EventSource` → **SSE**
+
 Flag:
-- Manual polling loops where AsyncEndpoint cleaner
+- Manual polling loops where AsyncEndpoint or NDJSON cleaner
 - Custom event processing where CDC framework exists
 - Single-item workflows using BatchAction (overkill — use AsyncEndpoint or direct workflow)
-- Multi-item processing without BatchAction when progress tracking needed
+- Multi-item processing without BatchAction when progress tracking needed AND durability matters
+- Multi-item streaming using AsyncEndpoint (single durable result) instead of NDJSON (typed item series)
 - FDB change reactions as cron/polling instead of CDC listeners
+- BatchAction used for transient streaming (no reload survival needed) — NDJSON has no FDB/Temporal overhead
 
 ---
 

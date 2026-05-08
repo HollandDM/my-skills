@@ -13,6 +13,28 @@ Review Tapir endpoint patterns for server (jvm/) and client (js/). Apply Part A 
 
 ## Part A: Server Patterns (jvm/)
 
+### A0. Endpoint Pattern Selection
+
+Stargazer has **5 endpoint patterns**. Wrong pattern → wrong durability/cancellation/latency profile. Match shape to job:
+
+| Pattern | Server primitive | Use when | NOT for |
+|---------|------------------|----------|---------|
+| **Blocking** | `authRouteCatchError` / `authRouteForwardError` / `validateRoute*` | Single atomic result, wall-clock < timeout (~30s) | Long-running, large stream, multi-item w/ tracking |
+| **NDJSON streaming** | `authNdjsonEndpoint` + `authNdjsonRouteCatchError` | Server pushes typed items incrementally; client wants progress; no durability needed; cancel on disconnect | Need durability across reload; need user-visible progress modal across pages |
+| **SSE (text/event-stream)** | `authSseEndpoint` + Tapir `streamBinaryBody(ZioStreams)(CodecFormat.TextEventStream())` | LLM/agent token streams; browser `EventSource` consumer; `[DONE]` sentinel compat | Typed structured items (use NDJSON instead); multi-item batch tracking |
+| **AsyncApiV2** | `asyncEndpoint` + `validateAsyncEnvironmentRoute` | Single long result (5s–30min), durable across reload, NATS-pushed completion | Streaming progress (NDJSON); multi-item w/ per-item status (BatchAction); <5s ops (blocking) |
+| **BatchAction** | `BatchActionService.startBatchActionInternal` + `BatchActionEndpoints` | N items with per-item Succeeded/Failed/Cancelled, parallel fan-out, user reload-tolerant, post-execute step | Single op (use AsyncApiV2 / direct workflow); transient streams (NDJSON) |
+
+**New code preference:** NDJSON > AsyncApiV2 for any *streaming* shape (no S3 round-trip, no 10s initial-poll delay, no GC, native cancel). AsyncApiV2 remains for single-result durable ops only — **flag new `asyncEndpoint` declarations** when result fits NDJSON (typed item stream).
+
+**Cross-reference:** for BatchAction / AsyncApiV2 *workflow* internals (Temporal, FDB state, retry attrs) see reviewer 06 §8–§10.
+
+Flag:
+- New `asyncEndpoint` for a streaming/multi-item job → suggest `authNdjsonEndpoint`
+- BatchAction used for single-item job → over-engineered, use AsyncApiV2 / blocking
+- Custom polling loop where `AsyncEndpoint` framework exists
+- Manual HTTP chunked writes / raw `Stream[Byte]` body where `authNdjsonEndpoint` exists
+
 ### A1. Endpoint & Server Base Classes
 
 Endpoint def must extend `AuthenticatedEndpoints` (or `PublicEndpoints` w/ justification).
@@ -79,6 +101,66 @@ Flag:
 - Endpoint type also exposed in OpenAPI docs but missing `Schema[T]` → use `JsoniterCodecWithSchema.forProduct*` (combined codec + schema)
 - `JsoniterUtils.encode` / `decode` (or any pooled `writeToString`/`readFromString`) called from inside an endpoint codec transform fn → reentrant corruption; use `RawJson.fromValue` / `RawJson.fromJson(s).as[T]` instead
 
+### A7. NDJSON Streaming Endpoints
+
+**Wire format:** `application/x-ndjson`. One JSON line per `\n`. Envelope ADT (`WireNdjsonEvent`, internal):
+```
+{"type":"item","data":{...}}     // intermediate payload
+{"type":"error","message":"..."} // terminal failure
+{"type":"complete"}              // terminal success
+```
+
+**Server primitive:**
+```scala
+val runTestsStream: BaseNdjsonAuthenticatedEndpoint[Params, GeneralServiceException, ResultRow] =
+  authNdjsonEndpoint[Params, GeneralServiceException, ResultRow](path, TapirEndpointInfo(...))
+
+// Wire route — impl returns Task[ZStream[Any, Throwable, T]]:
+authNdjsonRouteCatchError(runTestsStream) { (params, ctx) =>
+  service.runTestsStream(params, ctx.actor.userId)
+}
+```
+
+**Codec requirements:** params `I`, error `E`, item `T` each need `JsonValueCodec[T]` (Jsoniter marker). `I`/`E` also need `Schema[T]`. Item type `T` does NOT need to be in same module as envelope — envelope codec bridges via `RawJson`.
+
+**Error model (3 paths):**
+1. **Pre-stream failure** (setup `impl` throws): `flatMapError` → `ServiceError(e)` → HTTP 500 typed JSON body. Client sees `Left(GeneralServiceException)`.
+2. **Mid-stream failure** (source emits error / inter-item timeout): `catchAllCause` emits `{"type":"error","message":...}` as last frame, stream closes HTTP 200. Client parser yields `NdjsonEvent.Error(msg)`.
+3. **Interrupt** (client disconnect): no terminal frame, stream closes abruptly. Server work cancelled via ZIO interrupt.
+
+**Setup vs stream timeouts:** the `timeout` wraps only the **setup effect** (the `Task[ZStream[...]]` materialisation). The stream itself is **not** wrapped — `NdjsonByteStream.toBytes` enforces inter-item timeout instead. Long-running per-item compute is fine; long pause **between** items trips inter-item timeout.
+
+Flag:
+- `authNdjsonEndpoint` declared but server uses `authRouteCatchError` (or vice versa) — endpoint/route handler mismatch
+- Item type `T` lacks `derives JsoniterCodec.*` → won't compile / wrong wire format
+- NDJSON impl returning `ZStream[R, ...]` with `R != Any` — must be `ZStream[Any, Throwable, T]`; thread `R` via `ZIO.service` before stream construction
+- NDJSON impl wrapping the **stream** in `.timeout(...)` — redundant; inter-item timeout handled in `NdjsonByteStream.toBytes`. Wrap setup `impl` instead.
+- NDJSON used where blocking endpoint suffices (single item, `ZStream.succeed(x)` of length 1) — overhead w/o benefit, switch to `authRouteCatchError`
+- Server returning `ZStream[Any, E, T]` (typed error channel) — must be `ZStream[Any, Throwable, T]`; use mid-stream failure path
+- Per-item side effects without idempotency on a NDJSON job that may be retried by the user (no Temporal durability — caller WILL re-hit endpoint on disconnect). Document this contract.
+
+### A8. SSE (Server-Sent Events) Endpoints
+
+**Wire format:** `text/event-stream`. Frames separated by `\n\n`. Each frame = `data: <json>\n\n`. Server emits `data: [DONE]\n\n` sentinel. Non-`data:` lines (e.g. `event:`, `:` comment) silently dropped client-side.
+
+**When to use SSE over NDJSON:**
+- Browser `EventSource` consumer (built-in reconnect)
+- LLM token-stream interop (`[DONE]` sentinel matches OpenAI-style)
+- Heartbeat / keep-alive frames natural (`: heartbeat\n\n`)
+
+**When NOT:**
+- Typed structured items where client is ZIO/Scala — use NDJSON (cleaner envelope, native `Item/Error/Complete` ADT)
+- Bidirectional or chunked binary — use NDJSON or WebSocket
+
+**Discriminated event ADT:** SSE `StreamEvent` uses `JsoniterCodec.WithDefaultsAndDiscriminatorValue` + `JsoniterDiscriminator["type"]`. Subtypes must derive same marker (see reviewer 01 §10b).
+
+Flag:
+- SSE used for single-item or non-streaming response — switch to blocking
+- SSE event type missing discriminator marker — wire format wrong
+- SSE `data:` frame containing newlines (un-escaped JSON pretty-print) — breaks framing, must `noSpaces`
+- Custom event-name `event: foo\ndata: ...` parsing — current `SSEParser` only handles `data:` lines; non-`data:` lines dropped. Don't rely on `event:` for routing.
+- Missing heartbeat in long-idle SSE → connection drops; emit `: heartbeat\n\n` periodically
+
 ---
 
 ## Part B: Client Patterns (js/)
@@ -91,7 +173,7 @@ API clients must extend appropriate base:
 |-----------|------|
 | `PublicEndpointClient` | Public endpoints (no auth) |
 | `AuthenticatedEndpointClient` | Endpoints requiring auth |
-| `AsyncEndpointClient` | Long-running ops w/ polling |
+| `AsyncEndpointClient` | Long-running ops w/ polling (legacy AsyncApiV2) |
 
 Flag:
 - Raw `Fetch.fetch()`, `XMLHttpRequest`, `Ajax`, custom HTTP calls bypassing base clients — loses auth, rate limiting, telemetry
@@ -99,7 +181,49 @@ Flag:
 - `PublicEndpointClient` used for auth-required endpoints
 - Manual token handling (`localStorage.getItem("token")`) instead of `AuthenticationTokenService`
 
-### B2. Error Handling
+### B2. NDJSON / SSE Stream Clients
+
+**NDJSON:**
+```scala
+// 1. Get raw byte stream — handles auth, rate limit, decode/security failures
+val byteStream: Task[Either[E, ZStream[Any, Throwable, Byte]]] =
+  client.toNdjsonStreamThrowDecodeAndSecurityFailures(ndjsonEndpoint)(params)
+
+// 2. Decode envelope
+val events: ZStream[Any, Throwable, NdjsonEvent[T]] =
+  NdjsonParser.parse[T](byteStream)
+
+// 3. Accumulate inline via scanLeft (no dedicated Accumulator class)
+events.scanLeft(Seq.empty[T]) { (acc, event) =>
+  event match {
+    case NdjsonEvent.Item(x)    => acc :+ x
+    case NdjsonEvent.Error(msg) => /* show error toast */ acc
+    case NdjsonEvent.Complete   => acc
+  }
+}
+```
+
+**SSE:**
+```scala
+val byteStream: Task[Either[E, ZStream[Any, Throwable, Byte]]] =
+  client.toSseStreamThrowDecodeAndSecurityFailures(sseEndpoint)(params)
+val events: ZStream[Any, Throwable, StreamEvent] =
+  SSEParser.parse(byteStream)
+// Bridge to Laminar:
+AirStreamUtils.zstreamToEventStream(events)
+```
+
+Flag:
+- `toClientThrow*` (blocking variant) used on NDJSON / SSE endpoint — wrong shape, will hang or fail decode
+- `Unsafe.unsafely` / manual `runtime.unsafe.run` consuming a `ZStream` — use `AirStreamUtils.zstreamToEventStream`
+- NDJSON consumer ignoring `NdjsonEvent.Error(msg)` (only matches `Item`) — error frame silently dropped
+- NDJSON consumer ignoring `NdjsonEvent.Complete` when result correctness depends on completion (e.g. cumulative count) — interrupt = stream end without `Complete`; must distinguish "completed normally" from "disconnected mid-stream"
+- Custom byte→line parser instead of `NdjsonParser.parse` — duplicates UTF-8 + line-split + envelope decode
+- Custom SSE parser instead of `SSEParser.parse` — must handle `\n\n` framing + `data:` prefix + `[DONE]` sentinel
+- Missing `flatMapSwitch` on NDJSON / SSE consumer — page navigation leaks open HTTP stream
+- NDJSON endpoint client returns `Task[T]` instead of `Task[Either[E, ZStream[Byte]]]` — wrong client method picked
+
+### B3. Error Handling
 
 Client returns `Task[Either[E, O]]`. Both branches must be handled.
 
@@ -109,7 +233,7 @@ Flag:
 - Swallowing errors w/ `.ignore` or empty catch
 - Missing `Toast.error()` or equivalent user notification on failures
 
-### B3. Loading State
+### B4. Loading State
 
 Every API call should track loading state w/ `Var[Boolean]`.
 
@@ -118,7 +242,7 @@ Flag:
 - Loading flag not cleared on error path (stuck loading)
 - Buttons/forms not disabled during loading
 
-### B4. Task-to-Laminar Bridge
+### B5. Task-to-Laminar Bridge
 
 Flag:
 - `Unsafe.unsafely` or `runtime.unsafe.run` in component code — use `AirStreamUtils.taskToStream` or `ZIOUtils.runAsync`
