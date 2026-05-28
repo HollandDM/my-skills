@@ -18,6 +18,18 @@ Execute implementation plans for Stargazer codebase.
 
 ---
 
+## Session ID prefix (MANDATORY — avoid name conflict across concurrent sessions)
+
+Before creating team or spawning any agent, compute short session ID once:
+
+```bash
+SID=$(git rev-parse --short HEAD 2>/dev/null || printf '%04x' $RANDOM)
+```
+
+Prefix **every** `team_name` AND agent `name` in this skill with `${SID}-`. Examples below show literal `<SID>-` placeholder — substitute real value. Within-team `SendMessage` MUST use fully prefixed names (e.g. `<SID>-implementer-1`, `<SID>-phase-P-reviewer`, `<SID>-final-reviewer`).
+
+---
+
 ## Step 0: Verify Scala Code Intelligence
 
 Skill depends on `scala-code-intelligence` skill — provides IntelliJ-powered
@@ -77,7 +89,7 @@ Each team member scoped to single task — created when task starts, shutdown wh
 Use **TeamCreate** to create session team:
 
 ```
-team_name: "stargazer-dev"
+team_name: "<SID>-stargazer-dev"
 description: "Stargazer plan execution session"
 ```
 
@@ -100,8 +112,8 @@ Identify blocking dependencies, group tasks:
 Spawn all implementers **and** phase reviewer simultaneously:
 
 **Implementers:** Use template in `${SKILL_DIR}/implementer-prompt.md`.
-- `team_name: "stargazer-dev"`, `name: "implementer-N"`
-- Tell each implementer reviewer = `"phase-P-reviewer"` — message reviewer directly when done, respond to feedback directly.
+- `team_name: "<SID>-stargazer-dev"`, `name: "<SID>-implementer-N"`
+- Tell each implementer reviewer = `"<SID>-phase-P-reviewer"` — message reviewer directly when done, respond to feedback directly.
 
 **Implementer model selection:**
 - 1-2 files, clear spec -> `model: "sonnet"`
@@ -109,8 +121,8 @@ Spawn all implementers **and** phase reviewer simultaneously:
 - Architectural judgment or broad codebase understanding -> `model: "opus"`
 
 **Phase Reviewer:** Use template in `${SKILL_DIR}/code-quality-reviewer-prompt.md`.
-- `team_name: "stargazer-dev"`, `name: "phase-P-reviewer"`
-- Tell reviewer which implementers to expect (e.g., `implementer-1`, `implementer-2`)
+- `team_name: "<SID>-stargazer-dev"`, `name: "<SID>-phase-P-reviewer"`
+- Tell reviewer which implementers to expect (e.g., `<SID>-implementer-1`, `<SID>-implementer-2`)
 - Reviewer waits for all implementers, then reviews all changes together.
 
 **Reviewer model selection** (always lightweight — never opus):
@@ -170,14 +182,14 @@ Proceed to final review only after clean build.
 
 ## Step 5: Final Review
 
-Build green → dispatch final code quality reviewer (`name: "final-reviewer"`) to review **entire implementation** across all tasks. Catches cross-task integration issues per-task reviews miss.
+Build green → dispatch final code quality reviewer (`name: "<SID>-final-reviewer"`) to review **entire implementation** across all tasks. Catches cross-task integration issues per-task reviews miss.
 
 ## Step 6: Finish
 
 Delete team:
 
 ```
-TeamDelete: team_name: "stargazer-dev"
+TeamDelete: team_name: "<SID>-stargazer-dev"
 ```
 
 Wrap up branch: review all changes, decide to merge, create PR, or clean up. Present user with options.

@@ -18,6 +18,18 @@ Get plan file path from user. Ask once if missing — only exception to no-quest
 
 ---
 
+## Session ID prefix (MANDATORY — avoid name conflict across concurrent sessions)
+
+Before creating team or spawning any agent, compute short session ID once:
+
+```bash
+SID=$(git rev-parse --short HEAD 2>/dev/null || printf '%04x' $RANDOM)
+```
+
+Prefix **every** `team_name` AND agent `name` in this skill with `${SID}-`. Examples below show literal `<SID>-` placeholder — substitute real value. Within-team `SendMessage` MUST use fully prefixed names (e.g. `<SID>-advisor`, `<SID>-implementer-1`).
+
+---
+
 ## Step 1: Read Plan & Build Batch Schedule
 
 Read plan once. Extract tasks, group into **batches**:
@@ -35,21 +47,21 @@ Repeat until all batches complete:
 ### A. Setup the Team
 
 1. Pick next incomplete batch
-2. If previous team exists: `TeamDelete: team_name: "batch-team"`
-3. `TeamCreate: team_name: "batch-team", description: "Batch N execution"`
+2. If previous team exists: `TeamDelete: team_name: "<SID>-batch-team"`
+3. `TeamCreate: team_name: "<SID>-batch-team", description: "Batch N execution"`
 
 ### B. Spawn All Agents (one message, all at once)
 
 Spawn advisor + all implementers **simultaneously** in single turn.
 
-**Advisor** — `name: "advisor"`, `model: "opus"`, `team_name: "batch-team"`, `subagent_type: "Explore"`
+**Advisor** — `name: "<SID>-advisor"`, `model: "opus"`, `team_name: "<SID>-batch-team"`, `subagent_type: "Explore"`
 
 > `subagent_type: "Explore"` removes Edit/Write/NotebookEdit at platform level — advisor physically cannot modify files, only read + advise.
 
 Pass only this batch's tasks — not other batches or full plan.
 
 ```
-You are the advisor for Batch N of an implementation plan. You are part of team "batch-team".
+You are the advisor for Batch N of an implementation plan. You are part of team "<SID>-batch-team".
 Your role is purely reactive — do NOT read files or explore the codebase upfront. Any
 knowledge you gain now will be outdated once implementers start making changes. Instead,
 wait for implementers to contact you, then read only what is relevant to their question
@@ -76,13 +88,13 @@ other batches and must not attempt to review or influence anything outside this 
    review against the task spec, then reply with approval or specific feedback.
 
 - MUST NOT run any `./mill` commands
-- When ALL implementers have been approved by you: send `SendMessage` to `"team-lead"` with message: `BATCH_READY`
+- When ALL implementers have been approved by you: send `SendMessage` to team lead with message: `BATCH_READY`
 ```
 
-**Implementer-N** (one per task) — `name: "implementer-N"`, `model: "sonnet"`, `team_name: "batch-team"`
+**Implementer-N** (one per task) — `name: "<SID>-implementer-N"`, `model: "sonnet"`, `team_name: "<SID>-batch-team"`
 
 ```
-You are implementer-N, responsible for Task N. You are part of team "batch-team".
+You are implementer-N, responsible for Task N. You are part of team "<SID>-batch-team".
 
 ## Your Task
 [Full text of the specific task]
@@ -93,11 +105,11 @@ You are implementer-N, responsible for Task N. You are part of team "batch-team"
 ## Your role
 1. Implement the task exactly as specified
 2. For complex problems or architectural questions, ask the advisor via:
-   SendMessage to "advisor" — they have the full batch context and can help
+   SendMessage to "<SID>-advisor" — they have the full batch context and can help
 3. MUST NOT run any `./mill` commands (not even to check — the team lead handles compilation)
 4. Use `diagnostics` MCP tool after edits to catch type errors locally
 5. When done: commit your work with a descriptive message
-6. Then send a completion report to "advisor" via SendMessage:
+6. Then send a completion report to "<SID>-advisor" via SendMessage:
    - What you implemented
    - Files changed
    - Any concerns

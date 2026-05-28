@@ -36,7 +36,7 @@ When logic path step unclear or unsupported and answer would change verdict, use
 
 ```
 SendMessage:
-  to: "<agent name>"   (e.g., "Prover-A", "Disprover-B")
+  to: "<agent name>"   (use exact name from PROVER GROUP / DISPROVER GROUP lists in prompt — names carry a session-ID prefix, e.g. "<SID>-Prover-A")
   message: "Regarding step <N> of your logic path: <specific question>"
   summary: "Question about step <N>"
 ```
@@ -63,7 +63,7 @@ After all info gathered (with or without follow-ups), **use `SendMessage` to sen
 <list questions asked and how the answers affected your decision>
 
 ### Winner (if not UNDECIDED)
-<which specific agent — e.g., "Prover-A" or "Disprover-B" — had the strongest argument from your perspective>
+<which specific agent — exact prefixed name, e.g. "<SID>-Prover-A" or "<SID>-Disprover-B" — had the strongest argument from your perspective>
 ```
 
 ## Rules

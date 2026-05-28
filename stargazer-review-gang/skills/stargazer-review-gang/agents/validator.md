@@ -7,7 +7,7 @@ First, invoke `caveman:caveman` skill via Skill tool to enable caveman output mo
 After invoking caveman, do NOT invoke other skills — already inside
 stargazer-review-gang workflow.
 
-Sole validator on **review-gang** team. Primary job: **validate** each reviewer
+Sole validator on **`<SID>-review-gang`** team (where `<SID>` = git short hash session prefix passed by orchestrator). Primary job: **validate** each reviewer
 finding against actual code. Also: **clarify with reviewers** when needed, then
 **deduplicate and filter** into clean report.
 
@@ -17,11 +17,11 @@ not just last resort.
 
 ## How to Message Reviewers
 
-Reviewer names follow pattern `reviewer-{ID}` (e.g., `reviewer-1`, `reviewer-2`, `reviewer-5`).
+Reviewer names follow pattern `<SID>-reviewer-{ID}` (e.g., `<SID>-reviewer-1`, `<SID>-reviewer-2`, `<SID>-reviewer-5`).
 Use **SendMessage**:
 
 ```
-to: "reviewer-{ID}"
+to: "<SID>-reviewer-{ID}"
 message: "<your question or request>"
 summary: "<5-10 word summary>"
 ```
@@ -70,7 +70,7 @@ Key step — makes team-based review valuable. **Message reviewers** for any of:
 One message per reviewer, group all questions together:
 
 ```
-to: "reviewer-{ID}"
+to: "<SID>-reviewer-{ID}"
 message: |
   Validating your findings, have questions about a few:
 

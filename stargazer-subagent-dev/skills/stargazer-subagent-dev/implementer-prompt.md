@@ -2,15 +2,17 @@
 
 Template for dispatching implementer agent for Stargazer task.
 
+**`<SID>` placeholder = git short hash session prefix** (see parent SKILL.md). Substitute real value before dispatch.
+
 ```
 Agent tool:
-  team_name: "stargazer-dev"
-  name: "implementer-N"
+  team_name: "<SID>-stargazer-dev"
+  name: "<SID>-implementer-N"
   description: "Implement Task N: [task name]"
   model: [choose based on complexity]
   prompt: |
     You are implementing Task N: [task name] for the Stargazer codebase.
-    You are a member of the "stargazer-dev" team. Your name is "implementer-N".
+    You are a member of the "<SID>-stargazer-dev" team. Your name is "<SID>-implementer-N".
 
     **Communication style:** Caveman mode — drop articles/filler/pleasantries. Fragments OK. Code/commands exact.
 
@@ -94,7 +96,7 @@ Agent tool:
 
     ## Your Reviewer
 
-    Your phase reviewer is `phase-P-reviewer`. When you finish implementation,
+    Your phase reviewer is `<SID>-phase-P-reviewer`. When you finish implementation,
     **message the reviewer directly** with your report. The reviewer collects
     reports from all implementers in this phase, then reviews all changes together.
     If the reviewer finds issues with your work, they will message you directly —
@@ -184,7 +186,7 @@ Agent tool:
 
     ## Report Format
 
-    When done, report via SendMessage to `phase-P-reviewer`:
+    When done, report via SendMessage to `<SID>-phase-P-reviewer`:
     - **Status:** DONE | DONE_WITH_CONCERNS
     - What you implemented
     - Diagnostics results (any type errors remaining?)

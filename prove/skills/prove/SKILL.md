@@ -9,6 +9,16 @@ Adversarial verification orchestrator. Given subject and claim, assemble **verif
 
 Subject can be anything — code, architecture, runtime behavior, design decision, migration plan, config change. Team adapts techniques to subject.
 
+## Session ID prefix (MANDATORY — avoid name conflict across concurrent sessions)
+
+Before creating any team or spawning any agent, compute short session ID once:
+
+```bash
+SID=$(git rev-parse --short HEAD 2>/dev/null || printf '%04x' $RANDOM)
+```
+
+Prefix **every** `team_name` AND agent `name` in this skill with `${SID}-`. Examples below show literal `<SID>-` placeholder — substitute the real value. Within-team `SendMessage` MUST use fully prefixed names (e.g. `<SID>-Prover-A`, not `Prover-A`). Team lead name passed to agents is also the prefixed one.
+
 ## Workflow
 
 ### 1. Identify the target
@@ -34,7 +44,7 @@ Example restatements:
 Before spawning agents, create team for this round using **TeamCreate**:
 
 ```
-TeamCreate: { team_name: "prove-round-<N>", description: "Verification team for: <claim summary>" }
+TeamCreate: { team_name: "<SID>-prove-round-<N>", description: "Verification team for: <claim summary>" }
 ```
 
 All agents in this round join this team via `team_name` parameter on Agent tool. **Orchestrator is team lead**.
@@ -57,14 +67,14 @@ Team has three groups with distinct communication rules:
 
 #### Spawn order
 
-1. **In single turn**, spawn all 6 agents as **teammates** in team. Each agent gets `name` and `team_name`:
-   - 2 provers (named `Prover-A`, `Prover-B`)
-   - 3 disprovers (named `Disprover-A`, `Disprover-B`, `Disprover-C`)
-   - 1 vibe check agent (lighter model, named `Vibe-Check`)
+1. **In single turn**, spawn all 6 agents as **teammates** in team. Each agent gets `name` and `team_name` (all names prefixed with `<SID>-`):
+   - 2 provers (named `<SID>-Prover-A`, `<SID>-Prover-B`)
+   - 3 disprovers (named `<SID>-Disprover-A`, `<SID>-Disprover-B`, `<SID>-Disprover-C`)
+   - 1 vibe check agent (lighter model, named `<SID>-Vibe-Check`)
 
-2. **Listen for vibe check report.** Vibe checker uses `SendMessage` to report verdict to team lead. Uses lighter model, so arrives before main agents finish. When team lead receives report, immediately spawn **1 reinforcement agent** (named `Reinforcement`) into same team based on verdict:
-   - If vibe says `LIKELY TRUE` → spawn 1 additional prover (named `Reinforcement`)
-   - If vibe says `LIKELY FALSE` → spawn 1 additional disprover (named `Reinforcement`)
+2. **Listen for vibe check report.** Vibe checker uses `SendMessage` to report verdict to team lead. Uses lighter model, so arrives before main agents finish. When team lead receives report, immediately spawn **1 reinforcement agent** (named `<SID>-Reinforcement`) into same team based on verdict:
+   - If vibe says `LIKELY TRUE` → spawn 1 additional prover (named `<SID>-Reinforcement`)
+   - If vibe says `LIKELY FALSE` → spawn 1 additional disprover (named `<SID>-Reinforcement`)
 
 3. **Collect all results.** Wait for all team members (provers, disprovers, reinforcement) to complete before judging. Teammates remain alive — judges communicate directly via `SendMessage`.
 
@@ -146,7 +156,7 @@ For system behavior claims (architecture, runtime, integration):
 
 Adapt as needed — key is each agent has distinct angle, limited to 2 vectors, stated in prompt.
 
-**Agent spawn parameters**: `team_name: "prove-round-<N>"`, `name: "<agent-name>"`, `description: "<agent-name>"`
+**Agent spawn parameters**: `team_name: "<SID>-prove-round-<N>"`, `name: "<SID>-<agent-name>"`, `description: "<SID>-<agent-name>"`
 
 **Agent prompt template**:
 ```
@@ -200,7 +210,7 @@ Judges handle own Q&A — use `SendMessage` to ask provers/disprovers questions 
 - **Assumption audit**: Are assumptions stated by provers actually enforced by system?
 - **Scope coverage**: Does winning argument address ALL cases, or only subset?
 
-**Judge spawn parameters**: `team_name: "prove-round-<N>"`, `name: "Judge-<N>"`, `description: "Judge-<N>"`
+**Judge spawn parameters**: `team_name: "<SID>-prove-round-<N>"`, `name: "<SID>-Judge-<N>"`, `description: "<SID>-Judge-<N>"`
 
 **Judge prompt template**:
 ```
@@ -287,12 +297,12 @@ If user accepts, go to step 6 (present verdict). Use current round's judge major
 
 If user provides more context:
 1. **Refine claim statement** based on new information. Use **AskUserQuestion** tool to show refined claim and confirm before proceeding.
-2. **Create new team** (`prove-round-<N>`) and spawn fresh **prove/disprove round** (same structure as step 2 — provers, disprovers, vibe check agent, reinforcement agent). Use refined claim.
+2. **Create new team** (`<SID>-prove-round-<N>`) and spawn fresh **prove/disprove round** (same structure as step 2 — provers, disprovers, vibe check agent, reinforcement agent). Use refined claim.
 3. Judge round (step 3).
 
 #### Option 3: Battle round
 
-Create **new team** for battle round (`prove-battle-<N>`) and spawn targeted counter-agents attacking specific arguments from previous round. **No vibe check agent in battle rounds** — only direct argument combat.
+Create **new team** for battle round (`<SID>-prove-battle-<N>`) and spawn targeted counter-agents attacking specific arguments from previous round. **No vibe check agent in battle rounds** — only direct argument combat.
 
 **Identifying "strong" arguments**: Argument is strong if at least one judge cited it as convincing in rationale. If no judge cited specific argument, not strong enough for battle agent. Select at most **top 2** strongest arguments from each side (prover and disprover) — those cited by most judges.
 
@@ -302,7 +312,7 @@ Create **new team** for battle round (`prove-battle-<N>`) and spawn targeted cou
 
 Battle agents must use **different vectors** than agents in previous round used on same argument. If round-1 disprover attacked with "boundary analysis + race condition", battle disprover must use different techniques (e.g., "assumption violation + type escape").
 
-For each strong prover argument `pA`, spawn **disprover** into battle team (named `Battle-Disprover-<N>`):
+For each strong prover argument `pA`, spawn **disprover** into battle team (named `<SID>-Battle-Disprover-<N>`):
 ```
 You are Battle Disprover <N>. Read the file <this-skill-path>/agents/disprover.md for your instructions.
 
@@ -328,7 +338,7 @@ Your job: Find flaw in THIS argument — step that doesn't follow, assumption th
 When done, SendMessage your full argument to the team lead.
 ```
 
-For each strong disprover argument `dA`, spawn **prover** into battle team (named `Battle-Prover-<N>`):
+For each strong disprover argument `dA`, spawn **prover** into battle team (named `<SID>-Battle-Prover-<N>`):
 ```
 You are Battle Prover <N>. Read the file <this-skill-path>/agents/prover.md for your instructions.
 

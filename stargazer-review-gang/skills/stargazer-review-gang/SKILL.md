@@ -15,6 +15,16 @@ Store as `SKILL_DIR` — all file refs below (agents/, reviewers/) relative to i
 
 **Then immediately go to Step 1.** No diff gather. No file read. Nothing else before Step 1.
 
+## Session ID prefix (MANDATORY — avoid name conflict across concurrent sessions)
+
+Before TeamCreate or spawning any reviewer, compute short session ID once:
+
+```bash
+SID=$(git rev-parse --short HEAD 2>/dev/null || printf '%04x' $RANDOM)
+```
+
+Prefix **every** `team_name` AND agent `name` in this skill with `${SID}-`. Examples below show literal `<SID>-` placeholder — substitute real value. Within-team `SendMessage` MUST use fully prefixed names (e.g. `<SID>-reviewer-1`, `<SID>-validator`).
+
 ## Constraints
 
 1. **NO BUILD COMMANDS.** You + all team members FORBIDDEN from running `./mill`, `compile`,
@@ -87,7 +97,7 @@ Orchestrator returns JSON routing plan with `diff_ref`, `routing`, `workload`, `
 Use **TeamCreate** for this review session:
 
 ```
-team_name: "review-gang"
+team_name: "<SID>-review-gang"
 description: "Stargazer code review session"
 ```
 
@@ -120,8 +130,8 @@ Related concerns merged into single file per group.
 
 ### 4c. Spawn Reviewers as Named Team Members
 
-Name pattern: `reviewer-{ID}` (sub-reviewers: `reviewer-{ID}{letter}`).
-Use `team_name: "review-gang"`. Spawn all in **single message** for parallelism.
+Name pattern: `<SID>-reviewer-{ID}` (sub-reviewers: `<SID>-reviewer-{ID}{letter}`).
+Use `team_name: "<SID>-review-gang"`. Spawn all in **single message** for parallelism.
 
 Each reviewer prompt must start with:
 ```
@@ -147,8 +157,8 @@ Then include:
 
 After all reviewers complete, spawn **one** validator team member:
 
-- `team_name: "review-gang"`
-- `name: "validator"`
+- `team_name: "<SID>-review-gang"`
+- `name: "<SID>-validator"`
 - Use the **strongest reasoning model available in your environment** — always the best available regardless of workload
 
 Validator prompt:
@@ -174,6 +184,36 @@ scores, reviewer attributions. Report = deliverable; pass through.
 Applies even when all findings nitpicks — still show full report with code blocks.
 Never reduce finding to one-liner like "[NITPICK] description (confidence N)".
 Code blocks ARE the report.
+
+### Persist final report to `docs/reviews/`
+
+**MANDATORY.** Team lead (you) — never validator — writes validator's full report
+verbatim to file under `docs/reviews/`. Path pattern:
+
+```
+docs/reviews/<UTC-date>-<branch-slug>-<SID>.md
+```
+
+- `<UTC-date>` = `date -u +%Y-%m-%d`
+- `<branch-slug>` = current branch, `/` and spaces replaced with `-` (`git rev-parse --abbrev-ref HEAD | tr '/ ' '--'`)
+- `<SID>` = session prefix already computed
+
+Steps:
+1. `mkdir -p docs/reviews` (relative to repo root)
+2. Write file using **Write** tool — content = validator report **verbatim** (same no-rewrite rule)
+3. Prepend YAML frontmatter:
+   ```yaml
+   ---
+   date: <UTC-date>
+   branch: <full branch name>
+   diff_ref: <diff_ref>
+   sid: <SID>
+   reviewers: [<list of reviewer names>]
+   ---
+   ```
+4. After write, tell user exact file path written. Do NOT commit — user decides.
+
+If `docs/reviews/` outside git repo (no `.git` found), skip persistence and warn user.
 
 ---
 
@@ -201,7 +241,7 @@ issues. They already have full file context from their review, so fixes more acc
 Per reviewer with findings to fix, use **SendMessage** to reviewer:
 
 ```
-to: "reviewer-{ID}"
+to: "<SID>-reviewer-{ID}"
 message: |
   Apply the following fixes to the files you reviewed. Use the Edit tool for each fix.
   After applying all fixes, report what you changed.
