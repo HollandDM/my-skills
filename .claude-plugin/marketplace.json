@@ -11,7 +11,7 @@
       "name": "stargazer-review-gang",
       "source": "./stargazer-review-gang",
       "description": "Multi-perspective code review with 8 grouped reviewer agents (Scala/ZIO/Architecture/FDB/Temporal/Tapir/Frontend/Testing), opus validator, and confidence scoring for the Stargazer codebase",
-      "version": "ea390d3",
+      "version": "8123259",
       "author": {
         "name": "HollandDM"
       },
@@ -21,7 +21,7 @@
       "name": "stargazer-subagent-dev",
       "source": "./stargazer-subagent-dev",
       "description": "Execute implementation plans for Stargazer via paired implementer+reviewer agents with direct communication",
-      "version": "ea390d3",
+      "version": "8123259",
       "author": {
         "name": "HollandDM"
       },
@@ -31,7 +31,7 @@
       "name": "stargazer-batch-dev",
       "source": "./stargazer-batch-dev",
       "description": "Batch-parallel plan execution for Stargazer via advisor (opus) + implementers (sonnet) per batch, autonomous loop until all tasks done",
-      "version": "ea390d3",
+      "version": "8123259",
       "author": {
         "name": "HollandDM"
       },
@@ -41,7 +41,7 @@
       "name": "prove",
       "source": "./prove",
       "description": "Adversarial verification skill: prover vs disprover agents argue, then a judge synthesizes a verdict",
-      "version": "ea390d3",
+      "version": "8123259",
       "author": {
         "name": "HollandDM"
       },
