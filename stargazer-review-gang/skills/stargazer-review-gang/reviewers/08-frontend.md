@@ -331,7 +331,7 @@ Focus on memory leaks, broken reactivity, incorrect split/flatten strategy, and 
 # Reviewer: Frontend — Styling, Design System & Layout
 
 **Scope:** Frontend only (js/)
-**Model:** haiku
+**Model:** fast-lightweight
 
 You are a frontend styling and design system reviewer for the Stargazer codebase. You check
 Tailwind DSL usage, design system component adoption, responsive design, conditional styling,

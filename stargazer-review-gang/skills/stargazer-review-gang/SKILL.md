@@ -17,13 +17,13 @@ Store as `SKILL_DIR` — all file refs below (agents/, reviewers/) relative to i
 
 ## Session ID prefix (MANDATORY — avoid name conflict across concurrent sessions)
 
-Before TeamCreate or spawning any reviewer, compute short session ID once:
+Before creating a team or spawning any reviewer, compute short session ID once:
 
 ```bash
 SID=$(git rev-parse --short HEAD 2>/dev/null || printf '%04x' $RANDOM)
 ```
 
-Prefix **every** `team_name` AND agent `name` in this skill with `${SID}-`. Examples below show literal `<SID>-` placeholder — substitute real value. Within-team `SendMessage` MUST use fully prefixed names (e.g. `<SID>-reviewer-1`, `<SID>-validator`).
+Prefix **every** `team_name` AND agent `name` in this skill with `${SID}-`. Examples below show literal `<SID>-` placeholder — substitute real value. Within-team messages MUST use fully prefixed names (e.g. `<SID>-reviewer-1`, `<SID>-validator`).
 
 ## Constraints
 
@@ -31,7 +31,7 @@ Prefix **every** `team_name` AND agent `name` in this skill with `${SID}-`. Exam
    `test`, `checkStyle`, `checkStyleDirty`, `reformat`, `checkUnused`, `WarnUnusedCode`, or any
    build/lint command.
 2. **YOU DO NOT READ DIFFS, SOURCE FILES, OR AGENT INSTRUCTION FILES.** No
-   `git diff` or `git merge-base`. No Read tool on any `.md` file in this skill.
+   `git diff` or `git merge-base`. No read of any `.md` file in this skill.
    Orchestrator determine diff ref from user's review scope.
    **Exception:** MAY run `git log --oneline` and `git status` (short form) in Step 3 for
    branch/history context for orchestrator prompt — but no analysis yourself; pass to orchestrator.
@@ -72,8 +72,8 @@ user's words intact as primary scope.
 
 ```
 You are a subagent dispatched to execute a specific routing task.
-First, invoke the `/caveman ultra` skill via the Skill tool to enable caveman output mode.
-After invoking caveman, do NOT invoke any other skills — you are already inside a workflow.
+First, activate caveman mode via the relevant skill.
+After activating caveman, do NOT activate any other skills — you are already inside a workflow.
 
 Read your full instructions from: ${SKILL_DIR}/agents/orchestrator.md
 
@@ -94,12 +94,7 @@ Orchestrator returns JSON routing plan with `diff_ref`, `routing`, `workload`, `
 
 ### 4a. Create the Review Team
 
-Use **TeamCreate** for this review session:
-
-```
-team_name: "<SID>-review-gang"
-description: "Stargazer code review session"
-```
+Create a team for this review session named `<SID>-review-gang` with description `Stargazer code review session`.
 
 ### 4b. Determine Reviewer Set
 
@@ -136,8 +131,8 @@ Use `team_name: "<SID>-review-gang"`. Spawn all in **single message** for parall
 Each reviewer prompt must start with:
 ```
 You are a subagent dispatched to execute a specific task.
-First, invoke the `/caveman ultra` skill via the Skill tool to enable caveman output mode.
-After invoking caveman, do NOT invoke any other skills — you are already inside a workflow.
+First, activate caveman mode via the relevant skill.
+After activating caveman, do NOT activate any other skills — you are already inside a workflow.
 ```
 
 Then include:
@@ -165,8 +160,8 @@ Validator prompt:
 
 ```
 You are a subagent dispatched to execute a specific task.
-First, invoke the `/caveman ultra` skill via the Skill tool to enable caveman output mode.
-After invoking caveman, do NOT invoke any other skills — you are already inside a workflow.
+First, activate caveman mode via the relevant skill.
+After activating caveman, do NOT activate any other skills — you are already inside a workflow.
 
 Read your instructions from: ${SKILL_DIR}/agents/validator.md
 Diff ref: <diff_ref>
@@ -200,7 +195,7 @@ docs/reviews/<UTC-date>-<branch-slug>-<SID>.md
 
 Steps:
 1. `mkdir -p docs/reviews` (relative to repo root)
-2. Write file using **Write** tool — content = validator report **verbatim** (same no-rewrite rule)
+2. Write file — content = validator report **verbatim** (same no-rewrite rule)
 3. Prepend YAML frontmatter:
    ```yaml
    ---
@@ -219,38 +214,22 @@ If `docs/reviews/` outside git repo (no `.git` found), skip persistence and warn
 
 ## Step 6: Auto-Fix
 
-If only nitpicks, skip this step entirely. Else use **AskUserQuestion** tool:
-
-```
-question: "Would you like me to auto-fix the findings?"
-header: "Auto-fix"
-options:
-  - label: "Fix all"
-    description: "Apply fixes for all blockers and suggestions"
-  - label: "Fix blockers only"
-    description: "Apply fixes for blockers, skip suggestions"
-  - label: "Skip"
-    description: "Do not apply any fixes"
-```
+If only nitpicks, skip this step entirely. Else ask the user, presenting these options:
+- "Fix all" — Apply fixes for all blockers and suggestions
+- "Fix blockers only" — Apply fixes for blockers, skip suggestions
+- "Skip" — Do not apply any fixes
 
 ### Dispatch Fixes to Reviewers
 
 Instead of applying fixes yourself, dispatch to **original reviewers** who flagged
 issues. They already have full file context from their review, so fixes more accurate.
 
-Per reviewer with findings to fix, use **SendMessage** to reviewer:
+Per reviewer with findings to fix, send a team message to the reviewer:
 
-```
-to: "<SID>-reviewer-{ID}"
-message: |
-  Apply the following fixes to the files you reviewed. Use the Edit tool for each fix.
-  After applying all fixes, report what you changed.
-
-  Fixes to apply (blockers first):
-  [list the specific findings from the validator report that belong to this reviewer,
-   including file:line, issue description, and suggested fix]
-summary: "Apply N fixes to reviewed files"
-```
+Send a message to `<SID>-reviewer-{ID}`:
+- Message body: instruct them to apply the prescribed fixes using edit for each fix, then report what they changed
+- Include the specific findings (file:line, issue description, suggested fix) from the validator report, blockers first
+- Summary: "Apply N fixes to reviewed files"
 
 Wait for all dispatched reviewers to respond with changes, then tell user to run
 `checkStyleDirty` on affected modules.
@@ -268,4 +247,4 @@ after auto-fix applied):
    message: {"type": "shutdown_request", "reason": "Review complete"}
    ```
 
-2. After all members shut down, use **TeamDelete** to clean up.
+2. After all members shut down, delete the team.

@@ -25,7 +25,7 @@ Multi-perspective code review swarm. A fast router agent reads each file's diff 
 
 **Features:**
 - Content-aware routing — a fast router agent reads diffs and spawns only relevant reviewers
-- Adaptive depth — model strength scales with PR size (lite=haiku, standard=default, deep=opus)
+- Adaptive depth — model strength scales with PR size (lite=fast-lightweight, standard=default, deep=high-capability)
 - Confidence scoring — every finding self-assessed 0–100, filtered at threshold 70
 - Built-in validation — aggregators verify each blocker/suggestion against actual code before reporting
 - Git blame context — authorship and recency data for smarter false positive filtering
@@ -41,7 +41,7 @@ Adversarial verification skill. Spawns prover and disprover agents that argue fr
 
 ### [stargazer-batch-dev](./stargazer-batch-dev/) `v1.0.0`
 
-Batch-parallel plan execution for the Stargazer codebase. Lighter alternative to `stargazer-subagent-dev` — groups independent tasks into batches, spawns one advisor (opus) + one implementer (sonnet) per task per batch, loops autonomously through all batches without stopping. Team lead handles all `./mill` commands after each batch completes.
+Batch-parallel plan execution for the Stargazer codebase. Lighter alternative to `stargazer-subagent-dev` — groups independent tasks into batches, spawns one advisor (high-capability) + one implementer (balanced-capability) per task per batch, loops autonomously through all batches without stopping. Team lead handles all `./mill` commands after each batch completes.
 
 **Key behaviors:**
 - No user questions (except once for plan file path)

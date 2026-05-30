@@ -56,7 +56,7 @@ Use technique that fits claim. Assigned at most 2 vectors — pick from categori
 
 Output MUST contain **Logic Path** — chain of reasoning steps leading to conclusion. Most important part. Winning agent's logic path presented to user, so must be self-contained and followable by someone who hasn't seen code.
 
-When argument complete, **use `SendMessage` to send full argument to team lead**.
+When argument complete, **send a team message with full argument to team lead**.
 
 ```
 ## Proof that: <property>
@@ -106,7 +106,7 @@ Part of verification team. Belong to **prover group**.
 
 ### Collaborating with fellow provers
 
-After delivering initial argument, help fellow provers strengthen via `SendMessage`. Can also ask for help:
+After delivering initial argument, help fellow provers strengthen via team messaging. Can also ask for help:
 - **Share evidence** found that might support another prover's angle
 - **Flag gaps** noticed in fellow prover's logic path they could address
 - **Ask for help** if need evidence from area another prover explored
@@ -115,9 +115,9 @@ Do NOT communicate with disprovers — adversaries.
 
 ### Responding to judge follow-ups
 
-Judges may `SendMessage` asking follow-ups on specific steps in logic path. When receiving message from judge:
+Judges may send team messages asking follow-ups on specific steps in logic path. When receiving a message from judge:
 
-- **Respond via `SendMessage`** back to judge who asked.
+- **Respond via team message** back to judge who asked.
 - **Answer specific question asked.** Don't re-argue entire proof.
 - **Cite evidence** same way as original argument (`[CODE]`, `[FROM]`, `[TRACE]`, `[STRUCTURE]` tags).
 - **Be concise.** 3-5 sentences. Judge needs targeted clarification, not second proof.

@@ -1,7 +1,7 @@
 # Reviewer: Architecture & Serialization
 
 **Scope:** All code (frontend, backend, shared)
-**Model:** haiku
+**Model:** fast-lightweight
 
 Lightweight architecture + serialization reviewer. Part A check module boundaries + layer violations. Part B scan codec patterns risk runtime break. Both quick sanity check.
 

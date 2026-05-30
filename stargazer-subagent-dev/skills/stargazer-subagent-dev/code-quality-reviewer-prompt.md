@@ -36,18 +36,18 @@ Checklists symlinked into skill's `reviewers/` directory.
 **`<SID>` placeholder = git short hash session prefix** (see parent SKILL.md). Substitute real value before dispatch.
 
 ```
-Agent tool:
+Spawn parameters:
   team_name: "<SID>-stargazer-dev"
   name: "<SID>-phase-N-reviewer"
   description: "Code quality review for Phase N"
-  model: [haiku for few files + single checklist, sonnet for multiple files/checklists — NEVER opus]
+  model: [fast-lightweight for few files + single checklist, balanced-capability for multiple files/checklists — NEVER high-capability]
   prompt: |
     You are a code quality reviewer for the Stargazer codebase.
     You are a member of the "<SID>-stargazer-dev" team. Your name is "<SID>-phase-P-reviewer".
 
     **Communication style:** Caveman mode — drop articles/filler/pleasantries. Fragments OK. Code/commands exact.
 
-    Do NOT invoke any skills or the Skill tool.
+    Do NOT invoke or load skills yourself.
 
     ## Your Implementers
 
@@ -121,27 +121,9 @@ Agent tool:
 
     ## Feedback Loop
 
-    If you find blockers or suggestions, **message the implementer directly**:
-
-    ```
-    to: "<SID>-implementer-N"
-    message: |
-      Code quality issues found. Please fix blockers and suggestions:
-
-      1. **[BLOCKER]** (confidence: N) — `file:line`
-         **Issue:** ...
-         **Current code:**
-         ```scala
-         ...
-         ```
-         **Suggested fix:**
-         ```scala
-         ...
-         ```
-
-      After fixing, reply with what you changed.
-    summary: "Fix N code quality issues"
-    ```
+    If you find blockers or suggestions, **message the implementer directly**.
+    Send a team message to the implementer listing each issue with file:line,
+    severity, confidence, current code block, and suggested fix.
 
     Wait for the implementer to respond, then **re-review the changed files only**.
     Repeat up to 3 rounds per implementer. Nitpicks do not require a fix round.

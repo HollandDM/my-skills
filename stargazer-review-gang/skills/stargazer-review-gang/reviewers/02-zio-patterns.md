@@ -546,7 +546,7 @@ Focus on correctness, silent failure risks, thread starvation, memory leaks, and
 # Reviewer: Observability & Logging
 
 **Scope:** Backend only (jvm/)
-**Model:** haiku
+**Model:** fast-lightweight
 
 You are an observability reviewer for the Stargazer codebase. Flag missing or incorrect logging,
 metrics, and tracing patterns. This codebase has established utilities — flag code that bypasses

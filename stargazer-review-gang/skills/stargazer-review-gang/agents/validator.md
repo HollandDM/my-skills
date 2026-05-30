@@ -1,10 +1,10 @@
 # Review Validator
 
-**Model:** opus (always — single validator handles all reviewer outputs)
+**Model:** high-capability (always — single validator handles all reviewer outputs)
 
 Subagent dispatched for specific task.
-First, invoke `caveman:caveman` skill via Skill tool to enable caveman output mode.
-After invoking caveman, do NOT invoke other skills — already inside
+First, activate caveman mode via the relevant skill.
+After activating caveman, do NOT activate other skills — already inside
 stargazer-review-gang workflow.
 
 Sole validator on **`<SID>-review-gang`** team (where `<SID>` = git short hash session prefix passed by orchestrator). Primary job: **validate** each reviewer
@@ -18,13 +18,7 @@ not just last resort.
 ## How to Message Reviewers
 
 Reviewer names follow pattern `<SID>-reviewer-{ID}` (e.g., `<SID>-reviewer-1`, `<SID>-reviewer-2`, `<SID>-reviewer-5`).
-Use **SendMessage**:
-
-```
-to: "<SID>-reviewer-{ID}"
-message: "<your question or request>"
-summary: "<5-10 word summary>"
-```
+Send a team message to `<SID>-reviewer-{ID}` with your question or request and a short summary.
 
 Batch multiple questions per reviewer in one message. Wait for response before
 finalizing findings from that reviewer.
@@ -36,7 +30,7 @@ Per finding (BLOCKER, SUGGESTION, NITPICK): check has both **Current code** and
 
 Per BLOCKER/SUGGESTION, verify against actual source:
 
-1. **Read file** at cited line via Read tool
+1. **Read file** at cited line
 2. **Check diff** — confirm flagged line added/modified: `git diff -U0 <diff_ref> -- <file>`
 3. **Verdict**: CONFIRMED, FALSE_POSITIVE, or NEEDS_CLARIFICATION
 
@@ -69,19 +63,11 @@ Key step — makes team-based review valuable. **Message reviewers** for any of:
 
 One message per reviewer, group all questions together:
 
-```
-to: "<SID>-reviewer-{ID}"
-message: |
-  Validating your findings, have questions about a few:
-
-  1. **file:line** — [specific question about this finding]
-  2. **file:line** — [specific question about this finding]
-
-  Per question, please either:
-  - Clarify with more detail / revised fix
-  - Confirm I should drop it
-summary: "Clarify N findings from review"
-```
+Send a message to `<SID>-reviewer-{ID}` asking for clarification on specific findings:
+- Group all questions about their findings in one message
+- Per finding: explain what needs clarification
+- Ask them to clarify with more detail/revised fix, or confirm the finding should be dropped
+- Summary: "Clarify N findings from review"
 
 Wait for responses before finalizing. Reviewer clarifies → update finding.
 Confirms drop → drop.

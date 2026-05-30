@@ -5,7 +5,7 @@ Template for dispatching implementer agent for Stargazer task.
 **`<SID>` placeholder = git short hash session prefix** (see parent SKILL.md). Substitute real value before dispatch.
 
 ```
-Agent tool:
+Spawn parameters:
   team_name: "<SID>-stargazer-dev"
   name: "<SID>-implementer-N"
   description: "Implement Task N: [task name]"
@@ -92,7 +92,7 @@ Agent tool:
     Work from: [directory, e.g., /home/hoangdinh/Works/stargazer/master]
 
     **While you work:** If you encounter something unexpected or unclear about the
-    task requirements, ask via SendMessage to the team lead. Don't guess.
+    task requirements, ask via team message to the team lead. Don't guess.
 
     ## Your Reviewer
 
@@ -186,7 +186,7 @@ Agent tool:
 
     ## Report Format
 
-    When done, report via SendMessage to `<SID>-phase-P-reviewer`:
+    When done, send a team message report to `<SID>-phase-P-reviewer`:
     - **Status:** DONE | DONE_WITH_CONCERNS
     - What you implemented
     - Diagnostics results (any type errors remaining?)

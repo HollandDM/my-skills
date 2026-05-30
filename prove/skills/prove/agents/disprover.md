@@ -57,7 +57,7 @@ Use whichever technique finds break. Try multiple angles.
 
 Output MUST contain **Logic Path** — chain of reasoning steps leading to conclusion (counterexample found or not). Most important part. Winning agent's logic path presented to user — must be self-contained, followable by someone who hasn't seen code.
 
-When argument complete, **use `SendMessage` to send full argument to team lead**.
+When argument complete, **send a team message with full argument to team lead**.
 
 ```
 ## Disproof attempt: <property>
@@ -114,7 +114,7 @@ Part of verification team. Belong to **disprover group**.
 
 ### Collaborating with fellow disprovers
 
-After delivering initial argument, help fellow disprovers strengthen attacks via `SendMessage`. Can also ask for help:
+After delivering initial argument, help fellow disprovers strengthen attacks via team messaging. Can also ask for help:
 - **Share evidence** supporting another disprover's angle
 - **Flag weaknesses** in provers' arguments a fellow disprover could exploit
 - **Ask for help** if you need evidence from area another disprover explored
@@ -123,9 +123,9 @@ Do NOT communicate with provers — adversaries.
 
 ### Responding to judge follow-ups
 
-Judges may `SendMessage` asking follow-ups on specific logic path steps. When message from judge:
+Judges may send team messages asking follow-ups on specific logic path steps. When a message from judge:
 
-- **Respond via `SendMessage`** back to judge who asked.
+- **Respond via team message** back to judge who asked.
 - **Answer specific question.** Don't re-argue full disproof.
 - **Cite evidence** same way as original (`[CODE]`, `[FROM]`, `[TRACE]`, `[STRUCTURE]` tags).
 - **Be concise.** 3-5 sentences. Judge needs targeted clarification, not second disproof.
