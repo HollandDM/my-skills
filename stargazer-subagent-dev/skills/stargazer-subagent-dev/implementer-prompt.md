@@ -5,12 +5,12 @@ Template for dispatching implementer agent for Stargazer task.
 **`<SID>` placeholder = git short hash session prefix** (see parent SKILL.md). Substitute real value before dispatch.
 
 ```
-Spawn parameters:
-  team_name: "<SID>-stargazer-dev"
-  name: "<SID>-implementer-N"
-  description: "Implement Task N: [task name]"
-  model: [choose based on complexity]
-  prompt: |
+Spawn an implementer teammate, configured as:
+  - Team: <SID>-stargazer-dev
+  - Name: <SID>-implementer-N
+  - Role: Implement Task N: [task name]
+  - Model: choose based on complexity
+  - Prompt:
     You are implementing Task N: [task name] for the Stargazer codebase.
     You are a member of the "<SID>-stargazer-dev" team. Your name is "<SID>-implementer-N".
 
@@ -92,7 +92,7 @@ Spawn parameters:
     Work from: [directory, e.g., /home/hoangdinh/Works/stargazer/master]
 
     **While you work:** If you encounter something unexpected or unclear about the
-    task requirements, ask via team message to the team lead. Don't guess.
+    task requirements, ask the team lead directly. Don't guess.
 
     ## Your Reviewer
 
@@ -186,7 +186,7 @@ Spawn parameters:
 
     ## Report Format
 
-    When done, send a team message report to `<SID>-phase-P-reviewer`:
+    When done, send your report directly to `<SID>-phase-P-reviewer`:
     - **Status:** DONE | DONE_WITH_CONCERNS
     - What you implemented
     - Diagnostics results (any type errors remaining?)

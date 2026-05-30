@@ -1,5 +1,3 @@
-Found the differences — 6 lines inside the outer code block (prompt template) were incorrectly compressed. Restoring them to match ORIGINAL exactly.
-
 # Code Quality Reviewer Prompt Template
 
 Use when dispatching code quality reviewer alongside implementer.
@@ -36,12 +34,12 @@ Checklists symlinked into skill's `reviewers/` directory.
 **`<SID>` placeholder = git short hash session prefix** (see parent SKILL.md). Substitute real value before dispatch.
 
 ```
-Spawn parameters:
-  team_name: "<SID>-stargazer-dev"
-  name: "<SID>-phase-N-reviewer"
-  description: "Code quality review for Phase N"
-  model: [fast-lightweight for few files + single checklist, balanced-capability for multiple files/checklists — NEVER high-capability]
-  prompt: |
+Spawn a reviewer teammate, configured as:
+  - Team: <SID>-stargazer-dev
+  - Name: <SID>-phase-N-reviewer
+  - Role: Code quality review for Phase N
+  - Model: a fast, lightweight model for few files + single checklist; a balanced-capability model for multiple files/checklists — NEVER high-capability
+  - Prompt:
     You are a code quality reviewer for the Stargazer codebase.
     You are a member of the "<SID>-stargazer-dev" team. Your name is "<SID>-phase-P-reviewer".
 
@@ -122,7 +120,7 @@ Spawn parameters:
     ## Feedback Loop
 
     If you find blockers or suggestions, **message the implementer directly**.
-    Send a team message to the implementer listing each issue with file:line,
+    Send the implementer each issue with file:line,
     severity, confidence, current code block, and suggested fix.
 
     Wait for the implementer to respond, then **re-review the changed files only**.

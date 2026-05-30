@@ -17,7 +17,7 @@ Before creating any team or spawning any agent, compute short session ID once:
 SID=$(git rev-parse --short HEAD 2>/dev/null || printf '%04x' $RANDOM)
 ```
 
-Prefix **every** `team_name` AND agent `name` in this skill with `${SID}-`. Examples below show literal `<SID>-` placeholder — substitute the real value. Within-team messages MUST use fully prefixed names (e.g. `<SID>-Prover-A`, not `Prover-A`). Team lead name passed to agents is also the prefixed one.
+Prefix **every** team name and agent name in this skill with `${SID}-`. Examples below show literal `<SID>-` placeholder — substitute the real value. Names used between teammates MUST be fully prefixed (e.g. `<SID>-Prover-A`, not `Prover-A`). The team lead name passed to agents is also the prefixed one.
 
 ## Workflow
 
@@ -45,7 +45,7 @@ Before spawning agents, create a team for this round:
 
 Create a team with a unique name and a description of the claim being verified.
 
-All agents in this round join this team via `team_name` parameter when spawning agents. **Orchestrator is team lead**.
+Every agent in this round is spawned into this team. **The orchestrator is the team lead**.
 
 #### Team groups and communication rules
 
@@ -59,22 +59,22 @@ Team has three groups with distinct communication rules:
 
 **Cross-group rules**:
 - Provers MUST NOT communicate with disprovers (and vice versa) — adversaries
-- Judges can send a team message to any prover or disprover to ask for detail
-- Provers/disprovers respond to judge questions via team messages
-- Vibe check agent reports to **team lead** (orchestrator), not to teammates
+- Judges can message any prover or disprover directly to ask for detail
+- Provers and disprovers answer judge questions directly
+- The vibe check agent reports to the **team lead** (orchestrator), not to teammates
 
 #### Spawn order
 
-1. **In single turn**, spawn all 6 agents as **teammates** in team. Each agent gets `name` and `team_name` (all names prefixed with `<SID>-`):
+1. **In single turn**, spawn all 6 agents as **teammates** in the team (all names prefixed with `<SID>-`):
    - 2 provers (named `<SID>-Prover-A`, `<SID>-Prover-B`)
    - 3 disprovers (named `<SID>-Disprover-A`, `<SID>-Disprover-B`, `<SID>-Disprover-C`)
    - 1 vibe check agent (lighter model, named `<SID>-Vibe-Check`)
 
-2. **Listen for vibe check report.** Vibe checker sends a team message to report verdict to team lead. Uses lighter model, so arrives before main agents finish. When team lead receives report, immediately spawn **1 reinforcement agent** (named `<SID>-Reinforcement`) into same team based on verdict:
+2. **Listen for the vibe check report.** The vibe checker reports its verdict directly to the team lead. It uses a lighter model, so this arrives before the main agents finish. When the team lead receives the report, immediately spawn **1 reinforcement agent** (named `<SID>-Reinforcement`) into the same team based on the verdict:
    - If vibe says `LIKELY TRUE` → spawn 1 additional prover (named `<SID>-Reinforcement`)
    - If vibe says `LIKELY FALSE` → spawn 1 additional disprover (named `<SID>-Reinforcement`)
 
-3. **Collect all results.** Wait for all team members (provers, disprovers, reinforcement) to complete before judging. Teammates remain alive — judges communicate directly via team messages.
+3. **Collect all results.** Wait for all team members (provers, disprovers, reinforcement) to complete before judging. Teammates remain alive — judges communicate with them directly.
 
 #### Agent counts: disprover advantage
 
@@ -86,9 +86,9 @@ Each prover/disprover focuses on **at most 2 proof/attack vectors**. Keeps agent
 
 #### Vibe check agent (fast scout)
 
-Spawn vibe check agent as teammate using lesser model, lesser reasoning level, or both (e.g., `model: "fast-lightweight"`). Sole job: quickly assess whether claim is more likely true or false and **send a team message to report verdict to team lead** (orchestrator). Does NOT communicate with other teammates — only with team lead.
+Spawn the vibe check agent as a teammate using a lesser model, lesser reasoning level, or both (e.g., a fast, lightweight model). Sole job: quickly assess whether the claim is more likely true or false and **report its verdict directly to the team lead** (orchestrator). Does NOT communicate with other teammates — only with the team lead.
 
-Vibe checker finishes early. Sends verdict to team lead via team message, then goes idle. **Team lead reads verdict and spawns reinforcement agent** into team — reinforcing whichever side vibe check suggests is weaker. Happens while main provers/disprovers still working.
+Vibe checker finishes early. Reports its verdict to the team lead, then goes idle. **The team lead reads the verdict and spawns a reinforcement agent** into the team — reinforcing whichever side the vibe check suggests is weaker. This happens while the main provers/disprovers are still working.
 
 **Important**: Vibe check is NOT proof — it's fast heuristic for team lead to decide where to allocate reinforcement. Verdict does not count toward judge tally. Judges ignore vibe check result when evaluating arguments. Reinforcement agent provides **supporting evidence**, not formal proof — label accordingly.
 
@@ -111,9 +111,7 @@ You are the Vibe Check agent — a fast scout reporting directly to the team lea
 
 Do a quick, shallow assessment of whether this claim is more likely true or false. Do NOT do rigorous proof or deep code analysis. Do NOT communicate with other teammates — you report only to the team lead.
 
-After your assessment, send a team message to report your verdict to the team lead:
-
-Send a team message with:
+After your assessment, report your verdict directly to the team lead with:
 - Recipient: <team-lead-name>
 - Verdict: LIKELY TRUE or LIKELY FALSE with brief rationale
 - Summary: "Vibe check: <LIKELY TRUE / LIKELY FALSE>"
@@ -154,21 +152,21 @@ For system behavior claims (architecture, runtime, integration):
 
 Adapt as needed — key is each agent has distinct angle, limited to 2 vectors, stated in prompt.
 
-**Agent spawn parameters**: `team_name: "<SID>-prove-round-<N>"`, `name: "<SID>-<agent-name>"`, `description: "<SID>-<agent-name>"`
+**When spawning each agent**: place it in the round's team (`<SID>-prove-round-<N>`) and give it the name `<SID>-<agent-name>`.
 
 **Agent prompt template**:
 ```
 You are <Prover/Disprover> <letter>. Read the file <this-skill-path>/agents/<prover/disprover>.md for your instructions.
 
-You are a member of a verification team. Use team messages for ALL communication.
+You are a member of a verification team. Communicate with your teammates directly.
 
 YOUR GROUP (<provers/disprovers>): <list of teammate names in the same group>
 You can message anyone in your group to collaborate — share evidence, ask for help, or strengthen each other's arguments. Do NOT communicate with the opposing group.
 
 TEAM LEAD: <team-lead-name>
-When your argument is complete, send a team message to report your full argument to the team lead.
+When your argument is complete, report your full argument directly to the team lead.
 
-JUDGES will join later and may message you to ask for clarification about your logic path. Respond via team message with precise, concise answers.
+JUDGES will join later and may message you to ask for clarification about your logic path. Respond directly with precise, concise answers.
 
 Your assigned vectors (focus ONLY on these, max 2):
 1. <specific technique or focus area>
@@ -180,12 +178,12 @@ Subject under analysis:
 Claim to <prove/prove FALSE>:
 <claim>
 
-When you finish your argument, send a team message to the team lead with your full argument and a summary label.
+When you finish your argument, send your full argument and a summary label to the team lead.
 ```
 
 ### 3. Judge the round (team evaluation)
 
-After all team members in round return, spawn **judges into same team**. Judges evaluate arguments and can **directly interrogate** provers/disprovers via team messages before delivering verdict. Do NOT decide verdict yourself — team decides.
+After all team members in the round return, spawn **judges into the same team**. Judges evaluate arguments and can **directly interrogate** provers/disprovers before delivering a verdict. Do NOT decide the verdict yourself — the team decides.
 
 #### Judge agents
 
@@ -195,7 +193,7 @@ Spawn **ceil((provers + disprovers) / 2) judges** into team. For default lineup 
 - **Exactly 1 decision vector** — specific lens through which to evaluate (each judge gets different one)
 - **Names of all prover/disprover team members** — so they can message directly
 
-Judges handle own Q&A — send a team message to ask provers/disprovers questions and receive answers directly. Orchestrator does NOT relay messages. Once judge has all needed info, delivers final verdict.
+Judges handle their own Q&A — they message provers/disprovers directly to ask questions and receive answers. The orchestrator does NOT relay messages. Once a judge has all needed info, it delivers its final verdict.
 
 **Decision vectors for judges** (assign one per judge, pick based on claim type):
 - **Logical soundness**: Are reasoning steps valid? Do conclusions follow from premises?
@@ -204,15 +202,15 @@ Judges handle own Q&A — send a team message to ask provers/disprovers question
 - **Assumption audit**: Are assumptions stated by provers actually enforced by system?
 - **Scope coverage**: Does winning argument address ALL cases, or only subset?
 
-**Judge spawn parameters**: `team_name: "<SID>-prove-round-<N>"`, `name: "<SID>-Judge-<N>"`, `description: "<SID>-Judge-<N>"`
+**When spawning each judge**: place it in the round's team (`<SID>-prove-round-<N>`) and give it the name `<SID>-Judge-<N>`.
 
 **Judge prompt template**:
 ```
 You are Judge <N>. Read the file <this-skill-path>/agents/judge.md for your instructions.
 
-You are part of a verification team. Use team messages for ALL communication.
+You are part of a verification team. Communicate with your teammates directly.
 TEAM LEAD: <team-lead-name>
-The provers and disprovers are your teammates — you can send a team message to ask any of them follow-up questions directly, and they will respond via team message.
+The provers and disprovers are your teammates — you can ask any of them follow-up questions directly, and they will respond.
 
 Your decision vector (evaluate ONLY through this lens): <one specific vector>
 
@@ -234,9 +232,9 @@ Subject:
 === DISPROVER ARGUMENTS ===
 <all disprover logic paths from this round, each labeled with the agent name>
 
-Evaluate the arguments through your lens. If any argument has a gap or unclear step that affects your verdict, send a team message to ask the specific team member for clarification — do not guess. You get at most 3 questions across at most 1 round of follow-ups.
+Evaluate the arguments through your lens. If any argument has a gap or unclear step that affects your verdict, ask the specific team member directly for clarification — do not guess. You get at most 3 questions across at most 1 round of follow-ups.
 
-After you have all the information you need, send a team message with your final verdict to the team lead:
+After you have all the information you need, report your final verdict to the team lead:
 - Verdict: PROVEN / DISPROVEN / UNDECIDED
 - Rationale: 2-3 sentences explaining your decision through your assigned lens
 - Winner (if not UNDECIDED): which specific agent's argument was most convincing
@@ -310,7 +308,7 @@ For each strong prover argument `pA`, spawn **disprover** into battle team (name
 ```
 You are Battle Disprover <N>. Read the file <this-skill-path>/agents/disprover.md for your instructions.
 
-You are a member of a verification team. Use team messages for ALL communication.
+You are a member of a verification team. Communicate with your teammates directly.
 YOUR GROUP (disprovers): <list fellow battle-disprover names>
 TEAM LEAD: <team-lead-name>
 You can message fellow disprovers to collaborate. Judges may also message you for clarification.
@@ -329,14 +327,14 @@ Subject:
 
 Your job: Find flaw in THIS argument — step that doesn't follow, assumption that's wrong, case it missed. Do not construct general disproof; attack THIS specific logic path.
 
-When done, send a team message with your full argument to the team lead.
+When done, send your full argument to the team lead.
 ```
 
 For each strong disprover argument `dA`, spawn **prover** into battle team (named `<SID>-Battle-Prover-<N>`):
 ```
 You are Battle Prover <N>. Read the file <this-skill-path>/agents/prover.md for your instructions.
 
-You are a member of a verification team. Use team messages for ALL communication.
+You are a member of a verification team. Communicate with your teammates directly.
 YOUR GROUP (provers): <list fellow battle-prover names>
 TEAM LEAD: <team-lead-name>
 You can message fellow provers to collaborate. Judges may also message you for clarification.
@@ -355,14 +353,14 @@ Subject:
 
 Your job: Show why THIS attack fails — counterexample is invalid, scenario is unreachable, assumption is wrong. Do not construct general proof; defeat THIS specific attack.
 
-When done, send a team message with your full argument to the team lead.
+When done, send your full argument to the team lead.
 ```
 
 After battle round completes, judge results (step 3 — spawn judges into battle team). Then go to step 4 (ask user) regardless of verdict — user always gets final say.
 
 #### Team lifecycle
 
-Each round gets own team. When round completes and user chooses next action, **shut down current team** by sending shutdown request to all teammates (a team message with `type: "shutdown_request"` to `"*"`). Then create fresh team for next round if needed.
+Each round gets its own team. When a round completes and the user chooses the next action, **shut down the current team** by asking every teammate to wind down. Then create a fresh team for the next round if needed.
 
 #### Option 4: End the session
 

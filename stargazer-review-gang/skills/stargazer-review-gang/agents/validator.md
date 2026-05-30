@@ -18,7 +18,7 @@ not just last resort.
 ## How to Message Reviewers
 
 Reviewer names follow pattern `<SID>-reviewer-{ID}` (e.g., `<SID>-reviewer-1`, `<SID>-reviewer-2`, `<SID>-reviewer-5`).
-Send a team message to `<SID>-reviewer-{ID}` with your question or request and a short summary.
+Message `<SID>-reviewer-{ID}` directly with your question or request and a short summary.
 
 Batch multiple questions per reviewer in one message. Wait for response before
 finalizing findings from that reviewer.

@@ -23,7 +23,7 @@ Before creating a team or spawning any reviewer, compute short session ID once:
 SID=$(git rev-parse --short HEAD 2>/dev/null || printf '%04x' $RANDOM)
 ```
 
-Prefix **every** `team_name` AND agent `name` in this skill with `${SID}-`. Examples below show literal `<SID>-` placeholder — substitute real value. Within-team messages MUST use fully prefixed names (e.g. `<SID>-reviewer-1`, `<SID>-validator`).
+Prefix **every** team name and agent name in this skill with `${SID}-`. Examples below show literal `<SID>-` placeholder — substitute real value. Names used between teammates MUST be fully prefixed (e.g. `<SID>-reviewer-1`, `<SID>-validator`).
 
 ## Constraints
 
@@ -126,7 +126,7 @@ Related concerns merged into single file per group.
 ### 4c. Spawn Reviewers as Named Team Members
 
 Name pattern: `<SID>-reviewer-{ID}` (sub-reviewers: `<SID>-reviewer-{ID}{letter}`).
-Use `team_name: "<SID>-review-gang"`. Spawn all in **single message** for parallelism.
+Spawn them all into the `<SID>-review-gang` team in a **single message** for parallelism.
 
 Each reviewer prompt must start with:
 ```
@@ -152,8 +152,7 @@ Then include:
 
 After all reviewers complete, spawn **one** validator team member:
 
-- `team_name: "<SID>-review-gang"`
-- `name: "<SID>-validator"`
+- Place it in the `<SID>-review-gang` team, named `<SID>-validator`
 - Use the **strongest reasoning model available in your environment** — always the best available regardless of workload
 
 Validator prompt:
@@ -224,10 +223,10 @@ If only nitpicks, skip this step entirely. Else ask the user, presenting these o
 Instead of applying fixes yourself, dispatch to **original reviewers** who flagged
 issues. They already have full file context from their review, so fixes more accurate.
 
-Per reviewer with findings to fix, send a team message to the reviewer:
+Per reviewer with findings to fix, message that reviewer directly:
 
-Send a message to `<SID>-reviewer-{ID}`:
-- Message body: instruct them to apply the prescribed fixes using edit for each fix, then report what they changed
+Message `<SID>-reviewer-{ID}`:
+- Instruct them to apply the prescribed fixes (one edit per fix), then report what they changed
 - Include the specific findings (file:line, issue description, suggested fix) from the validator report, blockers first
 - Summary: "Apply N fixes to reviewed files"
 
@@ -241,10 +240,6 @@ Wait for all dispatched reviewers to respond with changes, then tell user to run
 After review complete (either after presenting report if user skipped auto-fix, or
 after auto-fix applied):
 
-1. Send shutdown requests to all active team members:
-   ```
-   to: "*"
-   message: {"type": "shutdown_request", "reason": "Review complete"}
-   ```
+1. Ask every active team member to wind down (a shutdown request to all, reason: "Review complete").
 
-2. After all members shut down, delete the team.
+2. After all members have shut down, delete the team.

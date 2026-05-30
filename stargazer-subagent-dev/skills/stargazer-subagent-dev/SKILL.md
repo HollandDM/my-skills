@@ -26,7 +26,7 @@ Before creating team or spawning any agent, compute short session ID once:
 SID=$(git rev-parse --short HEAD 2>/dev/null || printf '%04x' $RANDOM)
 ```
 
-Prefix **every** `team_name` AND agent `name` in this skill with `${SID}-`. Examples below show literal `<SID>-` placeholder — substitute real value. Within-team team message MUST use fully prefixed names (e.g. `<SID>-implementer-1`, `<SID>-phase-P-reviewer`, `<SID>-final-reviewer`).
+Prefix **every** team name and agent name in this skill with `${SID}-`. Examples below show literal `<SID>-` placeholder — substitute real value. Names used between teammates MUST be fully prefixed (e.g. `<SID>-implementer-1`, `<SID>-phase-P-reviewer`, `<SID>-final-reviewer`).
 
 ---
 
@@ -86,12 +86,7 @@ Each team member scoped to single task — created when task starts, shutdown wh
 
 ## Step 2: Create Team
 
-Use **create a team** for the session:
-
-```
-team_name: "<SID>-stargazer-dev"
-description: "Stargazer plan execution session"
-```
+**Create a team** for the session — name it `<SID>-stargazer-dev` and describe it as the Stargazer plan execution session.
 
 Team persists entire plan execution. Members join and leave per task.
 
@@ -112,22 +107,22 @@ Identify blocking dependencies, group tasks:
 Spawn all implementers **and** phase reviewer simultaneously:
 
 **Implementers:** Use template in `${SKILL_DIR}/implementer-prompt.md`.
-- `team_name: "<SID>-stargazer-dev"`, `name: "<SID>-implementer-N"`
-- Tell each implementer reviewer = `"<SID>-phase-P-reviewer"` — message reviewer directly when done, respond to feedback directly.
+- Spawn each into the `<SID>-stargazer-dev` team, named `<SID>-implementer-N`
+- Tell each implementer its reviewer is `<SID>-phase-P-reviewer` — message the reviewer directly when done, and respond to feedback directly.
 
 **Implementer model selection:**
-- 1-2 files, clear spec -> `model: "balanced-capability"`
+- 1-2 files, clear spec -> a balanced-capability model
 - Multi-file coordination, integration concerns -> default (no override)
-- Architectural judgment or broad codebase understanding -> `model: "high-capability"`
+- Architectural judgment or broad codebase understanding -> a high-capability model
 
 **Phase Reviewer:** Use template in `${SKILL_DIR}/code-quality-reviewer-prompt.md`.
-- `team_name: "<SID>-stargazer-dev"`, `name: "<SID>-phase-P-reviewer"`
+- Spawn into the `<SID>-stargazer-dev` team, named `<SID>-phase-P-reviewer`
 - Tell reviewer which implementers to expect (e.g., `<SID>-implementer-1`, `<SID>-implementer-2`)
 - Reviewer waits for all implementers, then reviews all changes together.
 
 **Reviewer model selection** (always lightweight — never high-capability):
-- Few files, single checklist -> `model: "fast-lightweight"`
-- Multiple files or checklists -> `model: "balanced-capability"`
+- Few files, single checklist -> a fast, lightweight model
+- Multiple files or checklists -> a balanced-capability model
 
 Before dispatching reviewer, determine checklists by scanning plan tasks for domain/tech indicators — see routing table in `${SKILL_DIR}/code-quality-reviewer-prompt.md`. Pass only matching checklists.
 
@@ -144,7 +139,7 @@ Intervene only when agent messages team lead:
 
 | Status | Action |
 |--------|--------|
-| **NEEDS_CONTEXT** | Answer questions via team message, let agent continue |
+| **NEEDS_CONTEXT** | Answer questions directly, let agent continue |
 | **BLOCKED** | Assess: provide context, re-dispatch with stronger model, break task down, or escalate to user |
 
 ### 3d. Wait for Phase Completion
@@ -182,15 +177,11 @@ Proceed to final review only after clean build.
 
 ## Step 5: Final Review
 
-Build green → dispatch final code quality reviewer (`name: "<SID>-final-reviewer"`) to review **entire implementation** across all tasks. Catches cross-task integration issues per-task reviews miss.
+Build green → dispatch a final code quality reviewer (named `<SID>-final-reviewer`) to review the **entire implementation** across all tasks. Catches cross-task integration issues per-task reviews miss.
 
 ## Step 6: Finish
 
-Delete the team:
-
-```
-team_name: "<SID>-stargazer-dev"
-```
+Delete the `<SID>-stargazer-dev` team.
 
 Wrap up branch: review all changes, decide to merge, create PR, or clean up. Present user with options.
 
