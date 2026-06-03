@@ -1,0 +1,1 @@
+../stargazer-subagent-dev/implementer-prompt.md

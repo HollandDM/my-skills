@@ -1,0 +1,1 @@
+../stargazer-subagent-dev/code-quality-reviewer-prompt.md
