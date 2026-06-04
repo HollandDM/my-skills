@@ -1,23 +1,23 @@
-# Prove — Workflow Mode
+# Prove — Ultracode Mode
 
 Use this when the **Workflow tool** is available. Author one `Workflow(...)` script that reproduces the prove/disprove logic deterministically, then launch it. State lives in JS variables — there is no `SendMessage`.
 
-### Translation rules (team → workflow)
+### Translation rules (team → ultracode)
 
-| Team mechanism | Workflow equivalent |
+| Team mechanism | Ultracode equivalent |
 |---|---|
 | `TeamCreate` per round | nothing — the script *is* the team lead |
 | Provers/disprovers as teammates | `agent(prompt, {schema, phase})` inside `parallel()` |
 | Vibe `SendMessage` → spawn reinforcement | run vibe `agent()` first, `await`, then append reinforcement arguer to weaker side before the fan-out |
 | Judges live-interrogate arguers | **no live Q&A** — each arguer returns a fully self-contained logic path; judges evaluate from text |
-| Cross-group isolation | automatic — workflow agents never share context |
+| Cross-group isolation | automatic — ultracode agents never share context |
 | `AskUserQuestion` between rounds | **can't ask mid-run** — loop battle rounds until majority verdict or `maxRounds`, then return record; main thread asks user after |
 
 Arguer/judge instruction files live in `${SKILL_DIR}/agents/` (`prover.md`, `disprover.md`, `judge.md`). Pass `${SKILL_DIR}` as `resourceDir` in `args`.
 
 ### What you do
 
-1. Extract Subject + Claim. Restate the claim precisely. If vague, `AskUserQuestion` to confirm BEFORE launch (workflow can't ask).
+1. Extract Subject + Claim. Restate the claim precisely. If vague, `AskUserQuestion` to confirm BEFORE launch (ultracode can't ask).
 2. Author the script (template below), filling Subject, Claim, `resourceDir`, and per-claim-type angle vectors (the angle tables in the team-of-agents section).
 3. Launch with the `Workflow` tool; pass Subject+Claim via `args`.
 4. On completion, present the verdict (full winning logic path verbatim) and `AskUserQuestion`: Accept / More context / Another battle round / End.
@@ -129,7 +129,7 @@ return {
 }
 ```
 
-### After the workflow returns
+### After the ultracode run returns
 
 Present in the team-of-agents step-6 format: Verdict, Claim, Rounds, Judge votes, **full winning logic path verbatim**, defeated arguments, confidence. Then `AskUserQuestion`: Accept / More context (re-run via `args`, optionally `resumeFromRunId`) / Another battle round / End. User always gets final say.
 

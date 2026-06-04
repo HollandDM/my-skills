@@ -1,4 +1,4 @@
-# Stargazer Review Gang — Workflow Mode
+# Stargazer Review Gang — Ultracode Mode
 
 Use this when the **Workflow tool** is available. Author one `Workflow(...)` script: route → parallel reviewers → opus validator. Read-only — no build commands.
 
@@ -8,14 +8,14 @@ Use this when the **Workflow tool** is available. Author one `Workflow(...)` scr
 - Diff-bound: reviewers only flag changed lines. No PR-size stop.
 - Checklists in `${SKILL_DIR}/reviewers/NN-*.md`; agent instructions in `${SKILL_DIR}/agents/*.md`.
 
-### Translation rules (team → workflow)
+### Translation rules (team → ultracode)
 
-| Team mechanism | Workflow equivalent |
+| Team mechanism | Ultracode equivalent |
 |---|---|
 | Routing orchestrator agent | first `agent()`, schema'd routing plan |
 | reviewers as teammates | `parallel()` of reviewer `agent()` calls |
 | validator live-re-queries reviewers | **no live re-query** — validator re-reads actual code itself |
-| auto-fix via `SendMessage` | **after** workflow returns: `AskUserQuestion` then dispatch fixes |
+| auto-fix via `SendMessage` | **after** the ultracode run returns: `AskUserQuestion` then dispatch fixes |
 
 ### What you do
 
@@ -98,12 +98,12 @@ const report = await agent(
 return { diff_ref: plan.diff_ref, reviewerCount: assigned.length, report }
 ```
 
-### After the workflow returns
+### After the ultracode run returns
 
 Present `report` verbatim (code blocks ARE the report — never reduce to one-liners, even all-nitpick). If blockers/suggestions, `AskUserQuestion` (Fix all / Fix blockers only / Skip); apply via Edit or the team-of-agents auto-fix step, then tell user to run `checkStyleDirty` on affected modules.
 
 ### Caveats
 
 - No live validator↔reviewer re-query — validator re-reads code itself.
-- Read-only — workflow never builds/fixes; fixes happen after with consent.
+- Read-only — the ultracode run never builds/fixes; fixes happen after with consent.
 - Resume: identical script + `args` replays cached routing/reviews.

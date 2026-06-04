@@ -16,7 +16,7 @@ This skill runs in one of two modes depending on tooling. **Capture this skill's
 
 Check whether the **Workflow tool** is available in this environment, then read the matching mode file and follow it:
 
-- **Workflow tool present** → read `${SKILL_DIR}/workflow-mode.md` and follow it (deterministic background orchestration — one `Workflow(...)` script driving the batch loop).
+- **Workflow tool present** → read `${SKILL_DIR}/ultracode-mode.md` and follow it (deterministic background orchestration — one `Workflow(...)` script driving the batch loop).
 - **Workflow tool absent** → read `${SKILL_DIR}/team-mode.md` and follow it (live advisor + implementers via TeamCreate/SendMessage).
 
 Both files implement the same batch-parallel execution logic; only the orchestration mechanism differs. Read only the one for the selected mode — do not read both.

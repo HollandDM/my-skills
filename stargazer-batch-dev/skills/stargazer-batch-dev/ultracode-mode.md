@@ -1,4 +1,4 @@
-# Stargazer Batch-Parallel Plan Execution — Workflow Mode
+# Stargazer Batch-Parallel Plan Execution — Ultracode Mode
 
 Use this when the **Workflow tool** is available. Author one `Workflow(...)` script: per-batch parallel implementers → review/fix loop → single mill build+commit.
 

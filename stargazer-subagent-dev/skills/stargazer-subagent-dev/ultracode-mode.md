@@ -1,4 +1,4 @@
-# Stargazer Subagent-Driven Development — Workflow Mode
+# Stargazer Subagent-Driven Development — Ultracode Mode
 
 Use this when the **Workflow tool** is available. Author one `Workflow(...)` script: per-phase implementers → bounded review/fix loop → single build+test+checkStyle → final review.
 
@@ -108,7 +108,7 @@ const finalReview = await agent(
 return { phases: phases.map(p => p.name), reports: prior, build, finalReview }
 ```
 
-### After the workflow returns
+### After the ultracode run returns
 
 Report build status + final review findings. Wrap up branch: review changes, then `AskUserQuestion` to merge / open PR / clean up. Never start on main/master without consent.
 
