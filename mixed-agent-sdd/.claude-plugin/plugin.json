@@ -1,0 +1,8 @@
+{
+  "name": "mixed-agent-sdd",
+  "description": "Controller-led mixed-agent implementation planning with Claude, Codex, and OpenCode",
+  "version": "b8c726d",
+  "author": {
+    "name": "HollandDM"
+  }
+}

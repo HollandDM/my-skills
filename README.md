@@ -49,6 +49,10 @@ Batch-parallel plan execution for the Stargazer codebase. Lighter alternative to
 - Compile errors fed back to implementers — team lead never touches code
 - Reformat + batch-done commit after each clean compile
 
+### [mixed-agent-sdd](./mixed-agent-sdd/)
+
+Claude Code plugin for executing a complete implementation plan through one controller and a mixed Claude/Codex/OpenCode roster. It requires OpenCode CLI and the OpenAI Codex Claude plugin, balances implementers across backends, reviews and repairs complete batches, and hands final cross-vendor findings to a human.
+
 ## Installation
 
 Add the marketplace, then install individual plugins:
@@ -58,4 +62,5 @@ Add the marketplace, then install individual plugins:
 /plugin install stargazer-review-gang@HollandDM-Skills
 /plugin install stargazer-batch-dev@HollandDM-Skills
 /plugin install prove@HollandDM-Skills
+/plugin install mixed-agent-sdd@HollandDM-Skills
 ```

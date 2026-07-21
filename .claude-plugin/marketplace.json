@@ -46,6 +46,16 @@
         "name": "HollandDM"
       },
       "keywords": ["verification", "adversarial", "reasoning"]
+    },
+    {
+      "name": "mixed-agent-sdd",
+      "source": "./mixed-agent-sdd",
+      "description": "Controller-led mixed-agent implementation workflow using Claude subagents, Codex, and OpenCode with batch repair and final human review",
+      "version": "b8c726d",
+      "author": {
+        "name": "HollandDM"
+      },
+      "keywords": ["implementation", "subagent", "codex", "opencode", "claude", "sdd", "plan-execution"]
     }
   ]
 }
