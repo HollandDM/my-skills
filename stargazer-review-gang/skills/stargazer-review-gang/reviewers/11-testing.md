@@ -1,11 +1,11 @@
 # Reviewer: Testing Quality
 
-**Scope:** Test files only (`**/test/src/**`, `**/it/src/**`, `**/multiregionit/**`)
+**Scope:** Changed test code and changed production behavior whose test adequacy is material.
 **Model:** standard
 
 Testing quality reviewer for Stargazer codebase. Flag weak assertions, missing cleanup, test isolation issues, patterns causing flaky CI. Codebase has established test infrastructure — flag code bypassing it or introducing fragility.
 
-No test files in diff → report "No test code found — nothing to review."
+When production behavior changes without test-file changes, inspect the nearest relevant tests and report a missing-test finding only when a concrete regression, failure mode, concurrency boundary, authorization rule, or compatibility contract is left unprotected. Cite the changed production line as the finding location; do not demand tests mechanically for every change.
 
 > **FORBIDDEN:** Do NOT run `./mill`, `compile`, `test`, `checkStyle`, `checkStyleDirty`, `reformat`,
 > `checkUnused`, `WarnUnusedCode`, or ANY build/lint command. Do NOT use the Bash tool for compilation
@@ -235,6 +235,13 @@ test("heavy OCR processing") {
 
 Flag tests overriding global timeout to very large value (>10 minutes) without justification as `[NITPICK]`.
 
+### Concurrency and Multi-Region Constraints
+
+- Tests sharing process-global state, singleton services, databases, ports, clocks, or mutable fixtures must explicitly serialize or isolate those resources. Do not infer a need for sequencing without evidence of sharing.
+- Stargazer multi-region integration tests require non-parallel execution (`-j1`) because they share `MultiRegionMockService` state and FDB singletons. Review new suites/fixtures for assumptions that violate this constraint.
+- Prefer deterministic synchronization (promises, queues, barriers, TestClock, explicit eventual assertions) over timing sleeps. Bound fibers and ensure failures/cancellation are observed so tests do not leak work into later tests.
+- For parallel tests, use unique/randomized data and cleanup that is safe when other tests run concurrently; verify assertions do not depend on execution order.
+
 ---
 
 ## 6. Test Data
@@ -318,6 +325,22 @@ object MyInteg extends ZIOSpecDefault {
 Flag:
 - Integration tests manually wiring service dependencies instead of using module's test object — `[SUGGESTION]`
 - Tests importing services not available from their base integ class without explanation — `[NITPICK]`
+
+---
+
+## 9. Coverage of Changed Production Behavior
+
+For changed production code, identify the nearest existing unit/integration specification and assess whether the new branch or contract is exercised at the right boundary.
+
+Flag concrete omissions such as:
+- a changed authorization or tenant boundary without an allow and deny case
+- a retry/idempotency, replay, duplicate, timeout, or cancellation path without coverage
+- a wire/schema compatibility change without old/new payload coverage
+- a database migration or reconciliation invariant without partial/restart/precision coverage
+- a shared JVM/JS model change tested on only one platform when both consume it
+- a multi-region behavior change without the required region/environment matrix
+
+Do not flag missing tests when existing tests already cover the changed behavior transitively and that relationship is clear from source.
 
 ---
 

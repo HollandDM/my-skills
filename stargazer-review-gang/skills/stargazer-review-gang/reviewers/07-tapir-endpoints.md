@@ -1,9 +1,9 @@
-# Reviewer: Tapir Endpoints
+# Reviewer: API and Wire Compatibility
 
-**Scope:** Backend (jvm/) and Frontend (js/)
+**Scope:** Tapir, GraphQL/Caliban, protobuf, OpenAPI, generated clients/specifications, and backend/frontend API consumers.
 **Model:** standard
 
-Review Tapir endpoint patterns for server (jvm/) and client (js/). Apply Part A to jvm files, Part B to js files. No Tapir code → report "No Tapir endpoint code found — nothing to review."
+Review API contracts and implementations across server and client code. Apply the detailed Tapir guidance where relevant; also assess GraphQL/Caliban, protobuf, OpenAPI, generated clients, and consumer compatibility. No applicable wire/API change means no finding.
 
 > **FORBIDDEN:** Do NOT run `./mill`, `compile`, `test`, `checkStyle`, `checkStyleDirty`, `reformat`,
 > `checkUnused`, `WarnUnusedCode`, or ANY build/lint command. Do NOT use Bash for compile/lint.
@@ -168,7 +168,7 @@ Flag:
 
 ### A6. JSON Body Codecs (Jsoniter)
 
-Tapir `jsonBody[T]` requires `JsonValueCodec[T]`. Stargazer use **Jsoniter** infra (`anduin.jsoniter.*`). All endpoint request/response types must use Jsoniter derives — see reviewer 01 §10 for full rules.
+Tapir `jsonBody[T]` requires `JsonValueCodec[T]`. Stargazer uses **Jsoniter** infrastructure (`anduin.jsoniter.*`). Endpoint request/response types must use the established Jsoniter derivation or codec strategy; coordinate detailed serialization review with reviewers 01 and 03.
 
 Flag:
 - Endpoint type missing `derives JsoniterCodec.WithDefaultsValue` (or appropriate marker) → compile fails or wrong wire format
@@ -230,7 +230,7 @@ Flag:
 - Typed structured items where client is ZIO/Scala — use NDJSON (cleaner envelope, native `Item/Error/Complete` ADT)
 - Bidirectional or chunked binary — use NDJSON or WebSocket
 
-**Discriminated event ADT:** SSE `StreamEvent` uses `JsoniterCodec.WithDefaultsAndDiscriminatorValue` + `JsoniterDiscriminator["type"]`. Subtypes must derive same marker (see reviewer 01 §10b).
+**Discriminated event ADT:** SSE `StreamEvent` uses `JsoniterCodec.WithDefaultsAndDiscriminatorValue` + `JsoniterDiscriminator["type"]`. Subtypes must preserve the same marker and wire discriminator strategy.
 
 Flag:
 - SSE used for single-item or non-streaming response — switch to blocking
@@ -345,3 +345,13 @@ Per issue, report:
 - **Suggested fix**: fenced block w/ concrete replacement, copy-paste ready
 
 **EVERY finding — blocker, suggestion, nitpick — MUST include both Current code and Suggested fix blocks.** One-liner findings w/o code blocks rejected by aggregator.
+
+---
+
+## Part C: GraphQL, Protobuf, OpenAPI, and Generated Clients
+
+- GraphQL/Caliban: preserve field names, argument/default/nullability semantics, authorization at resolvers, batching boundaries, depth/complexity controls where configured, and prevent tenant data leakage through nested resolvers.
+- Protobuf: never reuse field numbers; reserve removed numbers/names; preserve oneof semantics and defaults; check unknown-field and mixed-version behavior. Route changed generated sources and their schemas together.
+- OpenAPI: treat path, method, parameter location/name, request/response/error shape, enum values, requiredness, and wire field names as compatibility-sensitive. Confirm intentional changes account for known generated clients/spec consumers.
+- Generated clients/specs: do not hand-edit generated output unless local instructions explicitly permit it. Review generator inputs, output registration, versioning, and compatible rollout of producer and consumer.
+- For all protocols, validate untrusted inputs, bound payload sizes, avoid internal-error disclosure, and preserve pagination/cursor, idempotency, and streaming completion/error contracts.

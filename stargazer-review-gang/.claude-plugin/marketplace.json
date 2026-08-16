@@ -5,7 +5,7 @@
     {
       "name": "stargazer-review-gang",
       "source": "./..",
-      "description": "Multi-perspective code review with specialized reviewer agents for the Stargazer codebase"
+      "description": "Read-only capability-based specialist review for the Stargazer codebase"
     }
   ]
 }
