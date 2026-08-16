@@ -10,12 +10,12 @@
     {
       "name": "stargazer-review-gang",
       "source": "./stargazer-review-gang",
-      "description": "Multi-perspective code review with 8 grouped reviewer agents (Scala/ZIO/Architecture/FDB/Temporal/Tapir/Frontend/Testing), opus validator, and confidence scoring for the Stargazer codebase",
-      "version": "dc9e67a",
+      "description": "Read-only capability-based review with adaptive Scala, ZIO, data, API, security, AI, infrastructure, domain, and testing specialists plus validated confidence-scored findings",
+      "version": "2b76b09",
       "author": {
         "name": "HollandDM"
       },
-      "keywords": ["code-review", "scala", "zio", "stargazer"]
+      "keywords": ["code-review", "scala", "zio", "security", "stargazer"]
     },
     {
       "name": "stargazer-subagent-dev",
