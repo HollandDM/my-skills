@@ -33,6 +33,6 @@ Assign only relevant checklist files. Multiple specialists may receive the same 
 
 Expand routing when a change affects a shared model, protobuf/schema, endpoint contract, generated client/spec, build dependency, migration, configuration, or deployment artifact. Include the producer and known consumers in the specialist scope when source/instructions establish that relationship. Do not route a generic reviewer merely because a file changed.
 
-`01-scala-quality` and `04-scala-anti-slop` are inseparable routes. If one is assigned, assign the other to the identical scope. Their checklists divide ownership and must not duplicate findings.
+`01-scala-quality` and `04-scala-anti-slop` are inseparable routes. If one is assigned, assign the other to the identical scope. Reviewer 01 owns Scala 3/repository mechanics and local totality; reviewer 04 owns functional modelling, evidence preservation, and explicit effect/dependency boundaries. Their checklists must not duplicate findings.
 
 Return a concise routing record: selected diff, changed files, applicable instruction files, assigned specialists with file/hunk scope, and the path/semantic reason for every assignment.

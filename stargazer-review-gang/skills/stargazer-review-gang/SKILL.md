@@ -46,4 +46,4 @@ Route the existing focused reviewers when applicable:
 
 Use only evidence supported by the diff, applicable instructions, and source. A checklist is guidance, not a reason to manufacture findings.
 
-`01-scala-quality` and `04-scala-anti-slop` are a paired route: assign both to the same files and hunks whenever either applies. Reviewer 01 owns compiler, lint, language, and general quality concerns; reviewer 04 owns evidence preservation and anti-slop concerns.
+`01-scala-quality` and `04-scala-anti-slop` are a paired route: assign both to the same files and hunks whenever either applies. Reviewer 01 owns compiler/lint enforcement, Scala 3 mechanics, and local totality; reviewer 04 owns functional domain modelling, evidence preservation, and explicit effect/dependency boundaries.
