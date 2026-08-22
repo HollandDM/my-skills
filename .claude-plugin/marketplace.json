@@ -11,7 +11,7 @@
       "name": "stargazer-review-gang",
       "source": "./stargazer-review-gang",
       "description": "Read-only capability-based review with adaptive Scala, ZIO, data, API, security, AI, infrastructure, domain, and testing specialists plus validated confidence-scored findings",
-      "version": "2b76b09",
+      "version": "5cd34de",
       "author": {
         "name": "HollandDM"
       },
