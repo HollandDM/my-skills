@@ -235,7 +235,7 @@ body <dir> D-NNN <<'EOF'
 EOF
 set <dir> D-NNN composition "Data flow: …" "Failures: …" "Cleanup: …" "Invariants: …" "Progress: …"
 set <dir> D-NNN decisions "…"            # if any
-set <dir> D-NNN deferred "…"             # if any; plus `ambiguity` rows
+ambiguity <dir> "<claim>" "<conflict>" D-child   # one per deferred question; node view derives its Deferred list from these
 approve <dir> D-NNN
 ```
 

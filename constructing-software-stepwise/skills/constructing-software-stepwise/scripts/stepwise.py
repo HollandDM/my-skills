@@ -410,9 +410,11 @@ def render_node(led: Ledger, nid: str) -> str:
     if n.get("body"):
         sig = n["statement"].split("<-", 1)[-1].strip().removeprefix("->").strip()
         L += ["", "## Refinement", "", "```pseudo", sig + ":", *body_text(n["body"]), "```"]
-    for f, title in (("composition", "Composition argument"), ("decisions", "Decisions"), ("deferred", "Deferred")):
-        if n.get(f):
-            L += ["", f"## {title}", "", *[f"- {b}" for b in n[f]]]
+    children = {it.get("child") for it in n.get("body", []) if it.get("child")}
+    deferred = [*n.get("deferred", []), *[f"{a['claim']} — {a['conflict']} → {a['resolves_at']}" for a in led.data.get("ambiguities", []) if a["resolves_at"] in children]]
+    for f, title, items in (("composition", "Composition argument", n.get("composition", [])), ("decisions", "Decisions", n.get("decisions", [])), ("deferred", "Deferred", deferred)):
+        if items:
+            L += ["", f"## {title}", "", *[f"- {b}" for b in items]]
     if n.get("target") or n.get("adaptation"):
         L += ["", "## Realization", ""]
         if n.get("target"):
