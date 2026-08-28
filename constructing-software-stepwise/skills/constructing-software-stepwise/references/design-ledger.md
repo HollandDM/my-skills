@@ -17,9 +17,13 @@ docs/design/<topic>/
 
 ## Realization Target
 
-"Real" = whatever the statement maps onto outside the design: language construct, framework API, platform primitive, managed service, infra resource, config, existing repo function. Written `<target>: <identifier>` — `scala: AgentRuns.claim`, `dbos: Workflow.start`, `postgres: UNIQUE(run_id)`, `k8s: CronJob`, `repo: BillingLedger.append`.
+"Real" = whatever the statement maps onto **outside the design**: language construct, framework API, platform primitive, managed service, infra resource, config, repo function that exists on disk. Written `<target>: <identifier>` — `scala: AgentRuns.claim`, `dbos: DBOS.startWorkflow`, `postgres: SELECT … ORDER BY seq`, `k8s: CronJob`, `repo: src/billing/Ledger.scala#append`.
 
-Pseudocode above terminal. Target only inside terminal `Realization`.
+Exists test: target resolvable today — docs page, API signature, file path, SQL. Own code not yet written (`service: AgentLedger.read`, `module: Foo`) is not a target; it is the design. Such a statement is composite or a collapsed leaf (see Node Kinds), never terminal.
+
+Adaptation = one line per Contract clause, `<clause> → <concrete construct>`: query text, API call with arguments, type / constraint, config key. Contract verb restated ("query one snapshot in order") ≠ adaptation. No construct nameable → not terminal.
+
+Pseudocode above terminal. Target only inside terminal `Realization` or collapsed-leaf body lines.
 
 ## Pseudocode Notation
 
@@ -27,7 +31,8 @@ Pseudocode above terminal. Target only inside terminal `Realization`.
 - `x ← expr` assign · `→ value` return · `name(args)` abstract call
 - `if cond: … else: …` · `loop until cond: …` · `for each x in S: …`
 - `{ assertion }` = condition holding at that point. One wherever composition argument leans on it
-- `-- D-NNN` tags every child statement · `(frontier)` unrefined · `(draft, k ?)` · `(stale)` · `✓ <target>: <identifier>` realized · `↗ D-NNN` call to approved node defined elsewhere
+- `-- D-NNN` tags every child statement · `(frontier)` unrefined · `(draft, k ?)` · `(draft, ADR pending)` · `(stale)` · `(superseded by D-MMM)` · `⇒ <target>: <identifier>` approved terminal, unverified · `✓ <target>: <identifier>` verified · `↗ D-NNN` call to approved node defined elsewhere
+- collapsed-leaf body: every statement line ends `-- ⇒ <target>: <identifier>` (or `✓`); no `-- D-NNN` inside
 - `?slug` unknown, draft only
 - abstract data only: `set`, `seq`, `map`, `record{…}`. Concrete types, library / framework / service names → terminal `Realization`
 - realized line in `Program` may be replaced by the real line; pseudo and real mix there
@@ -115,11 +120,14 @@ Stable IDs (`D-NNN`) from first node. ID = statement; never renumber.
 
 | Kind | Test | Fields |
 |---|---|---|
-| Terminal — real | Statement = ONE real thing, or Contract already met by ONE real thing cited in a fact; named `<target>: <identifier>` in `Realization` | Header + Statement + Effect + Contract + Realization + Evidence |
+| Terminal — real | Statement = ONE real thing that passes Exists test, or Contract already met by ONE such thing cited in a fact; named `<target>: <identifier>` in `Realization` | Header + Statement + Effect + Contract + Realization + Evidence |
+| Leaf — collapsed | User rules node not worth child-by-child review; body still fully written to real lines | Header + Statement + Effect + Contract + Refinement (≤ 12 lines, every statement `-- ⇒ <target>: <identifier>`) + Composition argument + Realization (targets listed) + Evidence |
 | Terminal — reuse | Statement = call to existing node with `Design: approved`, Statement + Contract used verbatim | no new file; parent body line `-- ↗ D-NNN`; add parent to that node's `Parents` |
 | Composite | else | all fields below, body in pseudocode |
 
 Composite fan-out 2–7. 1 → rename. >7 → intermediate node. Terminal = only place refinement stops: adapt to real, or call approved node.
+
+Collapse rule: "not worth digging" is the user's call, and it collapses review, not refinement. Collapsed leaf = one approval, no child nodes, but Refinement is complete pseudocode down to real constructs — every statement line names its target, control + `{ assertion }` lines as usual, ≤ 12 lines. Needs > 12 lines or a line with no nameable target → it is worth digging: propose children. `Program` substitutes the body like any composite.
 
 Terminal test precedes every body. Contract met by one real thing cited in a fact → terminal; `Adaptation` maps each clause onto that thing, evidence verifies it. Platform guarantees (idempotent start by key, resume from checkpoint, CAS, lock, retry, version pin) never get refined into pseudocode — snapshot / decide / CAS / bind / schedule chains above one `dbos: startWorkflow` re-derive the platform.
 
@@ -181,8 +189,8 @@ next_step(run):
 
 ## Realization
 
-- Target: <target>: <identifier> — terminal only
-- Adaptation: <pseudo construct → real construct>, one line each — terminal only
+- Target: <target>: <identifier> — terminal: one; collapsed leaf: one per body line
+- Adaptation: <Contract clause> → <concrete construct: query text / API call + args / type / constraint / config key>, one per clause — terminal only. Contract verb restated ≠ adaptation
 - Code: <paths>
 
 ## Evidence

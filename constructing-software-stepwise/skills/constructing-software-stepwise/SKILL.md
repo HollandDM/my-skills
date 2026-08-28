@@ -34,11 +34,12 @@ Small refinement → small contract → small vocabulary. Many questions = scope
 
 | Kind | Test | Record |
 |---|---|---|
-| Terminal | Statement = ONE real thing (language construct / framework API / platform primitive / service / repo fn), or Contract already met by ONE such thing cited in a fact; named `<target>: <identifier>` in `Realization` | Statement + Contract + Realization (`Adaptation` lines) + Evidence |
+| Terminal | Statement = ONE real thing that exists outside the design today (language construct / framework API / platform primitive / managed service / repo fn on disk), or Contract already met by ONE such thing cited in a fact; named `<target>: <identifier>` in `Realization` | Statement + Contract + Realization (`Adaptation`: clause → concrete construct) + Evidence |
+| Leaf — collapsed | User says not worth digging | Statement + Contract + full pseudocode body to real lines (≤ 12, each `-- ⇒ <target>: <identifier>`, no children) + composition + Evidence |
 | Terminal — reuse | Statement = call to existing node with `Design: approved`, its Statement + Contract verbatim | no new file; body line `-- ↗ D-NNN`; caller added to that node's `Parents` |
 | Composite | else | Statement + Contract + pseudocode Refinement + every field in [design-ledger.md](references/design-ledger.md) |
 
-Composite → 2–7 child statements. 1 = rename. >7 = missing intermediate node. Terminal = where refinement stops: adapt to real, or call approved node. Terminal test runs before every body: one real thing (cited fact) satisfies Contract → terminal, `Adaptation` maps each clause onto it. Decomposing what the platform guarantees = re-deriving it; five levels of get-or-start / CAS / schedule above `dbos: startWorkflow` = this failure. Reused node's body appears once in `Program ### Procedures`; call sites point at it. "Trivial / obvious / clear enough" not decision words; tables decide.
+Composite → 2–7 child statements. 1 = rename. >7 = missing intermediate node. Terminal = where refinement stops: adapt to real, or call approved node. Terminal test runs before every body: one real thing (cited fact) satisfies Contract → terminal, `Adaptation` maps each clause onto it. Decomposing what the platform guarantees = re-deriving it; five levels of get-or-start / CAS / schedule above `dbos: startWorkflow` = this failure. Own unwritten code (`service: AgentLedger.read`) is not a real thing — it is the design; Adaptation that restates Contract verbs is not adaptation. Either passes → not terminal. User rules "not worth digging" → collapsed leaf: review collapses, refinement does not; body still reaches real constructs line by line, > 12 lines means it was worth digging. Reused node's body appears once in `Program ### Procedures`; call sites point at it. "Trivial / obvious / clear enough" not decision words; tables decide.
 
 ## Durable Artifacts
 
@@ -171,7 +172,7 @@ Never: batch questions; ask what code answers; ask without a `?`; propose childr
 
 ### 3. Propose ONE refinement
 
-Terminal test first: one real thing, cited in a fact, satisfies the Contract → propose `Realization: <target>: <identifier>` + one `Adaptation` line per clause, no body. Else:
+Terminal test first: one real thing, cited in a fact, satisfies the Contract → propose `Realization: <target>: <identifier>` + one `Adaptation` line per clause, no body. Target must exist outside the design today; Adaptation names query / call / type, not Contract verbs. User says not worth digging → collapsed leaf: propose full body to real lines (each `-- ⇒ <target>: <identifier>`, ≤ 12, no child tags) in one Proposal block. Else:
 
 Parent Statement → Refinement body: pseudocode ≤ 12 lines, 2–7 child statements each tagged `-- D-NNN`, control structure (sequence / choice / loop) lives here, `{ assertion }` line wherever composition leans on a condition. Notation in [design-ledger.md](references/design-ledger.md). No language keyword, library, concrete type — representation, storage, framework → deepest node needing them. Child already exists as approved node → call it (`-- ↗ D-NNN`), Statement + Contract verbatim; contract doesn't fit → reopen it or new node, never a tweaked copy.
 
@@ -215,7 +216,7 @@ Before Proposal: check linked ADRs. Conflict → STOP branch, Conflict Protocol 
 
 ### 6. Implement + verify to requested depth
 
-Design-only → stop at approved frontier. Implementation → refine until every leaf terminal, then adapt: terminal `Realization` names the real thing (`Target: <target>: <identifier>`, `Adaptation` lines pseudo construct → real construct), `Program` line gains `✓ <target>: <identifier>` or becomes the real line.
+Design-only → stop at approved frontier. Implementation → refine until every leaf terminal, then adapt: terminal `Realization` names the real thing (`Target: <target>: <identifier>`, `Adaptation` lines pseudo construct → real construct), `Program` line tagged `⇒ <target>: <identifier>` at approval, `✓ <target>: <identifier>` once verified; may become the real line.
 
 Evidence: cheapest method covering obligation (types → examples → property → integration → static/proof → model-check → benchmark → fault-injection → observation). One record per (obligation, method), ≤ 4 lines, under node's `## Evidence`. Rules in [design-ledger.md](references/design-ledger.md).
 
@@ -256,6 +257,9 @@ Context entry, ancestor, ADR, or dependency changes:
 | Composition needs paragraph | Insert intermediate node |
 | Pick storage / framework now | Deepest node needing it |
 | Write body in Scala / DBOS API, clearer | Composite = pseudocode. Real thing at terminal only |
+| `service: Foo.read` terminal, code not written yet | Not a target — it is the design. Composite or collapsed leaf |
+| Adaptation = Contract clauses with verbs | Name construct: query text, API call + args, type. None nameable → not terminal |
+| Not worth digging → skip body | Collapsed leaf keeps full pseudocode to real lines. > 12 lines = worth digging |
 | Refine get-or-start / CAS / resume / retry in pseudocode | Fact cites primitive meeting Contract → terminal now. Platform guarantee is never re-derived |
 | Evidence in separate doc | Under the node's `## Evidence`, nowhere else |
 | Copy D-050 body, tweak one line | Call `↗ D-050` or reopen it. No forks |
