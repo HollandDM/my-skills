@@ -144,6 +144,15 @@ assert "| job identity | key vs row id | D-030 |" in ctx and "- scheduling" in c
 run("evidence", "D-010", "--kind", "test", "--ref", "spec/job.test.ts:12", "--result", "pass")
 assert "D-010 ✓ postgres" in (d / "DESIGN.md").read_text()
 
+# collapsed leaf: realization derived from body tags
+run("new", "D-021")
+for f, v in (("gloss", "choose the next step"), ("effect", "Next step is chosen from the job spec."), ("pre", "job active"), ("post", "step chosen")):
+    run("set", "D-021", f, v)
+run("body", "D-021", stdin="pick_step(job):\n  steps <- job.spec.steps   -- ⇒ typescript: property access\n  -> steps[job.done]        -- ⇒ typescript: index access\n")
+run("set", "D-021", "composition", "pure lookup")
+run("approve", "D-021")
+assert "Collapsed leaf. Targets: `typescript`" in (d / "nodes" / "D-021.md").read_text()
+
 # supersede + views drift + log
 run("new", "D-030")
 t = run("supersede", "D-030", "D-021", "folded into advance", ok=False)

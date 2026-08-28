@@ -49,7 +49,7 @@ Exists test: target resolvable today — docs page, API signature, file path, SQ
 
 Adaptation = one line per Contract clause, `<clause> → <concrete construct>`: query text, API call with arguments, type / constraint, config key. Contract verb restated ("query one snapshot in order") ≠ adaptation. No construct nameable → not terminal.
 
-Pseudocode above terminal. Target only in a terminal's `target` or a collapsed leaf's `-- ⇒` body lines.
+Pseudocode above terminal. Target only in a terminal's `target` or a collapsed leaf's `-- ⇒` body lines. A collapsed leaf's node view derives its own Realization line (`Collapsed leaf. Targets: …`) from those tags — no verb, no prose.
 
 ## Pseudocode Notation — what `body` accepts
 

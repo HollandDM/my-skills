@@ -416,10 +416,14 @@ def render_node(led: Ledger, nid: str) -> str:
     for f, title, items in (("composition", "Composition argument", n.get("composition", [])), ("decisions", "Decisions", n.get("decisions", [])), ("deferred", "Deferred", deferred)):
         if items:
             L += ["", f"## {title}", "", *[f"- {b}" for b in items]]
-    if n.get("target") or n.get("adaptation"):
+    collapsed = not n.get("target") and led.is_collapsed(n)
+    if n.get("target") or n.get("adaptation") or collapsed:
         L += ["", "## Realization", ""]
         if n.get("target"):
             L.append(f"Target: `{n['target']}`")
+        elif collapsed:
+            heads = dict.fromkeys(it["target"].split(":", 1)[0].strip() for it in n["body"] if it.get("target"))
+            L.append("Collapsed leaf. Targets: " + ", ".join(f"`{h}`" for h in heads))
         L += [f"Adaptation: {a}" for a in n.get("adaptation", [])]
     if n.get("evidence"):
         L += ["", "## Evidence", ""]
