@@ -1,298 +1,157 @@
 #!/usr/bin/env python3
-"""Stepwise ledger tooling — the mechanical half of the skill. Agent-agnostic CLI; call it from any agent.
+"""Stepwise ledger CLI — owns every write to the design ledger. Agent-agnostic; call it from any agent.
 
-  stepwise.py new   <design-dir> D-NNN ["statement"]   draft stub for a frontier id (statement + parent prefilled); root needs the statement
-  stepwise.py sync  <design-dir>                       after every edit: linkify, auto-tag, fill meta, regenerate DESIGN.md + CONTEXT tables,
-                                                       then lint. Exit 1 with `error file:line: msg` lines when something must be fixed.
-  stepwise.py check <design-dir>                       lint only, no writes (CI / read-only review)
+Canonical data: <design-dir>/ledger.json (typed; this tool is the only writer).
+Generated views (never edit; regenerated on every verb): DESIGN.md, CONTEXT.md, nodes/D-NNN.md.
+ADRs stay markdown in docs/adr/ (repo convention); `adr new` stubs them, `adr accept` flips status.
 
-Agent writes (reasoning and content only):
-  nodes/D-NNN-<slug>.md                header + Statement / Effect / Contract / Refinement / Composition / Decisions / Deferred / Realization / Evidence
-  context/{terms,facts,scenarios}.md   one `##` section per entry: heading + definition (+ Source / Avoid / Not / Given-When-Then)
-  CONTEXT.md                           Scope, Open ambiguities, Explicit non-goals
-  ../adr/NNNN-<slug>.md                decisions
+Every verb ends with render + lint; exit 1 and `error <where>: <msg>` lines when something must be fixed.
 
-sync derives (never hand-edit):
-  DESIGN.md                            Nodes table, frontier, ADR list, Program (approved bodies substituted, tags from status)
-  CONTEXT.md tables                    Vocabulary / Facts and constraints / Scenarios
-  `Used by:` lines                     from node `Depends on:` and scenario `Settles:`
-  links                                write bare names (`Run Key`, `CTX-F05`, `D-060`, `ADR-0002`) in Parents / Depends on /
-                                       Not / Settles / Constrains; sync turns them into links
-  `-- D-NNN` tags                      an untagged body line calling `f(...)` gets tagged when exactly one node's signature is `f(`
-  `Confirmed:` / `Status:`             filled with today / confirmed when an entry has no meta line
+  frontier  <dir>                                     what to pick next
+  show      <dir> D-NNN                               node view to stdout
+  new       <dir> D-NNN ["stmt"]                      draft node (frontier id, or the root with its statement)
+  set       <dir> D-NNN gloss|effect "text"           one-line prose fields
+  set       <dir> D-NNN pre|post|failure|cancellation|invariant|progress "clause"   contract (<= 6 clauses; unknowns as ?slug)
+  set       <dir> D-NNN composition|decisions|deferred|adaptation "b1" "b2" ...    bullet lists (replace)
+  set       <dir> D-NNN realization|verification <vocab>
+  body      <dir> D-NNN [--file F]                    refinement body from stdin/file (pseudocode, `-- D-NNN` / `-- ↗ D-NNN` / `-- ⇒ target` tags)
+  answer    <dir> D-NNN slug "Name"                   ?slug -> name in every clause; name added to depends
+  terminal  <dir> D-NNN "<target>: <identifier>"      leaf: the real thing (Exists test enforced)
+  approve   <dir> D-NNN                               after the user says yes; refuses while anything is missing
+  reopen    <dir> D-NNN "reason"                      approved -> draft for revision (history keeps the reason)
+  stale     <dir> D-NNN "reason"                      dependency changed
+  supersede <dir> D-OLD D-NEW "reason"
+  evidence  <dir> D-NNN --kind K --ref R --result pass|fail [--note N]
+  entry     <dir> term|fact|scenario "Heading" "definition" [--source S] [--avoid a,b] [--not T] [--example E]
+                                                      [--given G --when W --then T --excludes X --settles T]
+  change    <dir> <ref> [--definition D] [--status confirmed|stale] --reason R     sharpen or stale an entry
+  meta      <dir> title|scope "text" | nongoals "a" "b" ...
+  ambiguity <dir> "claim" "conflict" D-NNN | ambiguity <dir> "claim" --drop
+  adr       <dir> new "Title" --constrains D-NNN[,D-MMM] | adr <dir> accept ADR-NNNN
+  sync      <dir>                                     render + lint (after hand-editing an ADR paragraph)
+  check     <dir>                                     lint only, no writes
 
-Stdlib only.
+Stdlib only, no regex: the ledger is typed data, not text to be parsed.
 """
 from __future__ import annotations
 
+import argparse
 import datetime as _dt
 import hashlib
 import json
 import os
-import re
 import sys
-from dataclasses import dataclass, field
 from pathlib import Path
 
+LEDGER = "ledger.json"
+LOG = ".stepwise.log"
 CODE_COL = 58
-ID_RE = re.compile(r"\bD-\d{3}\b")
-CTX_RE = re.compile(r"\bCTX-[FS]\d+\b")
-ADR_RE = re.compile(r"\bADR-\d{4}\b")
-TAG_RE = re.compile(r"^(?P<code>.*?)\s*--\s*(?P<tag>.*)$")
-CHILD_TAG_RE = re.compile(r"^(?P<reuse>↗\s*)?(?P<id>D-\d{3})\b")
-UNKNOWN_RE = re.compile(r"\?[a-z][a-z0-9-]*")
-CALL_RE = re.compile(r"(?:^|<-|←|->|→|\s|\()([a-z_][a-z0-9_]*)\s*\(")
-DESIGN_STATUS_RE = re.compile(r"^(draft( \((\d+ \?|ADR pending)\))?|approved|stale(\b.*)?|superseded by D-\d{3}\b.*)$")
-REALIZATION_VOCAB = {"not-started", "partial", "implemented"}
-VERIFICATION_VOCAB = {"unverified", "partial", "verified", "stale"}
-LINK_RE = re.compile(r"\[([^\]]*)\]\(([^)]+)\)")
-DATE_RE = re.compile(r"\d{4}-\d{2}-\d{2}")
-SIDECAR = ".stepwise.json"
-CONTEXT_FILES = ("terms.md", "facts.md", "scenarios.md")
-META_KEYS = ("Confirmed", "Status", "Source", "Avoid", "Not", "Used by", "Example", "Changed", "Settles", "Excludes")
-META_PREFIX = tuple(k + ":" for k in META_KEYS) + ("Given ", "When ", "Then ")
-CONTROL_RE = re.compile(r"^(if|else|elif|loop|while|for|until)\b.*:$")
-
-
-def uniq(xs):
-    return list(dict.fromkeys(xs))
-
-
-def anchor_of(heading: str) -> str:
-    s = re.sub(r"[^\w\s-]", "", heading.strip().lower())
-    return re.sub(r"\s+", "-", s).strip("-")
+CONTRACT_KEYS = ("pre", "post", "failure", "cancellation", "invariant", "progress")
+TEXT_FIELDS = ("gloss", "effect")
+LIST_FIELDS = ("composition", "decisions", "deferred", "adaptation")
+REALIZATION = ("not-started", "partial", "implemented")
+VERIFICATION = ("unverified", "partial", "verified", "stale")
+DESIGN = ("draft", "approved", "stale", "superseded")
+CONTROL = {"if", "else", "elif", "loop", "while", "for", "until", "case", "match", "try", "finally"}
+OWN_CODE = {"service", "module", "application", "application-service", "app", "own", "internal", "our", "runtime"}
+ENTRY_FILE = {"term": "terms", "fact": "facts", "scenario": "scenarios"}
+GENERATED = "_Generated by `stepwise.py` from ledger.json. Use the CLI; never edit this file._"
 
 
 def today() -> str:
     return _dt.date.today().isoformat()
 
 
-# ----------------------------------------------------------------------------- model
+def now() -> str:
+    return _dt.datetime.now().isoformat(timespec="microseconds")
 
 
-@dataclass
-class Entry:
-    file: str
-    heading: str
-    anchor: str
-    line: int
-    body: str
-    used_by: set[str]
-    changed: str
-    nonempty: int
-
-    @property
-    def id(self) -> str | None:
-        m = CTX_RE.match(self.heading)
-        return m.group(0) if m else None
-
-    @property
-    def key(self) -> str:
-        return f"{self.file}#{self.anchor}"
-
-    def meta(self, name: str) -> str:
-        m = re.search(rf"(?:^|[·|]\s*){name}:\s*(.*?)(?=\s+[·|]\s+[A-Z][a-z ]*:|$)", self.body, re.M)
-        return m.group(1).strip() if m else ""
-
-    def definition(self) -> str:
-        for ln in self.body.splitlines():
-            s = ln.strip()
-            if s and not s.startswith(META_PREFIX) and not s.startswith("#"):
-                return s
-        return ""
+def is_node_id(s: str) -> bool:
+    return len(s) == 5 and s.startswith("D-") and s[2:].isdigit()
 
 
-@dataclass
-class Node:
-    id: str
-    path: Path
-    header: dict[str, str]
-    sections: dict[str, str]
-    lines: list[str]
-    heading_id: str | None
-    parents: list[str]
-    depends_raw: str
-    design: str
-    realization: str
-    verification: str
-    approved: str
-    statement: str
-    signature: str
-    body: list[str]              # logical statements (continuation lines joined)
-    fence_span: tuple[int, int]  # line indexes of the pseudo fence content in `lines` (start, end exclusive)
-    target: str
-    depends: list[str] = field(default_factory=list)
-
-    @property
-    def is_draft(self): return self.design.startswith("draft")
-    @property
-    def is_approved(self): return self.design == "approved"
-    @property
-    def is_stale(self): return self.design.startswith("stale") or self.design.startswith("superseded")
-    @property
-    def is_terminal(self): return bool(self.target) and not self.body
-    @property
-    def fn(self) -> str:
-        m = re.match(r"([a-z_][a-z0-9_]*)\s*\(", self.signature or self.statement.split("<-")[-1].split("←")[-1].strip())
-        return m.group(1) if m else ""
-
-    @property
-    def is_collapsed(self) -> bool:
-        stmts = [ln for ln in self.body if _is_statement_line(ln)]
-        return bool(stmts) and all(("⇒" in ln or "✓" in ln) for ln in stmts)
-
-    def child_refs(self) -> list[tuple[str, bool, str]]:
-        out = []
-        for ln in self.body:
-            m = TAG_RE.match(ln)
-            if not m:
-                continue
-            cm = CHILD_TAG_RE.match(m.group("tag").strip())
-            if cm:
-                out.append((cm.group("id"), bool(cm.group("reuse")), ln))
-        return out
-
-    def references(self, cid: str) -> bool:
-        return any(c == cid for c, _, _ in self.child_refs())
-
-    def body_hash(self) -> str:
-        return hashlib.sha1("\n".join(ln.rstrip() for ln in self.body).encode()).hexdigest()[:12]
+def is_ctx_id(s: str) -> bool:
+    return s.startswith(("CTX-F", "CTX-S")) and s[5:].isdigit()
 
 
-@dataclass
-class Adr:
-    id: str
-    title: str
-    status: str
-    constrains: str
-    path: Path
-    lines: list[str]
+def is_adr_id(s: str) -> bool:
+    return len(s) == 8 and s.startswith("ADR-") and s[4:].isdigit()
 
 
-@dataclass
-class Ledger:
-    root: Path
-    nodes: dict[str, Node]
-    entries: dict[str, Entry]
-    adrs: list[Adr]
-    frontier: dict[str, tuple[str, str]] = field(default_factory=dict)  # id -> (statement, parent)
-    errors: list[str] = field(default_factory=list)
-    warnings: list[str] = field(default_factory=list)
-
-    def entry_by_ref(self, ref: str) -> Entry | None:
-        r = ref.strip()
-        if CTX_RE.fullmatch(r):
-            return next((e for e in self.entries.values() if e.id == r), None)
-        return next((e for e in self.entries.values() if e.file == "terms.md" and e.heading.lower() == r.lower()), None)
-
-    def adr_by_ref(self, ref: str) -> Adr | None:
-        return next((a for a in self.adrs if a.id == ref), None)
-
-    def canonical(self, ref: str) -> str:
-        r = ref.strip().strip("`")
-        for rx in (ID_RE, CTX_RE, ADR_RE):
-            m = rx.search(r)
-            if m:
-                return m.group(0)
-        e = self.entry_by_ref(r)
-        return e.heading if e else r
-
-    def resolves(self, ref: str) -> bool:
-        return bool((ID_RE.fullmatch(ref) and ref in self.nodes) or (ADR_RE.fullmatch(ref) and self.adr_by_ref(ref)) or self.entry_by_ref(ref))
-
-    def link(self, ref: str, from_file: Path) -> str:
-        """Markdown link for a canonical ref relative to `from_file`; bare ref when unresolvable."""
-        from_dir = from_file.parent
-        if ID_RE.fullmatch(ref):
-            n = self.nodes.get(ref)
-            return f"[{ref}]({os.path.relpath(n.path, from_dir)})" if n else ref
-        if ADR_RE.fullmatch(ref):
-            a = self.adr_by_ref(ref)
-            return f"[{ref}]({os.path.relpath(a.path, from_dir)})" if a else ref
-        e = self.entry_by_ref(ref)
-        if not e:
-            return ref
-        target = self.root / "context" / e.file
-        href = f"#{e.anchor}" if target == from_file else f"{os.path.relpath(target, from_dir)}#{e.anchor}"
-        return f"[{e.id or e.heading}]({href})"
-
-    def terms_longest_first(self) -> list[Entry]:
-        return sorted((e for e in self.entries.values() if e.file == "terms.md"), key=lambda e: -len(e.heading))
-
-    def linkify_terms_in(self, text: str, from_file: Path) -> str:
-        """Link every plain occurrence of a term heading in free text (existing links normalized first)."""
-        plain = LINK_RE.sub(lambda m: m.group(1), text)
-        out, i = [], 0
-        terms = self.terms_longest_first()
-        while i < len(plain):
-            for e in terms:
-                h = e.heading
-                if plain.startswith(h, i) and (i == 0 or not plain[i - 1].isalnum()) and (i + len(h) == len(plain) or not plain[i + len(h)].isalnum()):
-                    out.append(self.link(h, from_file))
-                    i += len(h)
-                    break
-            else:
-                out.append(plain[i])
-                i += 1
-        return "".join(out)
-
-    def terms_in(self, text: str) -> list[str]:
-        plain = LINK_RE.sub(lambda m: m.group(1), text)
-        return [e.heading for e in self.terms_longest_first() if re.search(rf"(?<!\w){re.escape(e.heading)}(?!\w)", plain)]
+def is_ident(s: str) -> bool:
+    return bool(s) and s.isidentifier() and (s[0].islower() or s[0] == "_")
 
 
-def _is_statement_line(ln: str) -> bool:
-    s = ln.strip()
-    return bool(s) and not s.startswith("{") and not s.startswith("--") and not CONTROL_RE.match(s)
+def anchor_of(heading: str) -> str:
+    keep = "".join(c.lower() if c.isalnum() else " " if c in " -_" else "" for c in heading)
+    return "-".join(keep.split())
 
 
-def split_refs(raw: str) -> list[str]:
-    raw = LINK_RE.sub(lambda m: m.group(1), raw)
-    return [t.strip().strip("`") for t in raw.split(",") if t.strip() and t.strip() not in ("-", "—")]
+def unknowns(*texts: str) -> list[str]:
+    out: set[str] = set()
+    for t in texts:
+        for w in t.split():
+            if w.startswith("?") and len(w) > 1 and w[1].isalpha():
+                out.add(w[1:].rstrip(",.;:)]}"))
+    return sorted(out)
 
 
-def _split_header(text: str) -> dict[str, str]:
-    out: dict[str, str] = {}
-    for line in text.splitlines():
-        if not line.strip() or line.startswith("#"):
-            continue
-        for part in re.split(r"\s+[·|]\s+", line.strip()):
-            if ":" in part:
-                k, v = part.split(":", 1)
-                if re.fullmatch(r"[A-Z][A-Za-z]*( [a-z]+)?", k.strip()):
-                    out[k.strip()] = v.strip()
+def fn_of(statement: str) -> str:
+    s = statement.split("<-", 1)[1] if "<-" in statement else statement
+    s = s.strip()
+    if s.startswith("->"):
+        s = s[2:].strip()
+    name = s.partition("(")[0].strip()
+    return name if is_ident(name) else ""
+
+
+def call_names(code: str) -> list[str]:
+    out, i, n = [], 0, len(code)
+    while i < n:
+        c = code[i]
+        if c.isalpha() or c == "_":
+            j = i
+            while j < n and (code[j].isalnum() or code[j] == "_"):
+                j += 1
+            k = j
+            while k < n and code[k] == " ":
+                k += 1
+            name, prev = code[i:j], code[i - 1] if i else ""
+            if k < n and code[k] == "(" and prev != "." and is_ident(name) and name not in CONTROL:
+                out.append(name)
+            i = j
+        else:
+            i += 1
     return out
 
 
-def _sections(text: str) -> tuple[str, dict[str, str]]:
-    parts = re.split(r"^## (.+)$", text, flags=re.M)
-    return parts[0], {parts[i].strip(): parts[i + 1] for i in range(1, len(parts), 2)}
+def stmt_kind(code: str) -> str:
+    s = code.strip()
+    if s.startswith("{"):
+        return "assert"
+    if s.endswith(":") and s.split(" ", 1)[0].rstrip(":") in CONTROL:
+        return "control"
+    return "stmt"
 
 
-def _fence_span(lines: list[str], section: str) -> tuple[int, int]:
-    """(start, end) indexes of pseudo fence content inside `## <section>`; (-1, -1) if absent."""
-    in_sec = False
-    start = -1
-    for i, ln in enumerate(lines):
-        if ln.startswith("## "):
-            in_sec = ln[3:].strip() == section
-            continue
-        if in_sec and ln.startswith("```") and start < 0:
-            start = i + 1
-        elif in_sec and ln.startswith("```") and start >= 0:
-            return start, i
-    return -1, -1
+def target_ok(target: str) -> str:
+    """'' when valid, else the reason."""
+    head, sep, rest = target.partition(": ")
+    first = head.replace("-", " ").split(" ")[0].lower() if head else ""
+    if first in OWN_CODE:
+        return f"Target {target!r} names design-owned code; a target must exist outside the design today (platform, language, repo fn on disk). Refine further, or collapse with `-- ⇒` lines"
+    if not sep or not rest.strip() or not head or not all(c.isalnum() or c in "-_" for c in head) or not head[0].islower():
+        return f"Target {target!r} must read '<target>: <identifier>' (dbos: DBOS.startWorkflow, postgres: SELECT ... ORDER BY seq, ts: Promise.all)"
+    return ""
+
+
+# ----------------------------------------------------------------------------- body text <-> items
 
 
 def join_continuations(raw: list[str]) -> list[str]:
-    """Merge lines while parentheses stay open: `f(\\n a, b\\n)  -- D-1` -> `f(a, b)  -- D-1`."""
-    out: list[str] = []
-    buf, depth = "", 0
+    out, buf, depth = [], "", 0
     for ln in raw:
-        if depth > 0:
-            buf = buf.rstrip() + (" " if not ln.strip().startswith(")") else "") + ln.strip()
-        else:
-            buf = ln
+        buf = ln if depth <= 0 else buf.rstrip() + ("" if ln.strip().startswith(")") else " ") + ln.strip()
         depth += ln.count("(") - ln.count(")")
         if depth <= 0:
             out.append(buf)
@@ -302,660 +161,959 @@ def join_continuations(raw: list[str]) -> list[str]:
     return out
 
 
-def parse_node(path: Path) -> Node:
-    text = path.read_text(encoding="utf-8")
-    lines = text.splitlines()
-    m = re.match(r"(D-\d{3})-(.+)\.md$", path.name)
-    nid = m.group(1) if m else path.stem
-    head, secs = _sections(text)
-    header = _split_header(head)
-    hm = re.search(r"^# (D-\d{3})\b", head, re.M)
-    stmt_sec = secs.get("Statement", "")
-    sm = re.search(r"`([^`]+)`", stmt_sec)
-    statement = sm.group(1).strip() if sm else (stmt_sec.strip().splitlines()[0] if stmt_sec.strip() else "")
-    span = _fence_span(lines, "Refinement")
-    fence = lines[span[0]:span[1]] if span[0] >= 0 else []
-    body = join_continuations(fence[1:]) if fence else []
-    tm = re.search(r"Target:\s*`?([^`\n]+?)`?\s*$", secs.get("Realization", ""), re.M)
-    return Node(
-        id=nid, path=path, header=header, sections=secs, lines=lines,
-        heading_id=hm.group(1) if hm else None, parents=uniq(ID_RE.findall(header.get("Parents", ""))),
-        depends_raw=header.get("Depends on", ""),
-        design=header.get("Design", "").strip(), realization=header.get("Realization", "").strip(),
-        verification=header.get("Verification", "").strip(), approved=header.get("Approved", "").strip(),
-        statement=statement, signature=fence[0].strip() if fence else "", body=body, fence_span=span,
-        target=tm.group(1).strip() if tm else "",
-    )
+def parse_body(text: str, fn: str) -> list[dict]:
+    lines = [ln for ln in join_continuations(text.splitlines()) if ln.strip()]
+    if lines:
+        first = lines[0].strip()
+        if first.endswith(":") and stmt_kind(first) != "control" and first.partition("(")[0].strip() == fn:
+            lines = lines[1:]
+    base = min((len(ln) - len(ln.lstrip()) for ln in lines), default=0)
+    items = []
+    for ln in lines:
+        code, sep, tag = ln.strip().partition("--")
+        item: dict = {"indent": len(ln) - len(ln.lstrip()) - base, "code": code.strip()}
+        if sep:
+            t = tag.strip()
+            words = t.split()
+            if t.startswith("↗") and len(words) > 1:
+                item["reuse"] = words[1]
+            elif t[:1] in ("⇒", "✓"):
+                item["target"] = t[1:].strip()
+            elif words and is_node_id(words[0]):
+                item["child"] = words[0]
+            else:
+                item["note"] = t
+        items.append(item)
+    return items
 
 
-def find_adr_dir(design_dir: Path) -> Path | None:
-    return next((p / "adr" for p in [design_dir, *design_dir.parents][:5] if (p / "adr").is_dir()), None)
+def item_tag(it: dict) -> str:
+    if "child" in it:
+        return it["child"]
+    if "reuse" in it:
+        return f"↗ {it['reuse']}"
+    if "target" in it:
+        return f"⇒ {it['target']}"
+    return it.get("note", "")
 
 
-def parse_adrs(design_dir: Path) -> list[Adr]:
-    adr_dir = find_adr_dir(design_dir)
-    out: list[Adr] = []
-    for p in sorted(adr_dir.glob("*.md")) if adr_dir else []:
-        text = p.read_text(encoding="utf-8")
-        tm = re.search(r"^# (ADR-\d{4})\s*[-—–]\s*(.+)$", text, re.M)
-        header = _split_header(_sections(text)[0])
-        out.append(Adr(tm.group(1) if tm else p.stem, tm.group(2).strip() if tm else p.stem,
-                       header.get("Status", "?"), header.get("Constrains", ""), p, text.splitlines()))
-    return out
+def fmt(code: str, tag: str, indent: int) -> str:
+    left = " " * indent + code
+    return f"{left}{' ' * max(CODE_COL - len(left), 1)}-- {tag}" if tag else left
 
 
-def parse_context(design_dir: Path) -> dict[str, Entry]:
-    out: dict[str, Entry] = {}
-    for fname in CONTEXT_FILES:
-        p = design_dir / "context" / fname
-        if not p.exists():
-            continue
-        parts = re.split(r"^## (.+)$", p.read_text(encoding="utf-8"), flags=re.M)
-        line = parts[0].count("\n") + 1
-        for i in range(1, len(parts), 2):
-            heading, body = parts[i].strip(), parts[i + 1]
-            um = re.search(r"^Used by:(.*)$", body, re.M)
-            cm = re.search(r"^Changed:.*$", body, re.M)
-            e = Entry(fname, heading, anchor_of(heading), line, body,
-                      set(ID_RE.findall(um.group(1))) if um else set(),
-                      max(DATE_RE.findall(cm.group(0)), default="") if cm else "",
-                      len([ln for ln in body.splitlines() if ln.strip()]))
-            out[e.key] = e
-            line += body.count("\n") + 1
-    return out
+def body_text(items: list[dict], indent: int = 2) -> list[str]:
+    return [fmt(it["code"], item_tag(it), indent + it["indent"]) for it in items]
 
 
-def load(design_dir: Path) -> Ledger:
-    nodes_dir = design_dir / "nodes"
-    nodes: dict[str, Node] = {}
-    for p in sorted(nodes_dir.glob("D-*.md")) if nodes_dir.is_dir() else []:
-        n = parse_node(p)
-        nodes[n.id] = n
-    led = Ledger(design_dir, nodes, parse_context(design_dir), parse_adrs(design_dir))
-    for n in nodes.values():
-        n.depends = uniq(led.canonical(t) for t in split_refs(n.depends_raw))
-        if n.is_draft:
-            continue
-        for cid, _reuse, ln in n.child_refs():
-            if cid not in nodes and cid not in led.frontier:
-                led.frontier[cid] = (_frontier_statement(ln), n.id)
-    return led
+def body_hash(items: list[dict]) -> str:
+    return hashlib.sha1(json.dumps(items, sort_keys=True).encode()).hexdigest()[:12]
 
 
-def _code_of(ln: str) -> str:
-    m = TAG_RE.match(ln)
-    return (m.group("code") if m else ln).strip()
+def frontier_statement(code: str) -> str:
+    lhs, sep, rhs = code.partition("<-")
+    if sep:
+        return f"{rhs.strip()} -> {lhs.strip()}"
+    return code[2:].strip() if code.startswith("->") else code
 
 
-def _frontier_statement(ln: str) -> str:
-    code = _code_of(ln)
-    m = re.match(r"^(\w+)\s*(?:<-|←)\s*(.+)$", code)
-    return f"{m.group(2).strip()} -> {m.group(1)}" if m else re.sub(r"^(?:->|→)\s*", "", code)
+# ----------------------------------------------------------------------------- ledger
 
 
-# ----------------------------------------------------------------------------- linkify + autofill (rewrites sources)
+class Ledger:
+    def __init__(self, d: Path):
+        self.dir = d
+        self.path = d / LEDGER
+        self.data: dict = json.loads(self.path.read_text(encoding="utf-8")) if self.path.exists() else {}
+        self.errors: list[str] = []
+        self.warnings: list[str] = []
 
+    # --- storage
+    @classmethod
+    def create(cls, d: Path, title: str) -> "Ledger":
+        d.mkdir(parents=True, exist_ok=True)
+        led = cls(d)
+        led.data = {"schema": 1, "title": title, "scope": "", "nongoals": [], "ambiguities": [],
+                    "nodes": {}, "terms": {}, "facts": {}, "scenarios": {}}
+        led.save()
+        return led
 
-def _rewrite_header_line(lines: list[str], key: str, value: str) -> bool:
-    for i, ln in enumerate(lines):
-        if ln.startswith("## "):
-            break
-        parts = re.split(r"(\s+[·|]\s+)", ln)
-        for j in range(0, len(parts), 2):
-            if parts[j].startswith(key + ":"):
-                new = f"{key}: {value}"
-                if parts[j] == new:
-                    return False
-                parts[j] = new
-                lines[i] = "".join(parts)
-                return True
-    return False
+    def save(self) -> None:
+        self.data["nodes"] = dict(sorted(self.nodes.items()))
+        self.path.write_text(json.dumps(self.data, indent=1, ensure_ascii=False) + "\n", encoding="utf-8")
 
+    @property
+    def nodes(self) -> dict[str, dict]:
+        return self.data.setdefault("nodes", {})
 
-def autotag_body(led: Ledger, n: Node, lines: list[str]) -> bool:
-    """Tag untagged statement lines whose call name matches exactly one node signature."""
-    s, e = n.fence_span
-    if s < 0:
-        return False
-    by_fn: dict[str, list[str]] = {}
-    for o in led.nodes.values():
-        if o.fn and o.id != n.id:
-            by_fn.setdefault(o.fn, []).append(o.id)
-    changed = False
-    depth = 0
-    for i in range(s + 1, e):
-        ln = lines[i]
-        opened = depth > 0
-        depth += ln.count("(") - ln.count(")")
-        if opened or depth > 0 or "--" in ln or not _is_statement_line(ln):
-            continue
-        cm = CALL_RE.search(" " + ln.strip())
-        if not cm:
-            continue
-        ids = by_fn.get(cm.group(1), [])
-        if len(ids) == 1:
-            lines[i] = _fmt(ln.rstrip(), ids[0], 0) if len(ln.rstrip()) < CODE_COL else f"{ln.rstrip()}  -- {ids[0]}"
-            changed = True
-    return changed
+    def node(self, nid: str) -> dict | None:
+        return self.nodes.get(nid)
 
+    @property
+    def title(self) -> str:
+        return self.data.get("title") or self.dir.name.replace("-", " ").title()
 
-def linkify_nodes(led: Ledger) -> list[Path]:
-    changed = []
-    for n in led.nodes.values():
-        lines = list(n.lines)
-        c1 = _rewrite_header_line(lines, "Parents", ", ".join(led.link(p, n.path) for p in n.parents) or "-")
-        c2 = _rewrite_header_line(lines, "Depends on", ", ".join(led.link(r, n.path) for r in n.depends) or "-")
-        c3 = autotag_body(led, n, lines)
-        if c1 or c2 or c3:
-            n.path.write_text("\n".join(lines) + "\n", encoding="utf-8")
-            changed.append(n.path)
-    return changed
+    # --- derived structure
+    def parents(self, nid: str) -> list[str]:
+        return sorted(pid for pid, p in self.nodes.items() if any(it.get("child") == nid or it.get("reuse") == nid for it in p.get("body", [])))
 
+    def roots(self) -> list[str]:
+        return [nid for nid in self.nodes if not self.parents(nid)]
 
-def reverse_index(led: Ledger) -> dict[str, list[str]]:
-    idx: dict[str, list[str]] = {k: [] for k in led.entries}
-    for n in led.nodes.values():
-        for r in n.depends:
-            e = led.entry_by_ref(r)
-            if e:
-                idx[e.key].append(n.id)
-    for e in led.entries.values():
-        if e.file == "scenarios.md" and e.id:
-            for t in led.terms_in(e.meta("Settles")):
-                te = led.entry_by_ref(t)
-                if te:
-                    idx[te.key].append(e.id)
-    return {k: sorted(uniq(v)) for k, v in idx.items()}
-
-
-def linkify_context(led: Ledger) -> list[Path]:
-    idx = reverse_index(led)
-    changed = []
-    for fname in CONTEXT_FILES:
-        p = led.root / "context" / fname
-        if not p.exists():
-            continue
-        text = p.read_text(encoding="utf-8")
-        parts = re.split(r"(^## .+$)", text, flags=re.M)
-        for i in range(1, len(parts), 2):
-            e = led.entries.get(f"{fname}#{anchor_of(parts[i][3:])}")
-            if not e:
+    def frontier(self) -> dict[str, tuple[str, str]]:
+        out: dict[str, tuple[str, str]] = {}
+        for pid, p in self.nodes.items():
+            if p["design"] == "draft":
                 continue
-            body = parts[i + 1]
-            blines = body.split("\n")
-            # meta autofill: first non-empty line must carry Confirmed: (and Status: for facts)
-            first = next((k for k, ln in enumerate(blines) if ln.strip()), None)
-            if first is not None and not blines[first].startswith("#"):
-                if not re.search(r"\bConfirmed:", blines[first]) and not blines[first].startswith(META_PREFIX[1:]):
-                    meta = f"Confirmed: {today()}"
-                    if fname == "facts.md":
-                        meta = "Status: confirmed · " + meta
-                    blines.insert(first, meta)
-                    blines.insert(first + 1, "")
-                elif fname == "facts.md" and not re.search(r"\bStatus:", blines[first]):
-                    blines[first] = "Status: confirmed · " + blines[first]
-            body = "\n".join(blines)
-            users = idx.get(e.key, [])
-            used_line = "Used by: " + (", ".join(led.link(u, p) for u in users) or "-")
-            if re.search(r"^Used by:.*$", body, re.M):
-                body = re.sub(r"^Used by:.*$", used_line.replace("\\", "\\\\"), body, count=1, flags=re.M)
-            elif users:
-                body = body.rstrip("\n") + "\n" + used_line + "\n\n"
-            body = re.sub(r"^(Not:\s*)(.+)$", lambda m: m.group(1) + led.linkify_terms_in(m.group(2), p), body, flags=re.M)
-            body = re.sub(r"(Settles:\s*)([^·|\n]+)", lambda m: m.group(1) + led.linkify_terms_in(m.group(2).rstrip(), p) + (" " if m.group(2).endswith(" ") else ""), body)
-            parts[i + 1] = body
-        new = "".join(parts)
-        if new != text:
-            p.write_text(new, encoding="utf-8")
-            changed.append(p)
-    return changed
+            for it in p.get("body", []):
+                cid = it.get("child")
+                if cid and cid not in self.nodes and cid not in out:
+                    out[cid] = (frontier_statement(it["code"]), pid)
+        return out
+
+    def status(self, nid: str) -> str:
+        n = self.nodes[nid]
+        if n["design"] == "draft":
+            if n.get("adr_pending"):
+                return f"draft (ADR pending {n['adr_pending']})"
+            k = len(node_unknowns(n))
+            return f"draft ({k} ?)" if k else "draft"
+        if n["design"] == "superseded":
+            return f"superseded by {n.get('superseded_by', '?')}"
+        return n["design"]
+
+    def is_terminal(self, n: dict) -> bool:
+        return bool(n.get("target")) and not n.get("body")
+
+    def is_collapsed(self, n: dict) -> bool:
+        stmts = [it for it in n.get("body", []) if stmt_kind(it["code"]) == "stmt"]
+        return bool(stmts) and all("target" in it for it in stmts)
+
+    def inline_parent(self, nid: str) -> str | None:
+        ps = self.parents(nid)
+        if len(ps) != 1:
+            return None
+        return ps[0] if any(it.get("child") == nid for it in self.nodes[ps[0]].get("body", [])) else None
+
+    # --- context lookups
+    def entry(self, ref: str) -> tuple[str, str, dict] | None:
+        """(kind-file, key, entry) for a term name or CTX id."""
+        r = ref.strip()
+        if is_ctx_id(r):
+            f = "facts" if r[4] == "F" else "scenarios"
+            e = self.data.get(f, {}).get(r)
+            return (f, r, e) if e else None
+        for k, e in self.data.get("terms", {}).items():
+            if k.lower() == r.lower():
+                return ("terms", k, e)
+        return None
+
+    def adrs(self) -> list[dict]:
+        return parse_adrs(self.adr_dir())
+
+    def adr_dir(self) -> Path | None:
+        return next((p / "adr" for p in [self.dir, *self.dir.parents][:5] if (p / "adr").is_dir()), None)
+
+    def resolves(self, ref: str) -> bool:
+        return (is_node_id(ref) and (ref in self.nodes or ref in self.frontier())) or \
+            (is_adr_id(ref) and any(a["id"] == ref for a in self.adrs())) or self.entry(ref) is not None
+
+    def canonical(self, ref: str) -> str:
+        e = self.entry(ref)
+        return e[1] if e else ref.strip()
+
+    def used_by(self) -> dict[str, list[str]]:
+        idx: dict[str, list[str]] = {}
+        for nid, n in self.nodes.items():
+            for r in n.get("depends", []):
+                e = self.entry(r)
+                if e:
+                    idx.setdefault(e[1], []).append(nid)
+        for sid, s in self.data.get("scenarios", {}).items():
+            for t in self.terms_in(s.get("settles", "")):
+                idx.setdefault(t, []).append(sid)
+        return {k: sorted(set(v)) for k, v in idx.items()}
+
+    def terms_in(self, text: str) -> list[str]:
+        low = f" {text.lower()} "
+        return [t for t in self.data.get("terms", {}) if f" {t.lower()} " in low or low.strip().startswith(t.lower())]
 
 
-def linkify_adrs(led: Ledger) -> list[Path]:
-    changed = []
-    for a in led.adrs:
-        if not a.constrains:
-            continue
-        lines = list(a.lines)
-        plain = LINK_RE.sub(lambda m: m.group(1), a.constrains)
-        new = ID_RE.sub(lambda m: led.link(m.group(0), a.path), plain)
-        if _rewrite_header_line(lines, "Constrains", new):
-            a.path.write_text("\n".join(lines) + "\n", encoding="utf-8")
-            changed.append(a.path)
-    return changed
+def node_unknowns(n: dict) -> list[str]:
+    return unknowns(n.get("gloss", ""), n.get("effect", ""), *n.get("contract", {}).values())
 
 
-# ----------------------------------------------------------------------------- CONTEXT.md tables
+# ----------------------------------------------------------------------------- ADR files (markdown, header only)
 
 
-def _first_sentence(s: str) -> str:
-    s = LINK_RE.sub(lambda m: m.group(1), s).strip()
-    m = re.match(r"(.+?\.)(\s|$)", s)
-    return (m.group(1) if m else s).rstrip(".")
+def _header_parts(line: str) -> list[str]:
+    return [p.strip() for p in line.replace(" | ", " · ").split(" · ")]
 
 
-def context_tables(led: Ledger) -> dict[str, list[str]]:
-    idx = reverse_index(led)
-    terms, facts, scen = [], [], []
-    for e in sorted(led.entries.values(), key=lambda e: (e.file, e.id or e.heading.lower())):
-        entry = f"[{e.file}#{e.anchor}](context/{e.file}#{e.anchor})"
-        name = e.heading[len(e.id) + 1:] if e.id else e.heading
-        if e.file == "terms.md":
-            terms.append(f"| {e.heading} | {_first_sentence(e.definition())} | {e.meta('Avoid') or '-'} | {entry} |")
-        elif e.file == "facts.md":
-            facts.append(f"| {e.id or '-'} | {_first_sentence(e.definition())} | {e.meta('Status') or '-'} | {', '.join(idx.get(e.key, [])) or '-'} | {entry} |")
-        else:
-            scen.append(f"| {e.id or '-'} | {name} | {LINK_RE.sub(lambda m: m.group(1), e.meta('Settles')) or '-'} | {entry} |")
-    return {
-        "Vocabulary": ["| Term | Is | Avoid | Entry |", "| --- | --- | --- | --- |", *terms],
-        "Facts and constraints": ["| ID | Fact (one line) | Status | Used by | Entry |", "| --- | --- | --- | --- | --- |", *facts],
-        "Scenarios": ["| ID | Scenario | Settles | Entry |", "| --- | --- | --- | --- |", *scen],
-    }
+def parse_adrs(adr_dir: Path | None) -> list[dict]:
+    out = []
+    for p in sorted(adr_dir.glob("*.md")) if adr_dir else []:
+        lines = p.read_text(encoding="utf-8").splitlines()
+        aid, title = p.stem[:4], p.stem
+        header: dict[str, str] = {}
+        for ln in lines:
+            if ln.startswith("# "):
+                head = ln[2:].replace(" - ", " — ").replace(" – ", " — ")
+                a, sep, t = head.partition(" — ")
+                aid, title = (a.strip(), t.strip()) if sep else (head.strip(), head.strip())
+            elif ln.startswith("## "):
+                break
+            else:
+                for part in _header_parts(ln):
+                    k, sep, v = part.partition(":")
+                    if sep and k and k[0].isupper() and " " not in k.strip():
+                        header[k.strip()] = v.strip()
+        if not is_adr_id(aid):
+            aid = f"ADR-{p.stem[:4]}" if p.stem[:4].isdigit() else p.stem
+        constrains = [w.strip("[],") for w in header.get("Constrains", "").replace("(", " (").split() if is_node_id(w.strip("[],"))]
+        out.append({"id": aid, "title": title, "status": header.get("Status", "?"), "constrains": constrains, "path": p, "lines": lines})
+    return out
 
 
-def render_context_index(led: Ledger) -> bool:
-    p = led.root / "CONTEXT.md"
-    if not p.exists():
-        return False
-    text = p.read_text(encoding="utf-8")
-    tables = context_tables(led)
-    parts = re.split(r"(^## .+$)", text, flags=re.M)
-    present = {parts[i][3:].strip() for i in range(1, len(parts), 2)}
-    for i in range(1, len(parts), 2):
-        name = parts[i][3:].strip()
-        if name in tables:
-            parts[i + 1] = "\n\n" + "\n".join(tables[name]) + "\n\n"
-    out = "".join(parts)
-    for name in tables:
-        if name not in present:
-            out = out.rstrip("\n") + f"\n\n## {name}\n\n" + "\n".join(tables[name]) + "\n"
-    out = re.sub(r"\n{3,}", "\n\n", out)
-    if out != text:
-        p.write_text(out, encoding="utf-8")
-        return True
-    return False
+# ----------------------------------------------------------------------------- rendering
 
 
-# ----------------------------------------------------------------------------- DESIGN.md
+def rel(frm: Path, to: Path) -> str:
+    return os.path.relpath(to, frm.parent)
 
 
-def _tag_for(led: Ledger, cid: str, reuse: bool) -> str:
+def link_ref(led: Ledger, ref: str, frm: Path) -> str:
+    if is_node_id(ref) and ref in led.nodes:
+        return f"[{ref}]({rel(frm, led.dir / 'nodes' / f'{ref}.md')})"
+    if is_adr_id(ref):
+        a = next((a for a in led.adrs() if a["id"] == ref), None)
+        return f"[{ref}]({rel(frm, a['path'])})" if a else ref
+    e = led.entry(ref)
+    if e:
+        return f"[{e[1]}]({rel(frm, led.dir / 'CONTEXT.md')}#{anchor_of(e[1] if e[0] == 'terms' else e[1] + ' ' + e[2].get('name', ''))})"
+    return ref
+
+
+def render_node(led: Ledger, nid: str) -> str:
+    n = led.nodes[nid]
+    p = led.dir / "nodes" / f"{nid}.md"
+    L = [f"# {nid} — {fn_of(n['statement']) or nid}", "", GENERATED, "",
+         f"Kind: node · Index: [../DESIGN.md](../DESIGN.md)",
+         f"Design: {led.status(nid)} · Realization: {n['realization']} · Verification: {n['verification']}",
+         f"Parents: {', '.join(link_ref(led, x, p) for x in led.parents(nid)) or '-'}",
+         f"Depends on: {', '.join(link_ref(led, x, p) for x in n.get('depends', [])) or '-'}",
+         f"Approved: {n.get('approved') or '-'}", "",
+         "## Statement", "", f"`{n['statement']}`" + (f" — {n['gloss']}" if n.get("gloss") else ""), "",
+         "## Effect", "", n.get("effect") or "-", "",
+         "## Contract", ""]
+    L += [f"- {k.title()}: {v}" for k, v in n.get("contract", {}).items()] or ["-"]
+    if n.get("body"):
+        sig = n["statement"].split("<-", 1)[-1].strip().removeprefix("->").strip()
+        L += ["", "## Refinement", "", "```pseudo", sig + ":", *body_text(n["body"]), "```"]
+    for f, title in (("composition", "Composition argument"), ("decisions", "Decisions"), ("deferred", "Deferred")):
+        if n.get(f):
+            L += ["", f"## {title}", "", *[f"- {b}" for b in n[f]]]
+    if n.get("target") or n.get("adaptation"):
+        L += ["", "## Realization", ""]
+        if n.get("target"):
+            L.append(f"Target: `{n['target']}`")
+        L += [f"Adaptation: {a}" for a in n.get("adaptation", [])]
+    if n.get("evidence"):
+        L += ["", "## Evidence", ""]
+        for i, ev in enumerate(n["evidence"], 1):
+            L += [f"### EV-{i} {ev['kind']} — {ev['result']}", f"{ev['date']} · {ev['ref']}" + (f" · {ev['note']}" if ev.get("note") else "")]
+    if n.get("history"):
+        L += ["", "## History", "", *[f"- {h['date']} — {h['event']}" + (f": {h['reason']}" if h.get("reason") else "") for h in n["history"]]]
+    return "\n".join(L) + "\n"
+
+
+def tag_for(led: Ledger, cid: str, reuse: bool) -> str:
     n = led.nodes.get(cid)
-    if reuse or (n and len(n.parents) >= 2):
+    if n and n["design"] == "approved" and led.is_terminal(n):
+        return f"{cid} {'✓' if n['verification'] == 'verified' else '⇒'} {n['target']}"
+    if reuse or (n and len(led.parents(cid)) >= 2):
         return f"↗ {cid}"
     if not n:
         return f"{cid} (frontier)"
-    if n.is_draft:
-        m = re.match(r"draft \((.+)\)", n.design)
-        return f"{cid} (draft, {m.group(1)})" if m else f"{cid} (draft)"
-    if n.design.startswith("superseded"):
-        return f"{cid} ({n.design})"
-    if n.is_stale:
-        return f"{cid} (stale)"
-    if n.is_terminal:
-        return f"{cid} {'✓' if n.verification == 'verified' else '⇒'} {n.target}"
+    if n["design"] == "draft":
+        return f"{cid} ({led.status(cid)})"
+    if n["design"] in ("stale", "superseded"):
+        return f"{cid} ({led.status(cid)})"
+    if led.is_terminal(n):
+        return f"{cid} {'✓' if n['verification'] == 'verified' else '⇒'} {n['target']}"
     return cid
 
 
-def _fmt(code: str, tag: str, indent: int) -> str:
-    left = " " * indent + code
-    return f"{left}{' ' * max(CODE_COL - len(left), 1)}-- {tag}"
-
-
-def _inline_parent(led: Ledger, n: Node) -> Node | None:
-    """The single parent whose body substitutes `n` inline; None when `n` is a procedure root."""
-    if len(n.parents) != 1:
-        return None
-    p = led.nodes.get(n.parents[0])
-    return p if p and p.references(n.id) else None
-
-
-def _emit(led: Ledger, node: Node, indent: int, out: list[str], emitted: set[str]) -> None:
-    emitted.add(node.id)
-    base = min((len(ln) - len(ln.lstrip()) for ln in node.body if ln.strip()), default=0)
-    for ln in node.body:
-        if not ln.strip():
-            continue
-        here = indent + (len(ln) - len(ln.lstrip()) - base)
-        m = TAG_RE.match(ln)
-        tag = m.group("tag").strip() if m else ""
-        cm = CHILD_TAG_RE.match(tag) if m else None
-        if cm:
-            cid, reuse = cm.group("id"), bool(cm.group("reuse"))
-            out.append(_fmt(_code_of(ln), _tag_for(led, cid, reuse), here))
-            child = led.nodes.get(cid)
-            if child and child.is_approved and child.body and not reuse and _inline_parent(led, child) is node and cid not in emitted:
-                _emit(led, child, here + 2, out, emitted)
-        elif m and ("⇒" in tag or "✓" in tag):
-            out.append(_fmt(_code_of(ln), tag, here))
+def emit(led: Ledger, nid: str, indent: int, out: list[str], emitted: set[str]) -> None:
+    emitted.add(nid)
+    for it in led.nodes[nid].get("body", []):
+        here = indent + it["indent"]
+        if "child" in it or "reuse" in it:
+            cid, reuse = it.get("child") or it["reuse"], "reuse" in it
+            out.append(fmt(it["code"], tag_for(led, cid, reuse), here))
+            c = led.nodes.get(cid)
+            if c and c["design"] == "approved" and c.get("body") and not reuse and led.inline_parent(cid) == nid and cid not in emitted:
+                emit(led, cid, here + 2, out, emitted)
         else:
-            out.append(" " * here + ln.strip())
+            out.append(fmt(it["code"], item_tag(it), here))
 
 
 def render_program(led: Ledger) -> tuple[list[str], list[str]]:
     main: list[str] = []
     emitted: set[str] = set()
-    for root in [n for n in led.nodes.values() if not n.parents]:
-        sig = root.signature.rstrip(":") + ":" if root.signature else root.statement
-        main.append(_fmt(sig, _tag_for(led, root.id, False), 0))
-        if root.body and not root.is_draft:
-            _emit(led, root, 2, main, emitted)
+    for rid in led.roots():
+        r = led.nodes[rid]
+        main.append(fmt(r["statement"].split("<-", 1)[-1].strip().removeprefix("->").strip() + ":", tag_for(led, rid, False), 0))
+        if r.get("body") and r["design"] != "draft":
+            emit(led, rid, 2, main, emitted)
     procs: list[str] = []
-    for n in sorted(led.nodes.values(), key=lambda x: x.id):
-        if n.id in emitted or not n.body or n.is_draft or n.parents == [] or _inline_parent(led, n):
+    for nid, n in led.nodes.items():
+        if nid in emitted or not n.get("body") or n["design"] == "draft" or not led.parents(nid) or led.inline_parent(nid):
             continue
-        sig = n.signature.rstrip(":") + ":" if n.signature else n.statement
         if procs:
             procs.append("")
-        status = _tag_for(led, n.id, False).replace(n.id, "").strip()
-        procs.append(_fmt(sig, f"{n.id}{' ' + status if status and not status.startswith('↗') else ''} (used by {', '.join(n.parents)})", 0))
-        _emit(led, n, 2, procs, emitted)
+        st = tag_for(led, nid, False).replace(nid, "").strip()
+        sig = n["statement"].split("<-", 1)[-1].strip().removeprefix("->").strip() + ":"
+        procs.append(fmt(sig, f"{nid}{' ' + st if st and not st.startswith('↗') else ''} (used by {', '.join(led.parents(nid))})", 0))
+        emit(led, nid, 2, procs, emitted)
     return main, procs
 
 
 def render_design(led: Ledger) -> str:
-    d = led.root
-    title = f"# {d.name} — Design"
-    existing = d / "DESIGN.md"
-    if existing.exists():
-        first = existing.read_text(encoding="utf-8").splitlines()[:1]
-        if first and first[0].startswith("# "):
-            title = first[0]
-    roots = [n.id for n in led.nodes.values() if not n.parents]
-    frontier = sorted(set(led.frontier) | {n.id for n in led.nodes.values() if n.is_draft})
-    lines = [title, "", "Kind: index · Context: [./CONTEXT.md](./CONTEXT.md)",
-             f"Root: {', '.join(roots) or '-'} · Active frontier: {', '.join(frontier) or '-'}", "",
-             "_Generated by `stepwise.py sync` from nodes/, context/ and ADRs. Edit those; never this file._", "",
-             "## Applicable ADRs", ""]
-    lines += [f"- [{a.id} {a.title}]({os.path.relpath(a.path, d)}) — {a.status} — constrains {LINK_RE.sub(lambda m: m.group(1), a.constrains) or '-'}" for a in led.adrs] or ["- none"]
-    lines += ["", "## Nodes", "", "| ID | Statement | Parents | Design | Realization | Verification | File |",
-              "| --- | --- | --- | --- | --- | --- | --- |"]
-    rows = [(n.id, n.statement.replace("|", "\\|"), ", ".join(n.parents) or "-", n.design, n.realization, n.verification,
-             f"[{os.path.relpath(n.path, d)}]({os.path.relpath(n.path, d)})") for n in led.nodes.values()]
-    rows += [(fid, stmt.replace("|", "\\|"), parent, "frontier", "not-started", "unverified", "-") for fid, (stmt, parent) in led.frontier.items()]
-    lines += ["| " + " | ".join(r) + " |" for r in sorted(rows, key=lambda r: r[0])]
+    d = led.dir
+    fr = led.frontier()
+    frontier = sorted(set(fr) | {nid for nid, n in led.nodes.items() if n["design"] == "draft"})
+    L = [f"# {led.title} — Design", "", GENERATED, "", "Kind: index · Context: [./CONTEXT.md](./CONTEXT.md)",
+         f"Root: {', '.join(led.roots()) or '-'} · Active frontier: {', '.join(frontier) or '-'}", "", "## Applicable ADRs", ""]
+    L += [f"- [{a['id']} {a['title']}]({rel(d / 'DESIGN.md', a['path'])}) — {a['status']} — constrains {', '.join(a['constrains']) or '-'}" for a in led.adrs()] or ["- none"]
+    L += ["", "## Nodes", "", "| ID | Statement | Parents | Design | Realization | Verification | File |", "| --- | --- | --- | --- | --- | --- | --- |"]
+    rows = [(nid, n["statement"].replace("|", "\\|"), ", ".join(led.parents(nid)) or "-", led.status(nid), n["realization"], n["verification"], f"[nodes/{nid}.md](nodes/{nid}.md)") for nid, n in led.nodes.items()]
+    rows += [(fid, s.replace("|", "\\|"), p, "frontier", "not-started", "unverified", "-") for fid, (s, p) in fr.items()]
+    L += ["| " + " | ".join(r) + " |" for r in sorted(rows)]
     main, procs = render_program(led)
-    lines += ["", "## Program", "", "```pseudo", *main, "```"]
+    L += ["", "## Program", "", "```pseudo", *main, "```"]
     if procs:
-        lines += ["", "### Procedures", "", "```pseudo", *procs, "```"]
-    return "\n".join(lines) + "\n"
+        L += ["", "### Procedures", "", "```pseudo", *procs, "```"]
+    return "\n".join(L) + "\n"
 
 
-def _sidecar(d: Path) -> dict:
-    p = d / SIDECAR
-    try:
-        return json.loads(p.read_text()) if p.exists() else {}
-    except json.JSONDecodeError:
-        return {}
+def render_context(led: Ledger) -> str:
+    D = led.data
+    used = led.used_by()
+    L = [f"# {led.title} — Shared Context", "", GENERATED, "", f"Kind: index · Status: active · Design: [./DESIGN.md](./DESIGN.md)", "",
+         "## Scope", "", D.get("scope") or "-", "", "## Vocabulary", "", "| Term | Is | Avoid | Used by |", "| --- | --- | --- | --- |"]
+    for k, e in sorted(D.get("terms", {}).items(), key=lambda kv: kv[0].lower()):
+        L.append(f"| [{k}](#{anchor_of(k)}) | {e['definition'].split('. ')[0].rstrip('.')} | {', '.join(e.get('avoid', [])) or '-'} | {', '.join(used.get(k, [])) or '-'} |")
+    L += ["", "## Facts and constraints", "", "| ID | Fact | Status | Used by |", "| --- | --- | --- | --- |"]
+    for k, e in sorted(D.get("facts", {}).items()):
+        L.append(f"| [{k}](#{anchor_of(k + ' ' + e['name'])}) | {e['definition'].split('. ')[0].rstrip('.')} | {e.get('status', 'confirmed')} | {', '.join(used.get(k, [])) or '-'} |")
+    L += ["", "## Scenarios", "", "| ID | Scenario | Settles |", "| --- | --- | --- |"]
+    for k, e in sorted(D.get("scenarios", {}).items()):
+        L.append(f"| [{k}](#{anchor_of(k + ' ' + e['name'])}) | {e['name']} | {e.get('settles') or '-'} |")
+    L += ["", "## Open ambiguities", "", "| Term / claim | Conflict | Resolves at |", "| --- | --- | --- |"]
+    L += [f"| {a['claim']} | {a['conflict']} | {a['resolves_at']} |" for a in D.get("ambiguities", [])]
+    L += ["", "## Explicit non-goals", "", *([f"- {g}" for g in D.get("nongoals", [])] or ["- none"])]
+    L += ["", "## Terms", ""]
+    for k, e in sorted(D.get("terms", {}).items(), key=lambda kv: kv[0].lower()):
+        L += [f"### {k}", "", f"Confirmed: {e['confirmed']}" + (f" · Source: {e['source']}" if e.get("source") else ""), "", e["definition"]]
+        for lab, key in (("Avoid", "avoid"), ("Not", "not")):
+            if e.get(key):
+                L.append(f"{lab}: {', '.join(e[key])}")
+        if e.get("example"):
+            L.append(f"Example: {e['example']}")
+        L += [f"Used by: {', '.join(used.get(k, [])) or '-'}", *_changed(e), ""]
+    L += ["## Facts", ""]
+    for k, e in sorted(D.get("facts", {}).items()):
+        L += [f"### {k} {e['name']}", "", f"Status: {e.get('status', 'confirmed')} · Confirmed: {e['confirmed']}" + (f" · Source: {e['source']}" if e.get("source") else ""), "",
+              e["definition"], f"Used by: {', '.join(used.get(k, [])) or '-'}", *_changed(e), ""]
+    L += ["## Scenario entries", ""]
+    for k, e in sorted(D.get("scenarios", {}).items()):
+        L += [f"### {k} {e['name']}", "", f"Confirmed: {e['confirmed']}" + (f" · Settles: {e['settles']}" if e.get("settles") else ""), ""]
+        L += [f"{w.title()} {e[w]}" for w in ("given", "when", "then") if e.get(w)]
+        if e.get("excludes"):
+            L.append(f"Excludes: {e['excludes']}")
+        L += _changed(e) + [""]
+    return "\n".join(L).rstrip("\n") + "\n"
 
 
-def body_violations(led: Ledger) -> dict[str, str]:
-    side = _sidecar(led.root)
-    return {n.id: side[n.id]["hash"] for n in led.nodes.values()
-            if n.is_approved and n.body and n.id in side
-            and side[n.id].get("hash") != n.body_hash() and side[n.id].get("approved") == n.approved}
+def _changed(e: dict) -> list[str]:
+    return [f"Changed: {c['at'][:10]} — {c['reason']}" for c in e.get("changed", [])]
 
 
-def do_render(design_dir: Path) -> list[str]:
-    led = load(design_dir)
-    touched = linkify_nodes(led) + linkify_adrs(led) + linkify_context(led)
-    led = load(design_dir)
-    if render_context_index(led):
-        touched.append(design_dir / "CONTEXT.md")
-    (design_dir / "DESIGN.md").write_text(render_design(led), encoding="utf-8")
-    side = _sidecar(design_dir)
-    bad = body_violations(led)
-    for n in led.nodes.values():
-        if n.is_approved and n.body and n.id not in bad:
-            side[n.id] = {"hash": n.body_hash(), "approved": n.approved}
-    (design_dir / SIDECAR).write_text(json.dumps(side, indent=1, sort_keys=True) + "\n")
-    return [os.path.relpath(p, design_dir.parent) for p in touched]
+def render_all(led: Ledger) -> dict[Path, str]:
+    out = {led.dir / "DESIGN.md": render_design(led), led.dir / "CONTEXT.md": render_context(led)}
+    for nid in led.nodes:
+        out[led.dir / "nodes" / f"{nid}.md"] = render_node(led, nid)
+    return out
 
 
-# ----------------------------------------------------------------------------- new
+def write_views(led: Ledger) -> None:
+    (led.dir / "nodes").mkdir(parents=True, exist_ok=True)
+    for p, text in render_all(led).items():
+        if not p.exists() or p.read_text(encoding="utf-8") != text:
+            p.write_text(text, encoding="utf-8")
 
 
-STUB = """# {id} — {fn}
-
-Kind: node · Index: [../DESIGN.md](../DESIGN.md)
-Design: draft · Realization: not-started · Verification: unverified
-Parents: {parent}
-Depends on: -
-Approved: -
-
-## Statement
-
-`{statement}` — <one line: what this statement achieves>
-
-## Effect
-
-<1–2 sentences: net observable behavior>
-
-## Contract
-
-- Pre: <one line>
-- Post: <one line>
-- Failure: <one line>
-- Invariant: <one line>
-"""
-
-
-def do_new(design_dir: Path, nid: str, statement: str | None) -> int:
-    led = load(design_dir)
-    if nid in led.nodes:
-        print(f"error {nid} already exists: {led.nodes[nid].path}", file=sys.stderr)
-        return 1
-    if nid in led.frontier:
-        stmt, parent = led.frontier[nid]
-        code = next(_code_of(ln) for n in led.nodes.values() for c, _r, ln in n.child_refs() if c == nid)
-    elif statement:
-        code, parent = statement, "-"
-    else:
-        print(f"error {nid} is not on the frontier; pass the statement for a root: new <dir> {nid} \"outcome <- f(x)\"", file=sys.stderr)
-        return 1
-    m = re.search(r"([a-z_][a-z0-9_]*)\s*\(", code)
-    fn = m.group(1) if m else nid.lower()
-    path = design_dir / "nodes" / f"{nid}-{fn.replace('_', '-')}.md"
-    path.write_text(STUB.format(id=nid, fn=fn, parent=parent, statement=code), encoding="utf-8")
-    do_render(design_dir)
-    print(f"created {_show(path)} (draft). Fill Statement gloss, Effect, Contract; mark unknowns ?slug; then sync.")
-    return 0
-
-
-# ----------------------------------------------------------------------------- check
-
-
-def _line_of(lines: list[str], pattern: str) -> int:
-    return next((i for i, ln in enumerate(lines, 1) if re.search(pattern, ln)), 1)
+# ----------------------------------------------------------------------------- lint
 
 
 def check(led: Ledger) -> None:
-    d = led.root
-
-    def rel(p: Path) -> str: return os.path.relpath(p, d.parent)
-    def E(path: Path, line: int, msg: str): led.errors.append(f"{rel(path)}:{line}: {msg}")
-    def W(path: Path, line: int, msg: str): led.warnings.append(f"{rel(path)}:{line}: {msg}")
-
+    E = led.errors.append
+    W = led.warnings.append
     nodes = led.nodes
-    roots = [n for n in nodes.values() if not n.parents]
-    if nodes and len(roots) != 1:
-        E(d / "DESIGN.md", 1, f"expected exactly one root node (empty Parents); found {[r.id for r in roots]}")
-
-    for n in nodes.values():
-        L = n.lines
-        hl = _line_of(L, r"^Design:")
-        if n.heading_id != n.id:
-            E(n.path, 1, f"heading id {n.heading_id!r} != filename id {n.id}")
-        if not DESIGN_STATUS_RE.match(n.design):
-            E(n.path, hl, f"Design {n.design!r} not in: draft | draft (k ?) | draft (ADR pending) | approved | stale | superseded by D-NNN — re-approval = keep 'approved', bump Approved:")
-        if n.realization not in REALIZATION_VOCAB:
-            E(n.path, hl, f"Realization {n.realization!r} not in {sorted(REALIZATION_VOCAB)}")
-        if n.verification not in VERIFICATION_VOCAB:
-            E(n.path, hl, f"Verification {n.verification!r} not in {sorted(VERIFICATION_VOCAB)}")
-        if n.is_approved and not DATE_RE.search(n.approved):
-            E(n.path, _line_of(L, r"^Approved:"), "approved node needs 'Approved: YYYY-MM-DD by <who>'")
-        if len(L) > 120:
-            E(n.path, len(L), f"node file {len(L)} lines > 120")
-        if re.search(r"<one line|<1–2 sentences", "\n".join(L)):
-            E(n.path, _line_of(L, r"<one line|<1–2"), "stub placeholders still present")
-        unknowns = sorted(set(UNKNOWN_RE.findall("\n".join(L))))
-        km = re.match(r"draft \((\d+) \?\)", n.design)
-        if unknowns and not n.is_draft:
-            E(n.path, _line_of(L, r"\?[a-z]"), f"`?` marks in non-draft node: {unknowns}")
-        elif km and int(km.group(1)) != len(unknowns):
-            E(n.path, hl, f"header says {km.group(1)} ? but text has {len(unknowns)}: {unknowns}")
-        elif n.is_draft and not km and unknowns and n.design != "draft (ADR pending)":
-            E(n.path, hl, f"draft has {len(unknowns)} ? marks; header must read 'draft ({len(unknowns)} ?)'")
-        stmts = [ln for ln in n.body if ln.strip()]
+    fr = led.frontier()
+    if nodes and len(led.roots()) != 1:
+        E(f"ledger: expected exactly one root node; found {led.roots()}")
+    adrs = led.adrs()
+    adr_ids = {a["id"] for a in adrs}
+    for nid, n in nodes.items():
+        where = f"{nid}"
+        if n["design"] not in DESIGN:
+            E(f"{where}: design {n['design']!r} not in {DESIGN}")
+        if n["realization"] not in REALIZATION:
+            E(f"{where}: realization {n['realization']!r} not in {REALIZATION}")
+        if n["verification"] not in VERIFICATION:
+            E(f"{where}: verification {n['verification']!r} not in {VERIFICATION}")
+        if n["design"] == "superseded" and n.get("superseded_by") not in nodes and n.get("superseded_by") not in fr:
+            E(f"{where}: superseded_by {n.get('superseded_by')!r} does not exist")
+        if not fn_of(n["statement"]):
+            E(f"{where}: statement {n['statement']!r} has no call `f(...)`")
+        if len(n.get("contract", {})) > 6:
+            E(f"{where}: contract has {len(n['contract'])} clauses > 6")
+        body = n.get("body", [])
+        stmts = [it for it in body if stmt_kind(it["code"]) == "stmt"]
         if len(stmts) > 12:
-            E(n.path, _line_of(L, r"^## Refinement"), f"Refinement body {len(stmts)} statements > 12")
-        for ln in n.body:
-            if _is_statement_line(ln) and not TAG_RE.match(ln) and CALL_RE.search(" " + ln.strip()):
-                E(n.path, _line_of(L, re.escape(ln.strip()[:30])), f"untagged call {ln.strip()!r}: add `-- D-NNN` (new id) or `-- ⇒ <target>: <identifier>`")
-        if n.is_approved and not n.body and not n.target:
-            E(n.path, _line_of(L, r"^## Refinement|^## Realization"), "approved node needs a Refinement body (composite) or a Target (terminal)")
-        if n.is_approved and n.body and "Composition argument" not in n.sections:
-            E(n.path, _line_of(L, r"^## Refinement"), "approved composite lacks '## Composition argument'")
-        if n.target:
-            tl = _line_of(L, r"Target:")
-            if not re.match(r"^[a-z][a-z0-9_-]*: \S", n.target):
-                E(n.path, tl, f"Target {n.target!r} must read '<target>: <identifier>' (e.g. 'dbos: DBOS.startWorkflow', 'postgres: SELECT ... ORDER BY seq')")
-            if re.match(r"^(service|module|application[- ]?service|app|own|internal|our|runtime)\b", n.target, re.I):
-                E(n.path, tl, f"Target {n.target!r} names design-owned code; a target must exist outside the design (platform, language, repo fn on disk)")
-            if n.body and not n.is_collapsed:
-                E(n.path, tl, "node has Target and child statements; terminal has no body, collapsed leaf tags every statement '-- ⇒ <target>: <identifier>'")
-        for cid, reuse, _ln in n.child_refs():
-            child = nodes.get(cid)
-            if child and not n.is_draft and n.id not in child.parents:
-                E(child.path, _line_of(child.lines, r"^Parents:"), f"{n.id} body calls {cid} but {cid} Parents = {child.parents}")
-            if reuse and child and not child.is_approved:
-                E(n.path, _line_of(L, re.escape(cid)), f"reuse ↗ {cid} but {cid} is {child.design!r}; only approved nodes are reusable")
-        for pid in n.parents:
-            parent = nodes.get(pid)
-            if not parent:
-                E(n.path, _line_of(L, r"^Parents:"), f"parent {pid} has no node file")
-            elif not parent.references(n.id) and n.id not in "\n".join(parent.lines):
-                E(n.path, _line_of(L, r"^Parents:"), f"Parents lists {pid} but {pid} never references {n.id}")
-        for rec in re.split(r"^### ", n.sections.get("Evidence", ""), flags=re.M)[1:]:
-            cnt = len([x for x in rec.splitlines() if x.strip()])
-            if cnt > 4:
-                E(n.path, _line_of(L, r"^### EV-"), f"evidence record {rec.splitlines()[0].strip()!r} has {cnt} lines > 4")
-        appr = DATE_RE.findall(n.approved)
-        for r in n.depends:
-            if ID_RE.fullmatch(r) or ADR_RE.fullmatch(r):
-                if not led.resolves(r) and r not in led.frontier:
-                    E(n.path, _line_of(L, r"^Depends on:"), f"Depends on {r} but it does not exist")
+            E(f"{where}: refinement has {len(stmts)} statements > 12")
+        for it in stmts:
+            if not any(k in it for k in ("child", "reuse", "target")) and call_names(it["code"]):
+                E(f"{where}: untagged call {it['code']!r}; tag `-- D-NNN` (new id), `-- ↗ D-NNN` (reuse) or `-- ⇒ <target>: <identifier>`")
+            if "reuse" in it and (it["reuse"] not in nodes or nodes[it["reuse"]]["design"] != "approved"):
+                E(f"{where}: reuse ↗ {it['reuse']} but it is not an approved node")
+            if "target" in it and (why := target_ok(it["target"])):
+                E(f"{where}: {why}")
+        if n["design"] == "approved":
+            if node_unknowns(n):
+                E(f"{where}: approved with unresolved ?{', ?'.join(node_unknowns(n))}")
+            if not body and not n.get("target"):
+                E(f"{where}: approved needs a refinement body (`body`) or a target (`terminal`)")
+            if body and not led.is_collapsed(n) and not n.get("composition"):
+                E(f"{where}: approved composite lacks composition (`set {nid} composition ...`)")
+            if n.get("approved_hash") and n["approved_hash"] != body_hash(body):
+                E(f"{where}: body changed since approval; `reopen` then `approve` again")
+            if n.get("adr_pending"):
+                E(f"{where}: approved while {n['adr_pending']} is pending; `adr accept` first")
+        if n.get("target"):
+            if (why := target_ok(n["target"])):
+                E(f"{where}: {why}")
+            if body and not led.is_collapsed(n):
+                E(f"{where}: has target and child statements; a terminal has no body, a collapsed leaf tags every statement `-- ⇒`")
+        for r in n.get("depends", []):
+            if is_node_id(r) or is_adr_id(r):
+                if not led.resolves(r):
+                    E(f"{where}: depends on {r} which does not exist")
                 continue
-            e = led.entry_by_ref(r)
+            e = led.entry(r)
             if not e:
-                E(n.path, _line_of(L, r"^Depends on:"), f"Depends on {r!r}: no term / fact / scenario with that heading or id in context/")
-            elif e.changed and appr and e.changed > appr[0] and not n.is_stale:
-                E(n.path, hl, f"{e.key} changed {e.changed} after approval {appr[0]}; node must be stale or re-approved")
-
-    for e in led.entries.values():
-        if e.nonempty > 10:
-            E(d / "context" / e.file, e.line, f"section {e.heading!r} has {e.nonempty} non-empty lines > 10")
-        if not e.definition() and not re.search(r"^(Given|When|Then) ", e.body, re.M):
-            E(d / "context" / e.file, e.line, f"section {e.heading!r} has no definition sentence")
-        if e.file != "terms.md" and not e.id:
-            E(d / "context" / e.file, e.line, f"heading {e.heading!r} must start with CTX-F<n> / CTX-S<n>")
-        if e.file == "scenarios.md" and e.meta("Settles") and not led.terms_in(e.meta("Settles")):
-            W(d / "context" / e.file, e.line, f"Settles {e.meta('Settles')!r} names no term from terms.md")
-        for t in split_refs(e.meta("Not")):
-            if not led.entry_by_ref(t):
-                W(d / "context" / e.file, e.line, f"Not: {t!r} is not a term in terms.md")
-
-    ctx = d / "CONTEXT.md"
-    if ctx.exists():
-        lines = ctx.read_text(encoding="utf-8").splitlines()
-        in_amb = False
-        for i, ln in enumerate(lines, 1):
-            if ln.startswith("## "):
-                in_amb = ln.strip() == "## Open ambiguities"
-            if in_amb and ln.startswith("|") and "Resolves at" not in ln and "---" not in ln:
-                cells = [c.strip() for c in ln.strip("|").split("|")]
-                if len(cells) >= 3 and "child of" not in cells[2]:
-                    for rid in ID_RE.findall(cells[2]):
-                        n = nodes.get(rid)
-                        if n and n.is_approved:
-                            E(ctx, i, f"open ambiguity resolves at {rid} but {rid} is approved; re-point to a child or delete the row")
-    elif led.entries:
-        E(ctx, 1, "CONTEXT.md missing while context/ has entries")
-
-    for a in led.adrs:
-        if len(a.lines) > 40:
-            E(a.path, len(a.lines), f"ADR {len(a.lines)} lines > 40")
-        cl = _line_of(a.lines, r"^Constrains:")
-        for rid in uniq(ID_RE.findall(a.constrains)):
-            n = nodes.get(rid)
-            if n and n.is_stale:
-                E(a.path, cl, f"Constrains {rid} which is {n.design!r}; re-point to the live node")
-            elif not n and rid not in led.frontier:
-                E(a.path, cl, f"Constrains {rid} which does not exist")
-
-    for nid, prev in body_violations(led).items():
-        n = nodes[nid]
-        E(n.path, _line_of(n.lines, r"^## Refinement"), f"Refinement changed since last sync (was {prev}) while still approved with the same Approved: value; mark stale or re-approve (bump Approved:)")
-
-    design = d / "DESIGN.md"
-    if not design.exists() and nodes:
-        E(design, 1, "DESIGN.md missing; run sync")
-    elif design.exists() and _norm(design.read_text(encoding="utf-8")) != _norm(render_design(led)):
-        E(design, 1, "DESIGN.md out of date; run `stepwise.py sync <design-dir>` (generated — edit nodes/, not DESIGN.md)")
+                E(f"{where}: depends on {r!r}: no term / fact / scenario with that name or id (`entry` first)")
+            elif n["design"] == "approved" and n.get("approved_at"):
+                last = max((c["at"] for c in e[2].get("changed", [])), default="")
+                if last > n["approved_at"]:
+                    E(f"{where}: {e[1]} changed {last[:10]} after approval {n['approved_at'][:10]}; `stale` or `reopen`+`approve`")
+        if n.get("adr_pending") and n["adr_pending"] not in adr_ids:
+            E(f"{where}: adr_pending {n['adr_pending']} has no file")
+    for a in adrs:
+        if len(a["lines"]) > 40:
+            E(f"{a['path'].name}: {len(a['lines'])} lines > 40")
+        for rid in a["constrains"]:
+            if rid in nodes and nodes[rid]["design"] in ("stale", "superseded"):
+                E(f"{a['path'].name}: constrains {rid} which is {led.status(rid)}; re-point to the live node")
+            elif rid not in nodes and rid not in fr:
+                E(f"{a['path'].name}: constrains {rid} which does not exist")
+        if "<1–3 sentences" in "\n".join(a["lines"]):
+            W(f"{a['path'].name}: paragraph still a placeholder")
+    for amb in led.data.get("ambiguities", []):
+        r = amb["resolves_at"]
+        if r in nodes and nodes[r]["design"] == "approved":
+            E(f"ambiguity {amb['claim']!r} resolves at {r} which is approved; re-point (`ambiguity`) or drop it")
+    for f in ("terms", "facts", "scenarios"):
+        for k, e in led.data.get(f, {}).items():
+            if not (e.get("definition") or e.get("then")):
+                E(f"{f}/{k}: empty definition")
+            if f == "scenarios" and e.get("settles") and not led.terms_in(e["settles"]):
+                W(f"{f}/{k}: settles {e['settles']!r} names no term")
+            for t in e.get("not", []):
+                if not led.entry(t):
+                    W(f"{f}/{k}: not {t!r} is not a term")
+    for p, text in render_all(led).items():
+        if not p.exists():
+            E(f"{p.name}: missing; run sync")
+        elif p.read_text(encoding="utf-8") != text:
+            E(f"{os.path.relpath(p, led.dir)}: generated view edited or stale; run sync (edit the ledger via the CLI, never the view)")
 
 
-def _norm(s: str) -> str:
-    return re.sub(r"[ \t]+", " ", "\n".join(ln.rstrip() for ln in s.strip().splitlines()))
-
-
-def do_check(design_dir: Path) -> int:
-    led = load(design_dir)
-    check(led)
+def report(led: Ledger, head: str = "") -> int:
+    if head:
+        print(head)
     for w in led.warnings:
         print(f"warn  {w}")
     for e in led.errors:
         print(f"error {e}")
-    if not led.errors:
-        print(f"ok    {design_dir.name}: {len(led.nodes)} nodes, {len(led.frontier)} frontier, {len(led.warnings)} warnings")
+    print(f"{'FAIL' if led.errors else 'ok'}  {led.dir.name}: {len(led.nodes)} nodes, {len(led.frontier())} frontier, {len(led.errors)} errors, {len(led.warnings)} warnings")
     return 1 if led.errors else 0
 
 
-# ----------------------------------------------------------------------------- sync
+def derive_depends(led: Ledger) -> None:
+    """A term / CTX id / ADR id named in a node's prose is a dependency; record it so `Used by` and staleness follow."""
+    adr_ids = {a["id"] for a in led.adrs()}
+    for n in led.nodes.values():
+        text = " ".join([n.get("gloss", ""), n.get("effect", ""), *n.get("contract", {}).values()])
+        deps = n.setdefault("depends", [])
+        for word in text.split():
+            w = word.strip(",.;:()[]`")
+            if (is_ctx_id(w) and led.entry(w)) or (is_adr_id(w) and w in adr_ids):
+                if w not in deps:
+                    deps.append(w)
+        padded = f" {text} "
+        for t in led.data.get("terms", {}):
+            if f" {t} " in padded.replace(",", " ").replace(".", " ").replace(";", " ").replace("(", " ").replace(")", " ") and t not in deps:
+                deps.append(t)
 
 
-def do_sync(design_dir: Path) -> int:
-    touched = do_render(design_dir)
-    led = load(design_dir)
+def finish(led: Ledger, head: str = "") -> int:
+    derive_depends(led)
+    led.save()
+    write_views(led)
     check(led)
-    print(f"synced {_show(design_dir / 'DESIGN.md')}" + (f"; rewrote {len(touched)}: {', '.join(touched)}" if touched else ""))
-    for w in led.warnings:
-        print(f"warn  {w}")
-    for e in led.errors:
-        print(f"error {e}")
-    print(f"{'FAIL' if led.errors else 'ok'}  {design_dir.name}: {len(led.nodes)} nodes, {len(led.frontier)} frontier, {len(led.errors)} errors, {len(led.warnings)} warnings")
-    return 1 if led.errors else 0
+    return report(led, head)
 
 
-def _show(p: Path) -> str:
-    r = os.path.relpath(p)
-    return str(p) if r.startswith("..") else r
+def fail(msg: str) -> int:
+    print(f"error {msg}", file=sys.stderr)
+    return 1
+
+
+# ----------------------------------------------------------------------------- verbs
+
+
+def need(led: Ledger, nid: str) -> dict | None:
+    n = led.node(nid)
+    if n is None:
+        fail(f"{nid}: no such node" + (" — it is on the frontier; `new` it first" if nid in led.frontier() else ""))
+    return n
+
+
+def hist(n: dict, event: str, reason: str = "") -> None:
+    n.setdefault("history", []).append({"date": today(), "event": event, **({"reason": reason} if reason else {})})
+
+
+def v_frontier(led: Ledger, a) -> int:
+    for fid, (stmt, parent) in sorted(led.frontier().items()):
+        print(f"{fid}  frontier  {stmt}  (child of {parent})")
+    drafts = [nid for nid, n in led.nodes.items() if n["design"] == "draft"]
+    for nid in drafts:
+        print(f"{nid}  {led.status(nid)}  {led.nodes[nid]['statement']}")
+    if not led.frontier() and not drafts:
+        print("frontier empty — every leaf terminal or collapsed" if led.nodes else 'no nodes — `new <dir> D-000 "outcome <- f(x)"`')
+    return 0
+
+
+def v_show(led: Ledger, a) -> int:
+    if need(led, a.id) is None:
+        return 1
+    print(render_node(led, a.id), end="")
+    return 0
+
+
+def v_new(led: Ledger, a) -> int:
+    if a.id in led.nodes:
+        return fail(f"{a.id} already exists")
+    fr = led.frontier()
+    if a.id in fr:
+        pid = fr[a.id][1]
+        code = next(it["code"] for it in led.nodes[pid]["body"] if it.get("child") == a.id)
+    elif a.statement and not led.nodes:
+        code = a.statement
+    elif a.statement:
+        return fail(f"{a.id} is not on the frontier and a root already exists ({led.roots()}); pick from `frontier`")
+    else:
+        return fail(f"{a.id} is not on the frontier; a root needs its statement: new <dir> {a.id} \"outcome <- f(x)\"")
+    if not fn_of(code):
+        return fail(f"statement {code!r} has no call `f(...)`")
+    led.nodes[a.id] = {"statement": code, "gloss": "", "effect": "", "contract": {}, "depends": [],
+                       "design": "draft", "realization": "not-started", "verification": "unverified", "approved": ""}
+    return finish(led, f"created {a.id} `{code}` (draft). Next: `set {a.id} gloss|effect|pre|post|failure|invariant ...` (unknowns as ?slug), then `answer`, `body`, `approve`.")
+
+
+def v_set(led: Ledger, a) -> int:
+    n = need(led, a.id)
+    if n is None:
+        return 1
+    f, vals = a.field, a.value
+    if f in TEXT_FIELDS:
+        n[f] = " ".join(vals).strip()
+    elif f in CONTRACT_KEYS:
+        n.setdefault("contract", {})[f] = " ".join(vals).strip()
+        if len(n["contract"]) > 6:
+            return fail(f"{a.id}: contract would have {len(n['contract'])} clauses > 6")
+    elif f in LIST_FIELDS:
+        n[f] = [v.strip() for v in vals if v.strip()]
+    elif f == "realization":
+        if vals[0] not in REALIZATION:
+            return fail(f"realization must be one of {REALIZATION}")
+        n[f] = vals[0]
+    elif f == "verification":
+        if vals[0] not in VERIFICATION:
+            return fail(f"verification must be one of {VERIFICATION}")
+        n[f] = vals[0]
+    else:
+        return fail(f"unknown field {f!r}; fields: {TEXT_FIELDS + CONTRACT_KEYS + LIST_FIELDS + ('realization', 'verification')}")
+    if n["design"] == "approved" and f in TEXT_FIELDS + CONTRACT_KEYS:
+        n["design"] = "draft"
+        hist(n, "reopened", f"{f} edited after approval")
+    return finish(led, f"{a.id}.{f} set" + (f"; open ?: {node_unknowns(n)}" if node_unknowns(n) else ""))
+
+
+def v_body(led: Ledger, a) -> int:
+    n = need(led, a.id)
+    if n is None:
+        return 1
+    if n["design"] == "approved":
+        return fail(f"{a.id} is approved; `reopen {a.id} \"reason\"` first")
+    text = Path(a.file).read_text(encoding="utf-8") if a.file else sys.stdin.read()
+    items = parse_body(text, fn_of(n["statement"]))
+    if not items:
+        return fail("empty body")
+    n["body"] = items
+    autotag(led, a.id)
+    new = [it["child"] for it in n["body"] if it.get("child") and it["child"] not in led.nodes]
+    return finish(led, f"{a.id} body: {len(items)} lines; children {sorted(set(new)) or 'none new'}")
+
+
+def autotag(led: Ledger, nid: str) -> None:
+    by_fn: dict[str, list[str]] = {}
+    for oid, o in led.nodes.items():
+        if oid != nid and fn_of(o["statement"]):
+            by_fn.setdefault(fn_of(o["statement"]), []).append(oid)
+    for it in led.nodes[nid].get("body", []):
+        if stmt_kind(it["code"]) != "stmt" or any(k in it for k in ("child", "reuse", "target")):
+            continue
+        calls = call_names(it["code"])
+        if len(calls) == 1 and len(by_fn.get(calls[0], [])) == 1:
+            it["child"] = by_fn[calls[0]][0]
+
+
+def v_answer(led: Ledger, a) -> int:
+    n = need(led, a.id)
+    if n is None:
+        return 1
+    slug = a.slug.lstrip("?")
+    if slug not in node_unknowns(n):
+        return fail(f"{a.id} has no ?{slug}; open: {node_unknowns(n) or 'none'}")
+    ref = led.canonical(a.name)
+    if not led.resolves(ref):
+        return fail(f"{a.name!r} is not on disk — `entry <dir> term|fact|scenario \"{a.name}\" \"<definition>\"` first")
+
+    def sub(t: str) -> str:
+        words = t.split(" ")
+        return " ".join(ref + w[len(slug) + 1:] if w.startswith("?" + slug) and w[len(slug) + 1:len(slug) + 2] in ("", ",", ".", ";", ":", ")", "]") else w for w in words)
+    for f in TEXT_FIELDS:
+        n[f] = sub(n.get(f, ""))
+    n["contract"] = {k: sub(v) for k, v in n.get("contract", {}).items()}
+    if ref not in n.setdefault("depends", []):
+        n["depends"].append(ref)
+    left = node_unknowns(n)
+    return finish(led, f"{a.id}: ?{slug} -> {ref}; depends += {ref}" + (f"; open: {left}" if left else "; no ? left — propose the refinement"))
+
+
+def v_terminal(led: Ledger, a) -> int:
+    n = need(led, a.id)
+    if n is None:
+        return 1
+    t = a.target.strip().strip("`")
+    if (why := target_ok(t)):
+        return fail(why)
+    if n.get("body") and not led.is_collapsed(n):
+        return fail(f"{a.id} has child statements; a terminal has no body (drop it) — or collapse: tag every statement `-- ⇒ <target>: <identifier>`")
+    n["target"] = t
+    return finish(led, f"{a.id} terminal ⇒ {t}. Add `set {a.id} adaptation \"<pseudo> → <real>\" ...` when shape changes, then `approve {a.id}`")
+
+
+def v_approve(led: Ledger, a) -> int:
+    n = need(led, a.id)
+    if n is None:
+        return 1
+    problems = []
+    if node_unknowns(n):
+        problems.append(f"unresolved ?{', ?'.join(node_unknowns(n))} — `answer` each")
+    for f in ("gloss", "effect"):
+        if not n.get(f):
+            problems.append(f"{f} empty — `set {a.id} {f} ...`")
+    if not n.get("contract"):
+        problems.append(f"contract empty — `set {a.id} pre|post|failure|invariant ...`")
+    body = n.get("body", [])
+    if not body and not n.get("target"):
+        problems.append("no refinement body and no target — `body` (composite) or `terminal` (leaf)")
+    if body and not led.is_collapsed(n) and not n.get("composition"):
+        problems.append(f"composition missing — `set {a.id} composition ...`")
+    for it in body:
+        if stmt_kind(it["code"]) == "stmt" and not any(k in it for k in ("child", "reuse", "target")) and call_names(it["code"]):
+            problems.append(f"untagged call {it['code']!r}")
+    if n.get("target") and (why := target_ok(n["target"])):
+        problems.append(why)
+    if n.get("adr_pending"):
+        problems.append(f"{n['adr_pending']} pending — `adr accept {n['adr_pending']}` after the user accepts it")
+    if problems:
+        print(f"refused {a.id}:", file=sys.stderr)
+        for p in problems:
+            print(f"  - {p}", file=sys.stderr)
+        return 1
+    re_approval = bool(n.get("approved"))
+    n["design"] = "approved"
+    n["approved"] = f"{today()} by user"
+    n["approved_at"] = now()
+    n["approved_hash"] = body_hash(body)
+    if re_approval:
+        hist(n, "re-approved")
+    rc = finish(led, f"approved {a.id}")
+    fr = led.frontier()
+    new = [it["child"] for it in body if it.get("child") in fr]
+    if new:
+        print(f"next: `new <dir> {new[0]}`  (frontier: {', '.join(sorted(fr))})")
+    elif not fr and not any(x["design"] == "draft" for x in led.nodes.values()):
+        print("frontier empty — design complete unless the user reopens something")
+    return rc
+
+
+def flip(led: Ledger, nid: str, design: str, event: str, reason: str, **extra) -> int:
+    n = need(led, nid)
+    if n is None:
+        return 1
+    n["design"] = design
+    n.update(extra)
+    if design != "approved" and n["verification"] == "verified":
+        n["verification"] = "stale"
+    hist(n, event, reason)
+    return finish(led, f"{nid} -> {led.status(nid)}")
+
+
+def v_reopen(led: Ledger, a) -> int:
+    return flip(led, a.id, "draft", "reopened", a.reason)
+
+
+def v_stale(led: Ledger, a) -> int:
+    return flip(led, a.id, "stale", "stale", a.reason)
+
+
+def v_supersede(led: Ledger, a) -> int:
+    if not led.resolves(a.new_id):
+        return fail(f"{a.new_id} does not exist and is not on the frontier")
+    return flip(led, a.id, "superseded", "superseded", a.reason, superseded_by=a.new_id)
+
+
+def v_evidence(led: Ledger, a) -> int:
+    n = need(led, a.id)
+    if n is None:
+        return 1
+    n.setdefault("evidence", []).append({"date": today(), "kind": a.kind, "ref": a.ref, "result": a.result, **({"note": a.note} if a.note else {})})
+    if a.result == "pass":
+        n["verification"] = "verified"
+        if n["realization"] == "not-started":
+            n["realization"] = "implemented"
+    return finish(led, f"{a.id} evidence EV-{len(n['evidence'])} {a.kind} {a.result}; verification {n['verification']}")
+
+
+def v_entry(led: Ledger, a) -> int:
+    f = ENTRY_FILE[a.kind]
+    store = led.data.setdefault(f, {})
+    heading = a.heading.strip()
+    if a.kind == "term":
+        if led.entry(heading):
+            return fail(f"{heading!r} already exists; `change <dir> \"{heading}\" --definition ... --reason ...`")
+        key = heading
+        e = {"definition": a.definition.strip(), "confirmed": today()}
+        if a.avoid:
+            e["avoid"] = [x.strip() for x in a.avoid.split(",") if x.strip()]
+        if a.not_:
+            e["not"] = [x.strip() for x in a.not_.split(",") if x.strip()]
+        if a.example:
+            e["example"] = a.example
+    else:
+        prefix = "CTX-F" if a.kind == "fact" else "CTX-S"
+        if is_ctx_id(heading.split(" ", 1)[0]):
+            key, heading = heading.split(" ", 1)[0], heading.split(" ", 1)[1].strip() if " " in heading else ""
+            if key in store:
+                return fail(f"{key} already exists; `change <dir> {key} ...`")
+        else:
+            key = f"{prefix}{max((int(k[5:]) for k in store), default=0) + 1:02d}"
+        e = {"name": heading, "definition": a.definition.strip(), "confirmed": today()}
+        if a.kind == "fact":
+            e["status"] = "confirmed"
+        else:
+            for w in ("given", "when", "then", "excludes", "settles"):
+                if getattr(a, w):
+                    e[w] = getattr(a, w).strip()
+    if a.source:
+        e["source"] = a.source
+    store[key] = e
+    return finish(led, f"entry {f}/{key}" + (f" {heading}" if a.kind != "term" else "") + f"; refer to it as `{key}`")
+
+
+def v_change(led: Ledger, a) -> int:
+    hit = led.entry(a.ref)
+    if not hit:
+        return fail(f"{a.ref!r}: no term / fact / scenario")
+    f, key, e = hit
+    if a.definition:
+        e["definition"] = a.definition.strip()
+    if a.status:
+        if f != "facts":
+            return fail("--status applies to facts only")
+        e["status"] = a.status
+    if a.minor:
+        return finish(led, f"{f}/{key} reworded (minor, no invalidation)")
+    e.setdefault("changed", []).append({"at": now(), "reason": a.reason})
+    users = led.used_by().get(key, [])
+    return finish(led, f"{f}/{key} changed; dependents to re-check: {', '.join(users) or 'none'} (`stale` or `reopen`+`approve` each approved one)")
+
+
+def v_meta(led: Ledger, a) -> int:
+    if a.field in ("title", "scope"):
+        led.data[a.field] = " ".join(a.value).strip()
+    elif a.field == "nongoals":
+        led.data["nongoals"] = [v.strip() for v in a.value if v.strip()]
+    else:
+        return fail("meta field must be title | scope | nongoals")
+    return finish(led, f"{a.field} set")
+
+
+def v_ambiguity(led: Ledger, a) -> int:
+    ambs = led.data.setdefault("ambiguities", [])
+    ambs[:] = [x for x in ambs if x["claim"].lower() != a.claim.strip().lower()]
+    if a.drop:
+        return finish(led, f"ambiguity {a.claim!r} dropped")
+    if not a.conflict or not a.resolves_at:
+        return fail('ambiguity <dir> "claim" "conflict" D-NNN   (or --drop)')
+    if not is_node_id(a.resolves_at):
+        return fail(f"{a.resolves_at!r} is not a D-NNN id")
+    ambs.append({"claim": a.claim.strip(), "conflict": a.conflict.strip(), "resolves_at": a.resolves_at})
+    return finish(led, f"ambiguity {a.claim!r} -> resolves at {a.resolves_at}")
+
+
+ADR_STUB = """# {id} — {title}
+
+Kind: adr · Status: proposed · Date: {date}
+Constrains: {constrains}
+Supersedes: — · Superseded by: —
+
+<1–3 sentences: what's the context, what did we decide, and why.>
+
+## Invariants imposed
+
+- <one line: property every constrained refinement must preserve>
+"""
+
+
+def v_adr(led: Ledger, a) -> int:
+    if a.action == "new":
+        ids = [w.strip() for w in (a.constrains or "").split(",") if is_node_id(w.strip())]
+        if not a.title or not ids:
+            return fail('adr <dir> new "Title" --constrains D-NNN[,D-MMM]')
+        adr_dir = led.adr_dir() or (led.dir.parents[1] / "adr" if len(led.dir.parents) > 1 else led.dir / "adr")
+        adr_dir.mkdir(parents=True, exist_ok=True)
+        num = max((int(p.stem[:4]) for p in adr_dir.glob("*.md") if p.stem[:4].isdigit()), default=0) + 1
+        slug = "-".join("".join(c.lower() if c.isalnum() else " " for c in a.title).split())[:50]
+        path = adr_dir / f"{num:04d}-{slug}.md"
+        aid = f"ADR-{num:04d}"
+        path.write_text(ADR_STUB.format(id=aid, title=a.title.strip(), date=today(), constrains=", ".join(ids)), encoding="utf-8")
+        for nid in ids:
+            if nid in led.nodes:
+                led.nodes[nid]["adr_pending"] = aid
+                if led.nodes[nid]["design"] == "approved":
+                    led.nodes[nid]["design"] = "draft"
+                    hist(led.nodes[nid], "reopened", f"{aid} proposed")
+        return finish(led, f"created {os.path.relpath(path)} ({aid}, proposed). Write the paragraph + invariants by hand, then `sync`; after the user accepts: `adr accept {aid}`")
+    if a.action == "accept":
+        adr = next((x for x in led.adrs() if x["id"] == a.title), None)
+        if not adr:
+            return fail(f"{a.title!r}: no such ADR")
+        lines = adr["lines"]
+        for i, ln in enumerate(lines):
+            if "Status:" in ln and not ln.startswith("#"):
+                parts = _header_parts(ln)
+                lines[i] = " · ".join(f"Status: accepted" if p.startswith("Status:") else p for p in parts)
+                break
+        adr["path"].write_text("\n".join(lines) + "\n", encoding="utf-8")
+        freed = [nid for nid, n in led.nodes.items() if n.get("adr_pending") == adr["id"]]
+        for nid in freed:
+            del led.nodes[nid]["adr_pending"]
+        return finish(led, f"{adr['id']} accepted; unblocked {', '.join(freed) or 'nothing'}")
+    return fail("adr <dir> new ... | adr <dir> accept ADR-NNNN")
+
+
+def v_sync(led: Ledger, a) -> int:
+    return finish(led)
+
+
+def v_check(led: Ledger, a) -> int:
+    check(led)
+    return report(led)
+
+
+# ----------------------------------------------------------------------------- main
+
+
+def log(d: Path, argv: list[str], rc: int) -> None:
+    try:
+        with (d / LOG).open("a", encoding="utf-8") as f:
+            f.write(f"{_dt.datetime.now().isoformat(timespec='seconds')} exit={rc} {' '.join(argv[1:2] + argv[3:])}\n")
+    except OSError:
+        pass
 
 
 def main(argv: list[str]) -> int:
-    if len(argv) < 3 or argv[1] not in ("sync", "check", "new"):
-        print(__doc__)
-        return 64
-    d = Path(argv[2]).resolve()
-    if argv[1] == "new":
-        if len(argv) < 4 or not ID_RE.fullmatch(argv[3]):
-            print("usage: stepwise.py new <design-dir> D-NNN [\"statement\"]", file=sys.stderr)
-            return 64
-        (d / "nodes").mkdir(parents=True, exist_ok=True)
-        return do_new(d, argv[3], argv[4] if len(argv) > 4 else None)
-    if not (d / "nodes").is_dir():
-        print(f"error {d}: no nodes/ directory", file=sys.stderr)
-        return 1
-    return do_sync(d) if argv[1] == "sync" else do_check(d)
+    ap = argparse.ArgumentParser(prog="stepwise.py", description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    sub = ap.add_subparsers(dest="cmd", required=True)
+
+    def add(name, *pos, **flags):
+        s = sub.add_parser(name)
+        s.add_argument("dir")
+        for p in pos:
+            s.add_argument(p[0], **p[1]) if isinstance(p, tuple) else s.add_argument(p)
+        for k, kw in flags.items():
+            s.add_argument("--" + k.rstrip("_"), dest=k, **kw)
+        return s
+
+    add("frontier"); add("sync"); add("check"); add("show", "id")
+    add("new", "id", ("statement", {"nargs": "?"}))
+    add("set", "id", "field", ("value", {"nargs": "+"}))
+    add("body", "id", file={"default": ""})
+    add("answer", "id", "slug", "name")
+    add("terminal", "id", "target")
+    add("approve", "id")
+    add("reopen", "id", "reason"); add("stale", "id", "reason"); add("supersede", "id", "new_id", "reason")
+    add("evidence", "id", kind={"required": True}, ref={"required": True}, result={"required": True, "choices": ["pass", "fail"]}, note={"default": ""})
+    add("entry", ("kind", {"choices": list(ENTRY_FILE)}), "heading", "definition",
+        source={"default": ""}, avoid={"default": ""}, not_={"default": ""}, example={"default": ""},
+        given={"default": ""}, when={"default": ""}, then={"default": ""}, excludes={"default": ""}, settles={"default": ""})
+    add("change", "ref", definition={"default": ""}, status={"default": "", "choices": ["", "confirmed", "stale"]}, reason={"required": True}, minor={"action": "store_true"})
+    add("meta", "field", ("value", {"nargs": "+"}))
+    add("ambiguity", "claim", ("conflict", {"nargs": "?"}), ("resolves_at", {"nargs": "?"}), drop={"action": "store_true"})
+    add("adr", ("action", {"choices": ["new", "accept"]}), ("title", {"nargs": "?"}), constrains={"default": ""})
+    a = ap.parse_args(argv[1:])
+    d = Path(a.dir).resolve()
+    for key in ("id", "new_id"):
+        if getattr(a, key, None) is not None and not is_node_id(getattr(a, key)):
+            return fail(f"{getattr(a, key)!r} is not a D-NNN id")
+    led = Ledger(d)
+    if not led.data:
+        if a.cmd in ("new", "entry", "meta") :
+            led = Ledger.create(d, d.name.replace("-", " ").title())
+        else:
+            return fail(f"{d / LEDGER} missing; start with `new <dir> D-000 \"outcome <- f(x)\"` or `entry` / `meta`")
+    rc = globals()[f"v_{a.cmd}"](led, a)
+    if a.cmd not in ("check", "show", "frontier"):
+        log(d, argv, rc)
+    return rc
 
 
 if __name__ == "__main__":

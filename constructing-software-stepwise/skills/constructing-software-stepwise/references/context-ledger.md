@@ -2,141 +2,76 @@
 
 Context = shared meaning. Answers **what we mean, what world design must fit**. Glossary + facts + scenarios. Nothing else — not spec, not scratch pad, not impl decisions.
 
-## Layout — central index, one file per kind
+## Layout — typed entries in the ledger, one generated view
 
-Repo glossary/context convention if exists. Else scoped to design:
+Repo glossary/context convention if it exists. Else scoped to design:
 
 ```text
 docs/design/<topic>/
-  CONTEXT.md            central index: scope, tables, open ambiguities, non-goals
-  context/terms.md      every term, one `##` section each
-  context/facts.md      every fact, one `##` section each
-  context/scenarios.md  every scenario, one `##` section each
+  ledger.json     terms · facts · scenarios · scope · nongoals · ambiguities — written ONLY by `stepwise.py`
+  CONTEXT.md      generated view: scope, three tables, open ambiguities, non-goals, then every entry in full
 ```
 
-Context entries get edited in place (meaning sharpens, facts go stale) → grouped files. Nodes + ADRs append-only → one file each (see design / adr ledgers).
+Entries change in place (meaning sharpens, facts go stale) → `change` appends a dated reason and lint names every approved dependent.
 
-Agent writes: heading + definition (+ `Source:`, `Avoid:`, `Not:`, scenario Given / When / Then). `stepwise.py sync` writes: `Confirmed:` / `Status:` when missing, `Used by:` (from node `Depends on` + scenario `Settles`), links, and the three `CONTEXT.md` tables.
+## Records — `ledger.json`
+
+| Store | Key | Fields | Verb |
+|---|---|---|---|
+| `terms` | canonical term (`Run Key`) | `definition`, `confirmed`, `source`, `avoid[]`, `not[]`, `example`, `changed[]` | `entry <dir> term "Run Key" "<definition>" [--source S] [--avoid a,b] [--not T] [--example E]` |
+| `facts` | `CTX-F<nn>` (allocated) | `name`, `definition`, `status confirmed\|stale`, `confirmed`, `source`, `changed[]` | `entry <dir> fact "<short name>" "<one fact>" [--source S]` |
+| `scenarios` | `CTX-S<nn>` (allocated) | `name`, `given`, `when`, `then`, `excludes`, `settles`, `confirmed`, `changed[]` | `entry <dir> scenario "<name>" "" --given G --when W --then T [--excludes X] [--settles "<term> boundary"]` |
+| `scope`, `title` | — | one line | `meta <dir> scope "…"` |
+| `nongoals` | — | list | `meta <dir> nongoals "a" "b" …` |
+| `ambiguities` | claim | `claim`, `conflict`, `resolves_at D-NNN` | `ambiguity <dir> "claim" "conflict" D-NNN` · `ambiguity <dir> "claim" --drop` |
+
+`change <dir> <ref> [--definition D] [--status confirmed|stale] --reason R` — sharpen an entry or stale a fact. `Used by` is derived from node `depends` (which `answer` sets and prose mentions extend) and scenario `settles`.
+
+The entry's key is its name everywhere: `answer D-020 run-identity "Run Key"`, `set D-020 pre "Run Key supplied by caller"`, `--not "Model Turn"`, `--settles "Run Key boundary"`. Views render the links.
 
 ## Entry Rules
 
-- **One claim per section.** `##` heading = canonical term or `ID name`. Sentence joins two citable claims with "and" / ";" → two sections.
-- **Heading = identity.** `## Agent Run`, `## CTX-F01 Required runtime`. Refer by that name anywhere (`Depends on: Agent Run, CTX-F01`); `sync` links. No punctuation inside heading.
-- **Self-describing section.** First line after heading: `Confirmed: YYYY-MM-DD · Source: <…>` (+ `Status:` for facts). Reader understands section alone.
-- **Name, never repeat.** Other entries + nodes by bare name; never copy a definition.
+- **One claim per entry.** Sentence joins two citable claims with "and" / ";" → two entries.
+- **Name = identity.** `Run Key`, `CTX-F01`. One canonical spelling; the tool matches case-insensitively and refuses duplicates.
 - **Tight.** Definition 1–2 sentences. What it IS, not what it does.
-- **Opinionated.** One canonical term. Rejected synonyms under `Avoid:`. Confusable neighbours under `Not:` w/ link.
-- **Size cap.** Section ≤ 10 lines. Over → two claims. Split.
-- **Project-specific only.** General programming concepts (timeout, retry, error type) not terms — even when used heavily.
-- **Order.** Terms alphabetical. Facts / scenarios by ID, append at end.
-- Section written → `sync`. Tables in `CONTEXT.md` and `Used by:` regenerate; never hand-edit them. On first entry create kind file + `CONTEXT.md` with Scope / Open ambiguities / Explicit non-goals, then `sync` adds the tables.
+- **Opinionated.** Rejected synonyms in `--avoid`. Confusable neighbours in `--not` (must be terms; lint warns otherwise).
+- **Project-specific only.** General programming concepts (timeout, retry, error type) are not terms — even when used heavily.
+- **Source always.** `--source user | <code path> | <doc url> | experiment`. Confirmation date is filled by the tool.
+- Term → project-wide glossary only when used across multiple designs / bounded contexts. Local stays local.
 
-Term → project-wide glossary only when used across multiple designs / bounded contexts. Local stays local.
-
-## Index — `CONTEXT.md`
-
-Agent owns Scope, Open ambiguities, Explicit non-goals. Vocabulary / Facts and constraints / Scenarios tables are generated.
+## View — `CONTEXT.md` (generated)
 
 ```markdown
 # <Design area> — Shared Context
 
-Kind: index · Status: active · Last confirmed: YYYY-MM-DD
-Design: [./DESIGN.md](./DESIGN.md)
-
 ## Scope
-
-<One or two sentences: problem boundary, actors, observable concern.>
+<one or two sentences>
 
 ## Vocabulary
-
-| Term | Is | Avoid | Entry |
-| --- | --- | --- | --- |
-| Job Key | Caller-chosen idempotency key naming one Job | run id, correlation id | [terms.md#job-key](context/terms.md#job-key) |
+| Term | Is | Avoid | Used by |
 
 ## Facts and constraints
-
-| ID | Fact (one line) | Status | Used by | Entry |
-| --- | --- | --- | --- | --- |
-| CTX-F01 | <one line> | confirmed | D-000, D-020 | [facts.md#ctx-f01](context/facts.md#ctx-f01-<slug>) |
+| ID | Fact | Status | Used by |
 
 ## Scenarios
-
-| ID | Scenario | Settles | Entry |
-| --- | --- | --- | --- |
-| CTX-S01 | <name> | <term / boundary it fixes> | [scenarios.md#ctx-s01](context/scenarios.md#ctx-s01-<slug>) |
+| ID | Scenario | Settles |
 
 ## Open ambiguities
-
 | Term / claim | Conflict | Resolves at |
-| --- | --- | --- |
-| <term> | <reading A vs reading B> | D-040 |
-| <term> | <surfaced during D-000 interview, no `?` for it in D-000 draft> | child of D-000 |
 
 ## Explicit non-goals
+- …
 
-- <Meaning or behavior outside this design's scope>
+## Terms / ## Facts / ## Scenario entries
+### <name>            full entry: meta line, definition, Avoid / Not / Example, Used by, Changed lines
 ```
 
-Tables mirror section headers; `sync` keeps them so. Never hold bodies.
-
-## Terms — `context/terms.md`
-
-```markdown
-# <Design area> — Terms
-
-Kind: terms · Index: [../CONTEXT.md](../CONTEXT.md)
-
-## Job Key
-
-Confirmed: YYYY-MM-DD · Source: <user | code path | document>
-
-<One or two sentences. What it IS, not what it does.>
-
-Avoid: <alias>, <alias>
-Not: <neighbour term>
-Example: <one boundary-revealing example>
-Used by: (generated)
-```
-
-## Facts — `context/facts.md`
-
-```markdown
-# <Design area> — Facts
-
-Kind: facts · Index: [../CONTEXT.md](../CONTEXT.md)
-
-## CTX-F01 <short name>
-
-Status: confirmed | stale · Confirmed: YYYY-MM-DD · Source: <code path | document | experiment | user decision>
-
-<ONE fact or constraint. One or two sentences.>
-
-Used by: (generated)
-```
-
-## Scenarios — `context/scenarios.md`
-
-```markdown
-# <Design area> — Scenarios
-
-Kind: scenarios · Index: [../CONTEXT.md](../CONTEXT.md)
-
-## CTX-S01 <scenario name>
-
-Confirmed: YYYY-MM-DD · Settles: <term> boundary
-
-Given <starting context>.
-When <event or action>.
-Then <observable meaning or boundary>.
-Excludes: <nearby interpretation this rules out>
-
-Used by: (generated)
-```
+Read it; never edit it. `check` fails on a hand-edited view.
 
 ## Not Here
 
-- decompositions, impl architecture → `nodes/`
-- chosen DB / framework / algo / protocol — unless already immutable environmental fact
+- decompositions, impl architecture → nodes
+- chosen DB / framework / algo / protocol — unless already an immutable environmental fact
 - rationale for hard-to-reverse choices → ADR
 - task lists, estimates, progress, conversation summaries
 - unverified assumptions as facts
@@ -158,15 +93,14 @@ User term conflicts w/ existing entry → call out immediately: "Glossary define
 
 Vague / overloaded term → propose canonical: "'account' — Customer or User? Different things."
 
-Ambiguous boundary → scenario forcing it. Resolve iff active node's draft Contract carries a `?` for it; else row in `Open ambiguities`, `Resolves at: child of D-NNN`, and node's `Deferred` at approval. Entries exist only for resolved `?` — one per question asked, no more.
+Ambiguous boundary → scenario forcing it. Resolve iff active node's draft Contract carries a `?` for it; else `ambiguity <dir> "<claim>" "<conflict>" D-NNN` (the child that will own it) and `set D-NNN deferred …` at approval. Entries exist only for resolved `?` — one per question asked, no more.
 
 ## Change + Invalidation
 
 Terms / facts = dependencies of design nodes. Entry changes →
 
-1. edit section in place (meaning changed → `Changed: YYYY-MM-DD — <reason>` line; typo / wording: no note)
-2. `sync`
-3. follow `Used by` links → mark those nodes + their evidence stale
-4. review before resuming
+1. `change <dir> <ref> --definition "…" --reason "…"`; typo / wording with identical meaning → add `--minor` (no invalidation)
+2. the verb prints every dependent; lint fails for each approved dependent until `stale D-NNN "…"` or `reopen` + `approve`
+3. review invalidated nodes before resuming; evidence on them is stale by construction
 
-No obsolete definition as active context. Historical meaning mattered to durable decision → keep in that ADR.
+No obsolete definition as active context. Historical meaning mattered to a durable decision → keep it in that ADR.

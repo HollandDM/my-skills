@@ -18,9 +18,10 @@ Typical: persistent data formats, ownership boundaries, public protocols, consis
 
 - **One decision per file.** Two decisions → two ADRs, cross-linked.
 - **Paragraph first.** Title + 1–3 sentences (context, decision, why) = complete ADR. Sections only when they add value.
-- **Self-describing header.** `Kind`, ID, `Status`, `Date`, `Constrains` node links.
-- **Link, never repeat.** Reference context items + nodes by link.
-- **Size cap.** ≤ 40 lines.
+- **Self-describing header.** `Kind`, ID, `Status`, `Date`, `Constrains` node ids — written by `stepwise.py adr new "<title>" --constrains D-NNN[,D-MMM]`.
+- **Name, never repeat.** Reference context entries + nodes by name / id. Never restate a definition.
+- **Size cap.** ≤ 40 lines (lint).
+- **Only the paragraph + sections are hand-written.** Header + status belong to the tool: `adr new` (proposed; constrained nodes drop to `draft (ADR pending)`), `adr accept ADR-NNNN` (accepted; nodes unblocked). Run `sync` after editing the paragraph.
 
 ## Authority + Lifecycle
 
@@ -34,13 +35,13 @@ Never delete / rewrite accepted ADR to erase changed decision. Typo / wording fi
 
 ## File — `docs/adr/NNNN-<slug>.md`
 
-Repo numbering / location if established. Else scan `docs/adr/` for highest number, increment.
+Repo numbering / location if established. Else `adr new` scans `docs/adr/` for the highest number and increments. Stub written by the tool:
 
 ```markdown
 # ADR-0003 — <Short title of the decision>
 
 Kind: adr · Status: proposed | accepted | superseded by ADR-NNNN | deprecated · Date: YYYY-MM-DD
-Constrains: [D-120](../design/<topic>/nodes/D-120-<slug>.md), [D-121](../design/<topic>/nodes/D-121-<slug>.md)
+Constrains: D-120, D-121
 Supersedes: — · Superseded by: —
 
 <1–3 sentences: what's the context, what did we decide, and why.>
