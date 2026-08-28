@@ -184,6 +184,18 @@ assert "- typescript: property access — read the declared step list" in v21, v
 v0 = (d / "nodes" / "D-000.md").read_text()
 assert "What it does:" in v0 and "- D-010 — create or load the job row" in v0, v0
 
+# a body rewrite drops a child -> the orphan is retired, never called back to life
+run("new", "D-022")
+run("set", "D-022", "gloss", "wait for the step to settle")
+run("reopen", "D-020", "wait_for folded into pick_step")
+t = run("body", "D-020", stdin="advance(job):\n  step <- pick_step(job)   -- ↗ D-021\n", ok=False)
+assert "lost every caller" in t and "D-022" in t, t
+run("retire", "D-021", "still called", ok=False)
+run("retire", "D-022", "wait_for folded into pick_step")
+run("approve", "D-020")
+run("check")
+assert "retired" in (d / "nodes" / "D-022.md").read_text()
+
 # supersede + views drift + log
 run("new", "D-030")
 t = run("supersede", "D-030", "D-021", "folded into advance", ok=False)

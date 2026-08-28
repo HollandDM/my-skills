@@ -53,6 +53,8 @@ Adaptation = one line per Contract clause, `<clause> → <concrete construct>`: 
 
 An ADR's `Constrains:` list makes it a dependency of each node it names: the link appears under `Depends on` with no verb.
 
+A body rewrite that drops a child leaves that child with no caller — lint says so. `retire D-NNN "reason"` records that the design dropped it; the node keeps its history and stops appearing on the frontier. Adding the call back to quiet the message writes a refinement nobody approved.
+
 `reopen` snapshots the body, composition, decisions and deferred it invalidates into the node view's `## Superseded refinement` section, so the replaced refinement stays readable while the node is redrafted.
 
 Adaptation lines name the clause they map: `<clause> → <concrete construct>` or `<Clause>: <concrete construct>`. A wrapped pseudocode line (multi-line SQL, a long expression) is joined onto the statement above it, so its tag goes on the last line.

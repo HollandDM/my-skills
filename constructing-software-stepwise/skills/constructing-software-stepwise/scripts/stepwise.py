@@ -22,6 +22,7 @@ Every verb ends with render + lint; exit 1 and `error <where>: <msg>` lines when
   approve   <dir> D-NNN                               after the user says yes; refuses while anything is missing
   reopen    <dir> D-NNN "reason"                      approved -> draft for revision (history keeps the reason)
   stale     <dir> D-NNN "reason"                      dependency changed
+  retire    <dir> D-NNN "reason"                      the design dropped it; nothing calls it any more
   supersede <dir> D-OLD D-NEW "reason"
   evidence  <dir> D-NNN --kind K --ref R --result pass|fail [--note N]
   entry     <dir> term|fact|scenario "Heading" "definition" [--source S] [--avoid a,b] [--not T] [--example E]
@@ -54,7 +55,7 @@ TEXT_FIELDS = ("gloss", "effect")
 LIST_FIELDS = ("walkthrough", "composition", "decisions", "deferred", "adaptation")
 REALIZATION = ("not-started", "partial", "implemented")
 VERIFICATION = ("unverified", "partial", "verified", "stale")
-DESIGN = ("draft", "approved", "stale", "superseded")
+DESIGN = ("draft", "approved", "stale", "superseded", "retired")
 CONTROL = {"if", "else", "elif", "loop", "while", "for", "until", "case", "match", "try", "finally"}
 OWN_CODE = {"service", "module", "application", "application-service", "app", "own", "internal", "our", "runtime"}
 ENTRY_FILE = {"term": "terms", "fact": "facts", "scenario": "scenarios"}
@@ -311,6 +312,8 @@ class Ledger:
             return f"draft ({k} ?)" if k else "draft"
         if n["design"] == "superseded":
             return f"superseded by {n.get('superseded_by', '?')}"
+        if n["design"] == "retired":
+            return "retired"
         return n["design"]
 
     def is_terminal(self, n: dict) -> bool:
@@ -629,8 +632,13 @@ def check(led: Ledger) -> None:
     W = led.warnings.append
     nodes = led.nodes
     fr = led.frontier()
-    if nodes and len(led.roots()) != 1:
-        E(f"ledger: expected exactly one root node; found {led.roots()}")
+    live_roots = [r for r in led.roots() if nodes[r]["design"] != "retired"]
+    if nodes and len(live_roots) != 1:
+        first = min(live_roots, default="")
+        orphans = [r for r in live_roots if r != first]
+        E(f"ledger: expected exactly one root node; found {live_roots}."
+          + (f" {', '.join(orphans)} lost every caller when a body was rewritten: `retire <dir> <id> \"reason\"` each node the design dropped, "
+             "or restore the call in the body that used to make it. Never add a call back to satisfy this message." if orphans else ""))
     adrs = led.adrs()
     adr_ids = {a["id"] for a in adrs}
     for nid, n in nodes.items():
@@ -1004,6 +1012,13 @@ def v_reopen(led: Ledger, a) -> int:
     return flip(led, a.id, "draft", "reopened", a.reason)
 
 
+def v_retire(led: Ledger, a) -> int:
+    """The design dropped this node: no body calls it any more and none should."""
+    if led.parents(a.id):
+        return fail(f"{a.id} is still called by {', '.join(led.parents(a.id))}; remove the call first, or this node is not retired")
+    return flip(led, a.id, "retired", "retired", a.reason)
+
+
 def v_stale(led: Ledger, a) -> int:
     return flip(led, a.id, "stale", "stale", a.reason)
 
@@ -1229,7 +1244,7 @@ def main(argv: list[str]) -> int:
     add("answer", "id", "slug", "name")
     add("terminal", "id", "target")
     add("approve", "id")
-    add("reopen", "id", "reason"); add("stale", "id", "reason"); add("supersede", "id", "new_id", "reason")
+    add("reopen", "id", "reason"); add("stale", "id", "reason"); add("retire", "id", "reason"); add("supersede", "id", "new_id", "reason")
     add("evidence", "id", kind={"required": True}, ref={"required": True}, result={"required": True, "choices": ["pass", "fail"]}, note={"default": ""})
     add("entry", ("kind", {"choices": list(ENTRY_FILE)}), "heading", "definition",
         source={"default": ""}, avoid={"default": ""}, not_={"default": ""}, example={"default": ""},

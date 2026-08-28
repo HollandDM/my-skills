@@ -34,6 +34,7 @@ This file is compressed on purpose. Nothing it writes is. Every artifact — glo
 | Pseudocode until terminal | Language keyword, library name, or concrete type in composite node = premature representation → move to child |
 | Terminal at platform | Contract already met by ONE real thing cited in a fact (idempotent start by key, resume from checkpoint, CAS, lock, retry, version pin) → terminal now, `adaptation` per clause. Never refine platform guarantee into pseudocode |
 | Write through the CLI | Every change to the ledger is one `stepwise.py` verb; the only hand-written text is an ADR paragraph. A verb that exits 1 is fixed (more verbs) before the next question or Proposal. `ledger.json`, `DESIGN.md`, `CONTEXT.md`, `nodes/*.md` are never opened in an editor |
+| Lint error = design conflict | Read what the error says is inconsistent and fix the design. Never write content whose only purpose is to make the message go away |
 | Back up freely | Obligation fails → revise children or `reopen` ancestor |
 
 ## Node Kinds
@@ -90,11 +91,13 @@ Rules:
 | propose→persist | `set <dir> D-NNN composition\|decisions\|deferred "b1" "b2" …` | bullets, replace whole list |
 | propose→persist | `terminal <dir> D-NNN "<target>: <identifier>"` · `set <dir> D-NNN adaptation "clause → construct" …` | leaf; Exists test enforced |
 | persist | `approve <dir> D-NNN` | refuses on `?`, empty prose, no body/target, missing walkthrough, a tagged body line that says nothing about what it does, missing composition, untagged call, pending ADR; drops ambiguity rows resolving at this node; prints next frontier id |
-| change | `reopen <dir> D-NNN "reason"` · `stale <dir> D-NNN "reason"` · `supersede <dir> D-OLD D-NEW "reason"` | status + history; `reopen` files the body it replaces under `## Superseded refinement` |
+| change | `reopen <dir> D-NNN "reason"` · `stale <dir> D-NNN "reason"` · `retire <dir> D-NNN "reason"` · `supersede <dir> D-OLD D-NEW "reason"` | status + history; `reopen` files the body it replaces under `## Superseded refinement` |
 | change | `change <dir> <name\|CTX-id> [--definition …] [--rename "New heading"] [--status stale] --reason "…" [--minor]` | entry changed; approved dependents fail lint until `stale` / re-`approve` |
 | decision | `adr <dir> new "Title" --constrains D-NNN[,D-MMM]` · `adr <dir> accept ADR-NNNN` | stub (nodes → `draft (ADR pending)`); accept unblocks |
 | implement | `set <dir> D-NNN realization implemented` · `evidence <dir> D-NNN --kind K --ref R --result pass\|fail` | pass → `verified` |
 | audit | `sync <dir>` · `check <dir>` | re-render after an ADR paragraph edit; lint only |
+
+Every error names a real inconsistency between two things you wrote. Resolve it in the design: `retire` a node the refinement dropped, `stale` / `reopen` what a changed entry invalidated, `supersede` what a replacement took over, restore a call you removed by mistake. Never invent a body line, a call, a clause, or a node to silence a message — a green `check` bought that way records a design nobody chose, and the next reader cannot tell. No verb fits → say so and ask; do not improvise.
 
 Lint covers: one root; status vocabulary; caps; untagged calls; reuse of non-approved node; Target format + Exists test; approved with `?` / no body / no walkthrough / unglossed body line / no composition / body changed / pending ADR; dependency names that do not exist; entry changed after approval; ADR constrains stale or missing node; ambiguity at approved node; hand-edited view. Judgment (contract, body, composition, questions) stays with agent + user.
 
@@ -300,6 +303,7 @@ Context entry, ancestor, ADR, or dependency changes:
 3. `stale D-NNN "…"` those not worth revisiting now, `reopen` + re-`approve` the rest; evidence drops to stale by construction
 4. revisit only invalidated frontier, one node per cycle
 5. superseded ADR: keep, link replacement; `supersede D-OLD D-NEW "…"` for replaced nodes
+6. a rewritten body that drops a child leaves that child callerless: `retire D-NNN "<what replaced it>"`. Its node view stays as the record of a design that was tried
 
 ## Discipline
 
@@ -336,6 +340,8 @@ Context entry, ancestor, ADR, or dependency changes:
 | Quick fix: edit the node view by hand | `check` fails on it; the next verb overwrites it. Use `set` / `body` / `reopen` |
 | Status needs a note (`approved (revised)`) | Status is one word from the verb; the note goes to history via `reopen` / `stale` / `supersede "reason"` |
 | Verb exited 1, looks fine anyway | Exit 0 before the next question or Proposal |
+| Add a call / clause / node so lint goes quiet | That fabricates design. Resolve the conflict the error names |
+| Body no longer calls D-NNN, lint complains it lost its caller | `retire D-NNN "reason"` if the design dropped it; restore the call only if removing it was the mistake |
 | Evidence in separate doc | `evidence D-NNN …`, nowhere else |
 | Copy D-050 body, tweak one line | Call `↗ D-050` or `reopen` it. No forks |
 | Reuse draft / stale node | Only `approved` reusable (lint) |
