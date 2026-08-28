@@ -13,6 +13,7 @@ Every verb ends with render + lint; exit 1 and `error <where>: <msg>` lines when
   set       <dir> D-NNN gloss|effect "text"           one-line prose fields
   set       <dir> D-NNN pre|post|failure|invariant|<label> "clause"   contract clause, any lowercase label (<= 6 clauses; unknowns as ?slug)
   set       <dir> D-NNN composition|decisions|deferred|adaptation "b1" "b2" ...    bullet lists (replace)
+  set       <dir> D-NNN depends "Name" ...            add dependencies that carry no ?slug (append; each must exist)
   set       <dir> D-NNN realization|verification <vocab>
   body      <dir> D-NNN [--file F]                    refinement body from stdin/file (pseudocode, `-- D-NNN` / `-- ↗ D-NNN` / `-- ⇒ target` tags)
   answer    <dir> D-NNN slug "Name"                   ?slug -> name in every clause; name added to depends
@@ -756,13 +757,22 @@ def v_set(led: Ledger, a) -> int:
     f, vals = a.field, a.value
     if f in TEXT_FIELDS:
         n[f] = " ".join(vals).strip()
-    elif f in CONTRACT_KEYS or (f.isalpha() and f.islower() and f not in LIST_FIELDS + ("realization", "verification")):
+    elif f in CONTRACT_KEYS or (f.isalpha() and f.islower() and f not in LIST_FIELDS + ("realization", "verification", "depends")):
         # any lowercase word is a contract clause label: pre, post, failure, invariant, budget, determinism, boundary, ...
         n.setdefault("contract", {})[f] = " ".join(vals).strip()
         if len(n["contract"]) > 6:
             return fail(f"{a.id}: contract would have {len(n['contract'])} clauses > 6")
     elif f in LIST_FIELDS:
         n[f] = [v.strip() for v in vals if v.strip()]
+    elif f == "depends":
+        deps = n.setdefault("depends", [])
+        for v in vals:
+            ref = led.canonical(v)
+            if not led.resolves(ref):
+                return fail(f"{v!r} is not a term / fact / scenario / node / ADR on disk — `entry` first")
+            if ref not in deps:
+                deps.append(ref)
+        return finish(led, f"{a.id}.depends = {deps}")
     elif f == "realization":
         if vals[0] not in REALIZATION:
             return fail(f"realization must be one of {REALIZATION}")

@@ -118,6 +118,13 @@ run("approve", "D-010")
 # facts, scenarios, ambiguity, meta, adr
 t = run("entry", "fact", "Postgres unique index", "A unique index rejects a second row with the same key.", "--source", "pg docs")
 assert "CTX-F01" in t
+run("set", "D-020", "depends", "CTX-F01")
+assert ledger()["nodes"]["D-020"]["depends"] == ["CTX-F01"]
+run("set", "D-020", "depends", "Nope", ok=False)
+t = run("set", "D-020", "depends", "Job Key", ok=False)  # Job Key changed after D-020's approval -> lint
+assert "Job Key changed" in t
+run("reopen", "D-020", "depends on Job Key now")
+run("approve", "D-020")
 t = run("entry", "scenario", "Retry after crash", "", "--given", "a job committed step 1", "--when", "the worker restarts", "--then", "step 1 is not repeated", "--settles", "Job Key boundary")
 assert "CTX-S01" in t
 run("meta", "scope", "One job from request to durable outcome.")
