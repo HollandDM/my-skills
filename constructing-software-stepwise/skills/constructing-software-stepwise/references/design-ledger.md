@@ -53,6 +53,8 @@ Adaptation = one line per Contract clause, `<clause> → <concrete construct>`: 
 
 An ADR's `Constrains:` list makes it a dependency of each node it names: the link appears under `Depends on` with no verb.
 
+`stale` and `superseded` are not synonyms. `stale`: the node is still the design, but a term, fact, ADR or ancestor changed under it — the node view carries `Stale: <date> — <reason> · invalidated by <entry> (<date>)`, listing every dependency whose entry changed after this node's approval. `superseded by D-NNN`: a different node does the work now, and the replacement must exist. `retired`: dropped with no replacement.
+
 A body rewrite that drops a child leaves that child with no caller — lint says so. `retire D-NNN "reason"` records that the design dropped it; the node keeps its history and stops appearing on the frontier. Adding the call back to quiet the message writes a refinement nobody approved.
 
 `reopen` snapshots the body, composition, decisions and deferred it invalidates into the node view's `## Superseded refinement` section, so the replaced refinement stays readable while the node is redrafted.

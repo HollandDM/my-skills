@@ -116,6 +116,8 @@ assert "Job Key changed" in t
 assert ledger()["nodes"]["D-010"]["depends"] == ["Job Key"]  # derived from the effect text
 run("stale", "D-000", "Job Key redefined", ok=False)
 run("stale", "D-010", "Job Key redefined")
+v10 = (d / "nodes" / "D-010.md").read_text()
+assert "Stale: " in v10 and "Job Key redefined" in v10 and "invalidated by Job Key (" in v10, v10
 run("check", ok=True)
 run("approve", "D-000")
 run("approve", "D-010")

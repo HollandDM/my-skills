@@ -91,7 +91,7 @@ Rules:
 | propose→persist | `set <dir> D-NNN composition\|decisions\|deferred "b1" "b2" …` | bullets, replace whole list |
 | propose→persist | `terminal <dir> D-NNN "<target>: <identifier>"` · `set <dir> D-NNN adaptation "clause → construct" …` | leaf; Exists test enforced |
 | persist | `approve <dir> D-NNN` | refuses on `?`, empty prose, no body/target, missing walkthrough, a tagged body line that says nothing about what it does, missing composition, untagged call, pending ADR; drops ambiguity rows resolving at this node; prints next frontier id |
-| change | `reopen <dir> D-NNN "reason"` · `stale <dir> D-NNN "reason"` · `retire <dir> D-NNN "reason"` · `supersede <dir> D-OLD D-NEW "reason"` | status + history; `reopen` files the body it replaces under `## Superseded refinement` |
+| change | `reopen <dir> D-NNN "reason"` · `stale <dir> D-NNN "reason"` · `retire <dir> D-NNN "reason"` · `supersede <dir> D-OLD D-NEW "reason"` | status + history; `stale` also records which entries changed after approval; `reopen` files the body it replaces under `## Superseded refinement` |
 | change | `change <dir> <name\|CTX-id> [--definition …] [--rename "New heading"] [--status stale] --reason "…" [--minor]` | entry changed; approved dependents fail lint until `stale` / re-`approve` |
 | decision | `adr <dir> new "Title" --constrains D-NNN[,D-MMM]` · `adr <dir> accept ADR-NNNN` | stub (nodes → `draft (ADR pending)`); accept unblocks |
 | implement | `set <dir> D-NNN realization implemented` · `evidence <dir> D-NNN --kind K --ref R --result pass\|fail` | pass → `verified` |
@@ -293,6 +293,8 @@ Design-only → stop at approved frontier. Implementation → refine until every
 Evidence: cheapest method covering obligation (types → examples → property → integration → static/proof → model-check → benchmark → fault-injection → observation). One `evidence D-NNN --kind <method> --ref <artifact> --result pass|fail [--note <limits>]` per (obligation, method). Rules in [design-ledger.md](references/design-ledger.md).
 
 States independent, never inferred from each other: `approved` (design accepted) · `implemented` (`set realization implemented`) · `verified` (every Contract clause has current passing evidence).
+
+Design states mean different things and are not interchangeable: `stale` = still the current design, invalidated by a change elsewhere (`stale` records the reason plus the entries that changed after approval, shown as `Stale: <date> — <reason> · invalidated by <entry> (<date>)`); `superseded by D-NNN` = another node took the work over, so a replacement exists; `retired` = the design dropped the work and nothing replaced it. Never mark a node superseded without naming the node that replaced it.
 
 ### 7. Propagate change
 

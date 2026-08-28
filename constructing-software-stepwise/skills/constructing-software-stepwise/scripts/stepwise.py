@@ -21,7 +21,7 @@ Every verb ends with render + lint; exit 1 and `error <where>: <msg>` lines when
   terminal  <dir> D-NNN "<target>: <identifier>"      leaf: the real thing (Exists test enforced)
   approve   <dir> D-NNN                               after the user says yes; refuses while anything is missing
   reopen    <dir> D-NNN "reason"                      approved -> draft for revision (history keeps the reason)
-  stale     <dir> D-NNN "reason"                      dependency changed
+  stale     <dir> D-NNN "reason"                      a change invalidated it; the entries that changed are recorded with it
   retire    <dir> D-NNN "reason"                      the design dropped it; nothing calls it any more
   supersede <dir> D-OLD D-NEW "reason"
   evidence  <dir> D-NNN --kind K --ref R --result pass|fail [--note N]
@@ -443,6 +443,19 @@ def link_ref(led: Ledger, ref: str, frm: Path) -> str:
     return ref
 
 
+def state_line(n: dict) -> list[str]:
+    """Why the node left `approved`, from the verb that moved it."""
+    if n["design"] in ("draft", "approved"):
+        return []
+    last = next((h for h in reversed(n.get("history", [])) if h["event"] in ("stale", "superseded", "retired", "reopened")), None)
+    if not last:
+        return []
+    line = f"{last['event'].title()}: {last['date']}" + (f" — {last['reason']}" if last.get("reason") else "")
+    if n["design"] == "stale" and n.get("stale_by"):
+        line += f" · invalidated by {', '.join(n['stale_by'])}"
+    return [line]
+
+
 def render_node(led: Ledger, nid: str) -> str:
     n = led.nodes[nid]
     p = led.dir / "nodes" / f"{nid}.md"
@@ -451,7 +464,8 @@ def render_node(led: Ledger, nid: str) -> str:
          f"Design: {led.status(nid)} · Realization: {n['realization']} · Verification: {n['verification']}",
          f"Parents: {', '.join(link_ref(led, x, p) for x in led.parents(nid)) or '-'}",
          f"Depends on: {', '.join(link_ref(led, x, p) for x in n.get('depends', [])) or '-'}",
-         f"Approved: {n.get('approved') or '-'}", "",
+         f"Approved: {n.get('approved') or '-'}",
+         *state_line(n), "",
          "## Statement", "", f"`{n['statement']}`" + (f" — {n['gloss']}" if n.get("gloss") else ""), "",
          "## Effect", "", n.get("effect") or "-", "",
          "## Contract", ""]
@@ -973,6 +987,7 @@ def v_approve(led: Ledger, a) -> int:
             print(f"  - {p}", file=sys.stderr)
         return 1
     re_approval = bool(n.get("approved"))
+    n.pop("stale_by", None)
     n["design"] = "approved"
     n["approved"] = f"{today()} by user"
     n["approved_at"] = now()
@@ -996,6 +1011,8 @@ def flip(led: Ledger, nid: str, design: str, event: str, reason: str, **extra) -
     n = need(led, nid)
     if n is None:
         return 1
+    if design != "stale":
+        n.pop("stale_by", None)
     n["design"] = design
     n.update(extra)
     if design != "approved" and n["verification"] == "verified":
@@ -1019,7 +1036,20 @@ def v_retire(led: Ledger, a) -> int:
     return flip(led, a.id, "retired", "retired", a.reason)
 
 
+def changed_deps(led: Ledger, n: dict) -> list[str]:
+    """Entries this node depends on that changed after it was approved — the reason it is stale."""
+    since, out = n.get("approved_at", ""), []
+    for r in n.get("depends", []):
+        e = led.entry(r)
+        if e and (last := max((c["at"] for c in e[2].get("changed", [])), default="")) > since:
+            out.append(f"{e[1]} ({last[:10]})")
+    return out
+
+
 def v_stale(led: Ledger, a) -> int:
+    n = led.nodes.get(a.id)
+    if n is not None:
+        n["stale_by"] = changed_deps(led, n)
     return flip(led, a.id, "stale", "stale", a.reason)
 
 
