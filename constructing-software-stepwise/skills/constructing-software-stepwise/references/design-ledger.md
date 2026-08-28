@@ -115,11 +115,13 @@ Stable IDs (`D-NNN`) from first node. ID = statement; never renumber.
 
 | Kind | Test | Fields |
 |---|---|---|
-| Terminal — real | Statement = ONE real thing, named `<target>: <identifier>` in `Realization` | Header + Statement + Effect + Contract + Realization + Evidence |
+| Terminal — real | Statement = ONE real thing, or Contract already met by ONE real thing cited in a fact; named `<target>: <identifier>` in `Realization` | Header + Statement + Effect + Contract + Realization + Evidence |
 | Terminal — reuse | Statement = call to existing node with `Design: approved`, Statement + Contract used verbatim | no new file; parent body line `-- ↗ D-NNN`; add parent to that node's `Parents` |
 | Composite | else | all fields below, body in pseudocode |
 
 Composite fan-out 2–7. 1 → rename. >7 → intermediate node. Terminal = only place refinement stops: adapt to real, or call approved node.
+
+Terminal test precedes every body. Contract met by one real thing cited in a fact → terminal; `Adaptation` maps each clause onto that thing, evidence verifies it. Platform guarantees (idempotent start by key, resume from checkpoint, CAS, lock, retry, version pin) never get refined into pseudocode — snapshot / decide / CAS / bind / schedule chains above one `dbos: startWorkflow` re-derive the platform.
 
 Reuse rules: target must be `approved` (draft / stale → not reusable); call matches its Statement signature; parent's composition argument uses its Contract only, never its body; contract doesn't fit → reopen that node via Propagate (all parents stale) or create a new node — never copy body with a tweak.
 

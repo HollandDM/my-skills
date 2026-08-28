@@ -26,6 +26,7 @@ Small refinement → small contract → small vocabulary. Many questions = scope
 | Approval explicit | Yes to shown Proposal block. Agreement to prose ≠ approval → show block, ask |
 | Step small | Refinement body ≤ 12 pseudocode lines; each composition bullet ≤ 2 lines. Longer → insert intermediate node |
 | Pseudocode until terminal | Language keyword, library name, or concrete type in composite node = premature representation → move to child |
+| Terminal at platform | Contract already met by ONE real thing cited in a fact (idempotent start by key, resume from checkpoint, CAS, lock, retry, version pin) → terminal now, `Adaptation` per clause. Never refine platform guarantee into pseudocode |
 | Program in sync | Every `-- D-NNN` in `Program` has node row; every approved body appears in `Program`. Substitution same edit as approval |
 | Back up freely | Obligation fails → revise children or reopen ancestor |
 
@@ -33,11 +34,11 @@ Small refinement → small contract → small vocabulary. Many questions = scope
 
 | Kind | Test | Record |
 |---|---|---|
-| Terminal | Statement = ONE real thing (language construct / framework API / platform primitive / service / repo fn), named `<target>: <identifier>` in `Realization` | Statement + Contract + Realization (`Adaptation` lines) + Evidence |
+| Terminal | Statement = ONE real thing (language construct / framework API / platform primitive / service / repo fn), or Contract already met by ONE such thing cited in a fact; named `<target>: <identifier>` in `Realization` | Statement + Contract + Realization (`Adaptation` lines) + Evidence |
 | Terminal — reuse | Statement = call to existing node with `Design: approved`, its Statement + Contract verbatim | no new file; body line `-- ↗ D-NNN`; caller added to that node's `Parents` |
 | Composite | else | Statement + Contract + pseudocode Refinement + every field in [design-ledger.md](references/design-ledger.md) |
 
-Composite → 2–7 child statements. 1 = rename. >7 = missing intermediate node. Terminal = where refinement stops: adapt to real, or call approved node. Reused node's body appears once in `Program ### Procedures`; call sites point at it. "Trivial / obvious / clear enough" not decision words; tables decide.
+Composite → 2–7 child statements. 1 = rename. >7 = missing intermediate node. Terminal = where refinement stops: adapt to real, or call approved node. Terminal test runs before every body: one real thing (cited fact) satisfies Contract → terminal, `Adaptation` maps each clause onto it. Decomposing what the platform guarantees = re-deriving it; five levels of get-or-start / CAS / schedule above `dbos: startWorkflow` = this failure. Reused node's body appears once in `Program ### Procedures`; call sites point at it. "Trivial / obvious / clear enough" not decision words; tables decide.
 
 ## Durable Artifacts
 
@@ -82,6 +83,8 @@ digraph refine {
     "Ask ONE question naming its ?, w/ recommendation" [shape=box];
     "WAIT for answer" [shape=ellipse];
     "Write term/fact/scenario entry + row; clear ?" [shape=box];
+    "One real thing (cited fact) satisfies Contract?" [shape=diamond];
+    "Propose terminal: Realization <target>: <identifier> + Adaptation per clause" [shape=box];
     "Propose pseudocode body (2-7 child statements) + 5-bullet composition" [shape=box];
     "Body <= 12 lines, bullets <= 2 lines, obligation holds?" [shape=diamond];
     "Insert intermediate node or reopen ancestor" [shape=box];
@@ -106,7 +109,10 @@ digraph refine {
     "Ask ONE question naming its ?, w/ recommendation" -> "WAIT for answer";
     "WAIT for answer" -> "Write term/fact/scenario entry + row; clear ?";
     "Write term/fact/scenario entry + row; clear ?" -> "Any ? left in draft?";
-    "Any ? left in draft?" -> "Propose pseudocode body (2-7 child statements) + 5-bullet composition" [label="no"];
+    "Any ? left in draft?" -> "One real thing (cited fact) satisfies Contract?" [label="no"];
+    "One real thing (cited fact) satisfies Contract?" -> "Propose terminal: Realization <target>: <identifier> + Adaptation per clause" [label="yes"];
+    "Propose terminal: Realization <target>: <identifier> + Adaptation per clause" -> "Conflicts accepted ADR?";
+    "One real thing (cited fact) satisfies Contract?" -> "Propose pseudocode body (2-7 child statements) + 5-bullet composition" [label="no"];
     "Propose pseudocode body (2-7 child statements) + 5-bullet composition" -> "Body <= 12 lines, bullets <= 2 lines, obligation holds?";
     "Body <= 12 lines, bullets <= 2 lines, obligation holds?" -> "Insert intermediate node or reopen ancestor" [label="no"];
     "Insert intermediate node or reopen ancestor" -> "Propose pseudocode body (2-7 child statements) + 5-bullet composition";
@@ -164,6 +170,8 @@ Never: batch questions; ask what code answers; ask without a `?`; propose childr
 ```
 
 ### 3. Propose ONE refinement
+
+Terminal test first: one real thing, cited in a fact, satisfies the Contract → propose `Realization: <target>: <identifier>` + one `Adaptation` line per clause, no body. Else:
 
 Parent Statement → Refinement body: pseudocode ≤ 12 lines, 2–7 child statements each tagged `-- D-NNN`, control structure (sequence / choice / loop) lives here, `{ assertion }` line wherever composition leans on a condition. Notation in [design-ledger.md](references/design-ledger.md). No language keyword, library, concrete type — representation, storage, framework → deepest node needing them. Child already exists as approved node → call it (`-- ↗ D-NNN`), Statement + Contract verbatim; contract doesn't fit → reopen it or new node, never a tweaked copy.
 
@@ -248,6 +256,7 @@ Context entry, ancestor, ADR, or dependency changes:
 | Composition needs paragraph | Insert intermediate node |
 | Pick storage / framework now | Deepest node needing it |
 | Write body in Scala / DBOS API, clearer | Composite = pseudocode. Real thing at terminal only |
+| Refine get-or-start / CAS / resume / retry in pseudocode | Fact cites primitive meeting Contract → terminal now. Platform guarantee is never re-derived |
 | Evidence in separate doc | Under the node's `## Evidence`, nowhere else |
 | Copy D-050 body, tweak one line | Call `↗ D-050` or reopen it. No forks |
 | Reuse draft / stale node | Only `approved` reusable |
