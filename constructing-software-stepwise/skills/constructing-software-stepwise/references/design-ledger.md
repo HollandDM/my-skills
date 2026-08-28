@@ -1,22 +1,27 @@
 # Design Ledger Format
 
-`DESIGN.md` = approved refinement tree, serialized. Answers **how accepted semantic ops compose to satisfy parent contracts**.
+Design = approved refinement tree, serialized. Answers **how accepted semantic ops compose to satisfy parent contracts**.
 
 Not: interview transcript, impl diary, backlog, component inventory.
 
-## Location + Update Rule
+## Layout — one node per file
 
-Existing design-doc convention if present. Else beside context file:
+Existing design-doc convention if present. Else:
 
 ```text
-docs/design/order-execution/DESIGN.md
+docs/design/<topic>/
+  DESIGN.md                index only: root, frontier, ADR list, node table
+  nodes/D-000-<slug>.md    one node
+  nodes/D-010-<slug>.md
 ```
 
-Write node immediately after its user-owned decisions approved. Never reconstruct tree from memory at session end.
+`DESIGN.md` holds no node body. Node file + its `DESIGN.md` row written in same edit. Never append node content to `DESIGN.md` "for now".
+
+Write node file immediately after its user-owned decisions approved. Never reconstruct tree from memory at session end.
 
 Only approved design authoritative. Candidates live in conversation / scratch notes. Unapproved proposal never appears as accepted.
 
-## Header
+## Index — `DESIGN.md`
 
 ```markdown
 # <Design name>
@@ -24,15 +29,24 @@ Only approved design authoritative. Candidates live in conversation / scratch no
 Context: ./CONTEXT.md
 Evidence: ./EVIDENCE.md
 Applicable ADRs:
-- ../../adr/0003-example.md
+- ../../adr/0003-example.md (accepted)
 
 ## Root
 
 Root node: D-000
 Active frontier: D-120, D-240
+
+## Nodes
+
+| ID | Operation | Parent | Design | Realization | Verification | File |
+| --- | --- | --- | --- | --- | --- | --- |
+| D-000 | <root operation> | — | approved | not-started | unverified | [nodes/D-000-<slug>.md](nodes/D-000-<slug>.md) |
+| D-120 | <operation> | D-100 | approved | partial | unverified | [nodes/D-120-<slug>.md](nodes/D-120-<slug>.md) |
 ```
 
-Stable IDs (`D-NNN`) from first node. ID = semantic node; never renumber for document order.
+Table row = mirror of node file header. Status changes in file → same edit updates row.
+
+Stable IDs (`D-NNN`) from first node. ID = semantic node; never renumber for document order. Slug may change; ID never.
 
 `Active frontier` updated in same edit that adds, approves, or stales a node.
 
@@ -45,10 +59,10 @@ Stable IDs (`D-NNN`) from first node. ID = semantic node; never renumber for doc
 
 Composite fan-out 2–7. 1 → rename, not refinement. >7 → add intermediate node.
 
-## Node Format
+## Node — `nodes/D-120-<slug>.md`
 
 ```markdown
-## D-120 — <Semantic operation>
+# D-120 — <Semantic operation>
 
 Design status: approved | stale | superseded
 Realization: not-started | partial | implemented
@@ -56,40 +70,40 @@ Verification: unverified | partial | verified
 Parent: D-100
 Depends on: CTX-F03, D-090, ADR-0003
 
-### Effect
+## Effect
 
 <The net observable behavior this node establishes.>
 
-### Contract
+## Contract
 
 - Preconditions: <facts required before activation>
 - Postconditions: <guarantees after successful completion>
 - Failure semantics: <errors, cancellation, retries, partial progress, recovery>
 - Invariants: <properties preserved throughout or across transitions>
 - Budgets: <relevant latency, memory, cost, security, reliability, operability>
-- Vocabulary: <links to terms or scenarios in CONTEXT.md>
+- Vocabulary: <links to context/terms or context/scenarios files>
 
-### Refines into
+## Refines into
 
-- D-121 — <child operation>
-- D-122 — <child operation>
+- D-121 — <child operation> → [nodes/D-121-<slug>.md](D-121-<slug>.md)
+- D-122 — <child operation> → [nodes/D-122-<slug>.md](D-122-<slug>.md)
 
-### Composition argument
+## Composition argument
 
 <Why the children, in their stated order or relationship, establish this node's contract. Cover each of data flow, failures, cleanup, invariants, progress; write `n/a: <reason>` for any that does not apply.>
 
-### Approved decisions
+## Approved decisions
 
 - <Decision and concise rationale>
 
-### Deferred boundaries
+## Deferred boundaries
 
 - <Question deliberately deferred> — becomes relevant at <child node or trigger>
 
-### Realization
+## Realization
 
 - Code or configuration: <paths or identifiers>
-- Evidence: <EVIDENCE.md record IDs>
+- Evidence: <evidence/EV-D120-NN-<slug>.md links>
 ```
 
 Composition argument covers each of: data flow, failures, cleanup, invariants, progress. Not applicable → `n/a: <reason>`. Never omit silently.
@@ -126,7 +140,7 @@ Reopen only when one changes:
 - child contract / dependency
 - evidence required for verification state
 
-Dependency changes → node `stale`, keep last approved content for comparison, revisit affected frontier only. Never keep `approved` / `verified` silently.
+Dependency changes → node `stale` in file header AND index row, keep last approved content for comparison, revisit affected frontier only. Never keep `approved` / `verified` silently.
 
 ## State Separation
 

@@ -51,7 +51,7 @@ Batch-parallel plan execution for the Stargazer codebase. Lighter alternative to
 
 ### [constructing-software-stepwise](./constructing-software-stepwise/)
 
-Stepwise refinement for hard designs — interacting components, state machines, durable workflows, concurrency, correctness constraints. One abstract node at a time: establish only the shared meaning that node needs, decompose into 2–7 children whose composition provably preserves the parent contract, persist immediately. Four separated ledgers (`CONTEXT.md`, `DESIGN.md`, `EVIDENCE.md`, ADRs) with three independent node states (approved / implemented / verified), an ADR conflict protocol, and an observable terminal-node test so agents can neither skip rigor nor over-ceremony trivial work. Trigger explicitly.
+Stepwise refinement for hard designs — interacting components, state machines, durable workflows, concurrency, correctness constraints. One abstract node at a time: establish only the shared meaning that node needs, decompose into 2–7 children whose composition provably preserves the parent contract, persist immediately. Four separated dimensions — context items, design nodes, evidence records, ADRs — each item its own file under `docs/design/<topic>/` with `CONTEXT.md` / `DESIGN.md` / `EVIDENCE.md` as index-only tables, three independent node states (approved / implemented / verified), an ADR conflict protocol, and an observable terminal-node test so agents can neither skip rigor nor over-ceremony trivial work. Trigger explicitly.
 
 ### [mixed-agent-sdd](./mixed-agent-sdd/)
 

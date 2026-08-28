@@ -1,27 +1,39 @@
 # Evidence Ledger Format
 
-`EVIDENCE.md` = why obligation currently believed to hold. Answers **what checked, against which obligation, result, limitation**.
+Evidence = why obligation currently believed to hold. Answers **what checked, against which obligation, result, limitation**.
 
-Approval → `DESIGN.md`. Rationale → ADR. Evidence alone grants `verified`.
+Approval → `nodes/`. Rationale → ADR. Evidence alone grants `verified`.
 
-## Location
+## Layout — one record per file
 
-Existing verification / test-plan convention if present. Else beside design ledger:
+Existing verification / test-plan convention if present. Else:
 
 ```text
-docs/design/order-execution/EVIDENCE.md
+docs/design/<topic>/
+  EVIDENCE.md                          index only: record table
+  evidence/EV-D120-01-<slug>.md        one record
 ```
 
-Create on first obligation w/ evidence. Never record command not run or proof not established.
+Record file + `EVIDENCE.md` row written in same edit. Create index on first obligation w/ evidence. Never record command not run or proof not established.
 
-## Record Format
+## Index — `EVIDENCE.md`
 
 ```markdown
 # <Design name> — Evidence
 
-## EV-D120-01 — <Short evidence name>
+| ID | Node | Obligation (short) | Method | Status | Recorded | File |
+| --- | --- | --- | --- | --- | --- | --- |
+| EV-D120-01 | D-120 | <clause> | property-test | passed | YYYY-MM-DD | [evidence/EV-D120-01-<slug>.md](evidence/EV-D120-01-<slug>.md) |
+```
 
-Design node: D-120
+Row mirrors record header. Status change in file → same edit updates row.
+
+## Record — `evidence/EV-D120-01-<slug>.md`
+
+```markdown
+# EV-D120-01 — <Short evidence name>
+
+Design node: D-120 → [../nodes/D-120-<slug>.md](../nodes/D-120-<slug>.md)
 Obligation: <exact contract clause, invariant, ADR constraint, or budget checked>
 Method: type-check | example | property-test | integration-test | static-analysis | proof | model-check | benchmark | fault-injection | observation
 Artifact: <test name, code path, model, report, or command>
@@ -33,7 +45,7 @@ Limitations: <what this evidence does not establish>
 Recorded: YYYY-MM-DD
 ```
 
-One record per (node, method, aspect). Keep addressable — design nodes + ADR compliance checks link here.
+One record per (node, method, aspect). Node's `Realization → Evidence` links back here.
 
 ## Method Selection — cheapest covering risk
 
@@ -61,6 +73,6 @@ Else `unverified` or `partial` + name missing obligation.
 
 ## Staleness
 
-Mark `stale` on change to: contract / vocab tested; ancestor or child composition; applicable ADR; impl code / config; dependency versions; anything listed in `Environment`.
+Mark `stale` (file + index row) on change to: contract / vocab tested; ancestor or child composition; applicable ADR; impl code / config; dependency versions; anything listed in `Environment`.
 
 Stale ≠ false. Old result no longer justifies current claim. Keep record; add fresh; restore `verified` only after coverage current.

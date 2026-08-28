@@ -18,18 +18,33 @@ Fan-out: composite → 2–7 children. 1 child = rename, not refinement. >7 = mi
 
 "Material", "trivial", "substantial", "obvious" = not decision words. Kind table decides.
 
-## Durable Artifacts
+## Durable Artifacts — one item per file
 
-Four dimensions, four files. Repo convention wins; else `docs/design/<topic>/` + repo ADR dir.
+Four dimensions. Repo convention wins; else:
 
-| Artifact | Records | Read before create/change |
-|---|---|---|
-| `CONTEXT.md` | Meaning: scope, vocab, confirmed facts, constraints, scenarios, non-goals | [context-ledger.md](references/context-ledger.md) |
-| `DESIGN.md` | Approved refinement tree: contracts, children, composition, invariants, deferred boundaries | [design-ledger.md](references/design-ledger.md) |
-| `EVIDENCE.md` | What checked vs which obligation, result, limits | [evidence-ledger.md](references/evidence-ledger.md) |
-| `docs/adr/NNNN-<slug>.md` | Hard-to-reverse trade-offs | [adr-ledger.md](references/adr-ledger.md) |
+```text
+docs/design/<topic>/
+  CONTEXT.md                            index only: scope, non-goals, item tables
+  context/terms/<slug>.md               one term
+  context/facts/CTX-F01-<slug>.md       one fact / constraint
+  context/scenarios/CTX-S01-<slug>.md   one scenario
+  DESIGN.md                             index only: root, frontier, ADR list, node table
+  nodes/D-000-<slug>.md                 one design node
+  EVIDENCE.md                           index only: record table
+  evidence/EV-D000-01-<slug>.md         one evidence record
+docs/adr/NNNN-<slug>.md                 one ADR
+```
 
-Create file on first qualifying record. No empty scaffolds. No file as catch-all for another dimension.
+| Dimension | Item file | Index | Format |
+|---|---|---|---|
+| Meaning | `context/{terms,facts,scenarios}/…` | `CONTEXT.md` | [context-ledger.md](references/context-ledger.md) |
+| Design | `nodes/D-NNN-<slug>.md` | `DESIGN.md` | [design-ledger.md](references/design-ledger.md) |
+| Evidence | `evidence/EV-DNNN-NN-<slug>.md` | `EVIDENCE.md` | [evidence-ledger.md](references/evidence-ledger.md) |
+| Decision | `docs/adr/NNNN-<slug>.md` | — | [adr-ledger.md](references/adr-ledger.md) |
+
+- One item = one file. Index holds status + link, never item body. No size threshold — split from first write.
+- Item file + its index row change in same edit.
+- Create index on first item. No empty scaffolds. No file as catch-all for another dimension.
 
 ## Core Loop
 
@@ -41,13 +56,13 @@ digraph refine {
     "Facts missing?" [shape=diamond];
     "Investigate code/docs/tools yourself" [shape=box];
     "User-owned decision missing?" [shape=diamond];
-    "Ask one round: trade-off + recommendation; write CONTEXT.md" [shape=box];
+    "Ask one round: trade-off + recommendation; write context item + index row" [shape=box];
     "Propose 2-7 children + composition argument" [shape=box];
     "Children establish parent contract?" [shape=diamond];
     "Revise children or reopen nearest wrong ancestor" [shape=box];
     "Conflicts accepted ADR?" [shape=diamond];
     "STOP branch: user picks preserve ADR or supersede" [shape=octagon, style=filled, fillcolor=red, fontcolor=white];
-    "Write node to DESIGN.md now" [shape=box];
+    "Write nodes/D-NNN file + DESIGN.md row now" [shape=box];
     "Frontier empty at requested depth?" [shape=diamond];
     "Done" [shape=doublecircle];
 
@@ -57,16 +72,16 @@ digraph refine {
     "Facts missing?" -> "Investigate code/docs/tools yourself" [label="yes"];
     "Investigate code/docs/tools yourself" -> "Facts missing?";
     "Facts missing?" -> "User-owned decision missing?" [label="no"];
-    "User-owned decision missing?" -> "Ask one round: trade-off + recommendation; write CONTEXT.md" [label="yes"];
-    "Ask one round: trade-off + recommendation; write CONTEXT.md" -> "Propose 2-7 children + composition argument";
+    "User-owned decision missing?" -> "Ask one round: trade-off + recommendation; write context item + index row" [label="yes"];
+    "Ask one round: trade-off + recommendation; write context item + index row" -> "Propose 2-7 children + composition argument";
     "User-owned decision missing?" -> "Propose 2-7 children + composition argument" [label="no"];
     "Propose 2-7 children + composition argument" -> "Children establish parent contract?";
     "Children establish parent contract?" -> "Revise children or reopen nearest wrong ancestor" [label="no"];
     "Revise children or reopen nearest wrong ancestor" -> "Propose 2-7 children + composition argument";
     "Children establish parent contract?" -> "Conflicts accepted ADR?" [label="yes"];
     "Conflicts accepted ADR?" -> "STOP branch: user picks preserve ADR or supersede" [label="yes"];
-    "Conflicts accepted ADR?" -> "Write node to DESIGN.md now" [label="no"];
-    "Write node to DESIGN.md now" -> "Frontier empty at requested depth?";
+    "Conflicts accepted ADR?" -> "Write nodes/D-NNN file + DESIGN.md row now" [label="no"];
+    "Write nodes/D-NNN file + DESIGN.md row now" -> "Frontier empty at requested depth?";
     "Record Effect + Realization" -> "Frontier empty at requested depth?";
     "Frontier empty at requested depth?" -> "Done" [label="yes"];
     "Frontier empty at requested depth?" -> "Pick one abstract node at frontier" [label="no"];
@@ -75,7 +90,7 @@ digraph refine {
 
 ### 1. Ground
 
-Read existing CONTEXT, approved nodes, applicable ADRs, code, tests, evidence. Pick ONE composite node at frontier. Siblings/descendants wait until active.
+Read `DESIGN.md` index, active node files, their `Depends on` context items, applicable ADRs, code, tests, evidence. Pick ONE composite node at frontier. Siblings/descendants wait until active.
 
 ### 2. Understand locally
 
@@ -88,7 +103,7 @@ Resolve only terms + decisions active node needs.
 - Scenarios + counterexamples expose ambiguous terms, boundaries, failures, negatives.
 - Distinction changes active node's contract clause → resolve now. Else → `Deferred boundaries`.
 
-Write resolved meaning to `CONTEXT.md` as it lands. Never end-of-session summary.
+Each resolved term / fact / scenario → own `context/` file + `CONTEXT.md` row, as it lands. Never end-of-session summary.
 
 ### 3. Refine
 
@@ -98,13 +113,13 @@ Check Refinement Obligation ([design-ledger.md](references/design-ledger.md)): c
 
 ### 4. Approve + persist
 
-Agent recommends. User owns semantic / risk / compat / hard-to-reverse choices. Approved → write node to `DESIGN.md` immediately. Record = contract AND why children compose. Component list or task plan ≠ refinement record.
+Agent recommends. User owns semantic / risk / compat / hard-to-reverse choices. Approved → write `nodes/D-NNN-<slug>.md` + `DESIGN.md` row immediately. Record = contract AND why children compose. Component list or task plan ≠ refinement record.
 
 Approved node = composed fn: descendants use contract, never re-derive. Reopen only on changed assumption, context term, invariant, dependency, ADR, or evidence.
 
 ### 5. ADR
 
-Create only if ALL: hard to reverse + surprising w/o context + real trade-off. Offer → user approves → binding constraint.
+Create only if ALL: hard to reverse + surprising w/o context + real trade-off. Offer → user approves → binding constraint. One ADR per file.
 
 Before approving any node: check applicable ADRs. Conflict → STOP branch, run Conflict Protocol ([adr-ledger.md](references/adr-ledger.md)). Never bypass, weaken, delete, or rewrite ADR to fit design.
 
@@ -112,7 +127,7 @@ Before approving any node: check applicable ADRs. Conflict → STOP branch, run 
 
 Design-only → stop at coherent approved frontier. Implementation → refine until every leaf terminal.
 
-Evidence: cheapest method covering obligation (types → examples → property → integration → static/proof → model-check → benchmark → fault-injection). Record in `EVIDENCE.md`, link node.
+Evidence: cheapest method covering obligation (types → examples → property → integration → static/proof → model-check → benchmark → fault-injection). Each record → own `evidence/` file + `EVIDENCE.md` row; link from node's `Realization`.
 
 Three independent states. Never infer one from another:
 
@@ -124,9 +139,9 @@ Three independent states. Never infer one from another:
 
 Context, ancestor, ADR, or dependency changes:
 
-1. record change at source
-2. find dependent nodes
-3. mark nodes + their evidence stale
+1. record change in item's own file
+2. find dependent nodes (`Depends on` / `Applies to`)
+3. mark nodes + their evidence stale — file header AND index row
 4. revisit only invalidated frontier
 5. superseded ADR: keep, link replacement
 6. resume
@@ -143,6 +158,7 @@ Composition: <why children establish contract; failures + cleanup covered>
 Decided: <approved this turn>
 Deferred: <question → node/trigger where it matters>
 Open: <user decisions needed | obligations w/o evidence>
+Files: <item files written/updated this turn>
 ```
 
 Empty slot → `none`. Stable ancestors → one line, never replayed.
@@ -164,8 +180,9 @@ Empty slot → `none`. Stable ancestors → one line, never replayed.
 |---|---|
 | "Obvious node, skip composition argument" | Composite = all fields. Pass terminal test or write it |
 | "User said 'sounds good'" | Approval binds recorded contract only. Show it, get yes |
-| "Write CONTEXT.md at end" | Lossy. Write on resolution |
-| "Tests pass → verified" | Verified = EVIDENCE record per Contract clause |
+| "Write context at end" | Lossy. Write item file on resolution |
+| "Append node to DESIGN.md, split later" | Never. One node = one file from first write. Index = table only |
+| "Tests pass → verified" | Verified = evidence record per Contract clause |
 | "ADR doesn't really apply here" | Conflict Protocol decides, not you |
 | "All known primitives, no refinement needed" | Name each in Realization. Can't → composite |
 | Asking user for fact that lives in code | Investigate |

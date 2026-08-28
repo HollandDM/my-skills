@@ -31,7 +31,7 @@ Never delete / rewrite accepted ADR to erase changed decision. Typo / wording fi
 
 ## File Format
 
-Repo numbering / location if established. Else `docs/adr/NNNN-<slug>.md`:
+Repo numbering / location if established. Else `docs/adr/NNNN-<slug>.md`. One ADR per file; never bundle several decisions in one ADR:
 
 ```markdown
 ---
