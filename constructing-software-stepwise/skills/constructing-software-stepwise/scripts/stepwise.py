@@ -11,7 +11,7 @@ Every verb ends with render + lint; exit 1 and `error <where>: <msg>` lines when
   show      <dir> D-NNN                               node view to stdout
   new       <dir> D-NNN ["stmt"]                      draft node (frontier id, or the root with its statement)
   set       <dir> D-NNN gloss|effect "text"           one-line prose fields
-  set       <dir> D-NNN pre|post|failure|cancellation|invariant|progress "clause"   contract (<= 6 clauses; unknowns as ?slug)
+  set       <dir> D-NNN pre|post|failure|invariant|<label> "clause"   contract clause, any lowercase label (<= 6 clauses; unknowns as ?slug)
   set       <dir> D-NNN composition|decisions|deferred|adaptation "b1" "b2" ...    bullet lists (replace)
   set       <dir> D-NNN realization|verification <vocab>
   body      <dir> D-NNN [--file F]                    refinement body from stdin/file (pseudocode, `-- D-NNN` / `-- ↗ D-NNN` / `-- ⇒ target` tags)
@@ -754,7 +754,8 @@ def v_set(led: Ledger, a) -> int:
     f, vals = a.field, a.value
     if f in TEXT_FIELDS:
         n[f] = " ".join(vals).strip()
-    elif f in CONTRACT_KEYS:
+    elif f in CONTRACT_KEYS or (f.isalpha() and f.islower() and f not in LIST_FIELDS + ("realization", "verification")):
+        # any lowercase word is a contract clause label: pre, post, failure, invariant, budget, determinism, boundary, ...
         n.setdefault("contract", {})[f] = " ".join(vals).strip()
         if len(n["contract"]) > 6:
             return fail(f"{a.id}: contract would have {len(n['contract'])} clauses > 6")

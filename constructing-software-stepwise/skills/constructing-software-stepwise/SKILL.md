@@ -77,7 +77,7 @@ Rules:
 |---|---|---|
 | orient | `frontier <dir>` · `show <dir> D-NNN` | what to pick; one node view |
 | draft | `new <dir> D-NNN ["stmt"]` | node from frontier line (root: pass statement) |
-| draft | `set <dir> D-NNN gloss\|effect "…"` · `set <dir> D-NNN pre\|post\|failure\|cancellation\|invariant\|progress "…"` | prose + contract; `?slug` allowed |
+| draft | `set <dir> D-NNN gloss\|effect "…"` · `set <dir> D-NNN pre\|post\|failure\|invariant\|<any lowercase label> "…"` | prose + contract clause (≤ 6; labels free: `budget`, `determinism`, `boundary` …); `?slug` allowed |
 | interview | `entry <dir> term\|fact\|scenario "Name" "definition" [--source --avoid --not --example \| --given --when --then --excludes --settles]` | context entry; ids allocated |
 | interview | `answer <dir> D-NNN slug "Name"` | `?slug` → name in every clause; depends += name |
 | interview | `ambiguity <dir> "claim" "conflict" D-NNN` · `meta <dir> scope\|title "…"` · `meta <dir> nongoals "a" "b"` | deferred question; scope; non-goals |

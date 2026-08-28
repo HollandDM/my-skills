@@ -26,7 +26,7 @@ Views exist for humans and PR review. The agent reads them (or `show D-NNN`) and
 |---|---|---|
 | `statement` | `new` (from parent body line, or root statement) | `x <- f(a, b)` · `-> f(a)` · `f(a)`. ID = statement; never renumber |
 | `gloss`, `effect` | `set D-NNN gloss\|effect "…"` | one line; 1–2 sentences |
-| `contract` | `set D-NNN pre\|post\|failure\|cancellation\|invariant\|progress "…"` | ≤ 6 clauses, one line each; unknowns `?slug` |
+| `contract` | `set D-NNN pre\|post\|failure\|invariant\|<any lowercase label> "…"` | ≤ 6 clauses, one line each, labels free (`budget`, `determinism`, `boundary`, `cancellation`, `progress`); unknowns `?slug` |
 | `depends` | `answer`; also derived from any term / `CTX-…` / `ADR-…` named in gloss, effect, contract | dependencies for `Used by` and staleness |
 | `body` | `body D-NNN` (stdin / `--file`) | pseudocode lines → `{indent, code, child \| reuse \| target \| note}`; refused on an approved node |
 | `composition`, `decisions`, `deferred`, `adaptation` | `set D-NNN <field> "b1" "b2" …` | bullet lists, replaced whole |
