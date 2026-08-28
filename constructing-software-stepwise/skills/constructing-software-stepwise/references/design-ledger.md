@@ -91,7 +91,7 @@ Program tags are rendered from status: `(frontier)` · `(draft, k ?)` · `(draft
 
 Composite fan-out 2–7. 1 → rename. >7 → intermediate node. Terminal = only place refinement stops: adapt to real, or call approved node.
 
-Collapse rule: "not worth digging" is the user's call, and it collapses review, not refinement. Collapsed leaf = one approval, no child nodes, but the body is complete pseudocode down to real constructs — every statement line names its target, control + `{ assertion }` lines as usual, ≤ 12 lines. Needs > 12 lines or a line with no nameable target → it is worth digging: propose children.
+Collapse rule: "not worth digging" is the user's call — the **Make terminal** answer to a Proposal, and it collapses review, not refinement. Collapsed leaf = one approval, no child nodes, but the body is complete pseudocode down to real constructs — every statement line names its target, control + `{ assertion }` lines as usual, ≤ 12 lines. Needs > 12 lines or a line with no nameable target → it is worth digging: propose children.
 
 Terminal test precedes every body. Contract met by one real thing cited in a fact → terminal; `adaptation` maps each clause onto that thing, evidence verifies it. Platform guarantees (idempotent start by key, resume from checkpoint, CAS, lock, retry, version pin) never get refined into pseudocode — snapshot / decide / CAS / bind / schedule chains above one `dbos: startWorkflow` re-derive the platform.
 

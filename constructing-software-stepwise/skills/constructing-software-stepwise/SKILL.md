@@ -7,7 +7,7 @@ description: Use when designing or implementing systems with interacting compone
 
 Stepwise refinement (Dijkstra EWD249/EWD340, Wirth CACM 1971): minute steps, decide as little as possible per step, proof grows with program, representation deferred, back up to any ancestor when needed. Spec not given here → interview builds it, per node.
 
-Cycle, this order: (1) pick ONE node (`frontier`), `new` it, `set` its abstract statement gloss + effect + contract ≤ 6 clauses, unknowns `?slug` → (2) one question per `?`, this node only; each answer → `entry` + `answer` → (3) propose ONE refinement: what the function does (≤ 3 lines) + pseudocode body, one line per tagged pseudocode line + composition argument → (4) user approves / denies → (5) `body` (or `terminal`) + `set composition` + `approve` → pick next node, same turn. Turn ends only at a question or a Proposal block; loop runs until frontier empty or user says stop.
+Cycle, this order: (1) pick ONE node (`frontier`), `new` it, `set` its abstract statement gloss + effect + contract ≤ 6 clauses, unknowns `?slug` → (2) one question per `?`, this node only; each answer → `entry` + `answer` → (3) propose ONE refinement: what the function does (≤ 3 lines) + pseudocode body, one line per tagged pseudocode line + composition argument → (4) user answers accept / make terminal / changes → (5) `body` (or `terminal`) + `set walkthrough` + `set composition` + `approve` → pick next node, same turn. Turn ends only at a question or a Proposal block; loop runs until frontier empty or user says stop.
 
 Design is pseudocode until a node is terminal; only there adapt to the real thing — language construct, framework API, platform primitive, service, infra, existing repo fn — written `<target>: <identifier>`. `DESIGN.md ## Program` = whole design, every approved body substituted in place, pseudo + realized lines mixed — a view rendered from `ledger.json`. Evidence lives inside the node it verifies.
 
@@ -224,17 +224,25 @@ Composition:
 Decisions: <one line each>
 Deferred: <ambiguity rows for children of D-NNN → D-x>
 ADRs: <checked, none conflict | conflict → protocol>
-**Approve D-NNN as above?** yes / change: …
+**Approve D-NNN as above?**
+1. Accept — persist it as proposed
+2. Make terminal — expand every line of it down to real constructs, no child nodes left
+3. Changes — say what to change
 ```
+
+End every Proposal with those three options, in that order, worded as they stand. Ask them the way the host lets you ask a multiple-choice question (Claude Code: `AskUserQuestion`; otherwise plain text); the user may always answer something else.
+
+**Make terminal** = the user rules this branch not worth child-by-child review. Do not persist the composite body as proposed: re-propose the same node as a collapsed leaf — every statement written down to a real construct and tagged `-- ⇒ <target>: <identifier> -- <one line>`, ≤ 12 lines, no `-- D-NNN` tags, no children. Statements whose target you cannot name, or a body that runs past 12 lines, mean the branch was worth digging: say so, show the shortest composite that works, and ask again. A child that is already an approved node stays a call (`-- ↗ D-NNN`).
 
 ### 4. Approve + persist
 
-User owns semantic / risk / compat / hard-to-reverse choices. Approval = explicit yes to block. Then, verbatim from the block:
+User owns semantic / risk / compat / hard-to-reverse choices. Approval = Accept (or Make terminal on the re-proposed leaf); Changes → revise and propose again, same node. Then, verbatim from the block:
 
 ```bash
 body <dir> D-NNN <<'EOF'
 <the Refinement lines>
 EOF
+set <dir> D-NNN walkthrough "<the What it does lines>"
 set <dir> D-NNN composition "Data flow: …" "Failures: …" "Cleanup: …" "Invariants: …" "Progress: …"
 set <dir> D-NNN decisions "…"            # if any
 ambiguity <dir> "<claim>" "<conflict>" D-child   # one per deferred question; node view derives its Deferred list from these
