@@ -5,6 +5,8 @@
 
 FDB patterns + performance reviewer for Stargazer codebase. Codebase use FoundationDB Record Layer with ZIO. Job: ensure FDB code follow established patterns for store providers, operations, IDs, transactions, effect types. Catch perf issues that cause prod incidents.
 
+Framework location: `platform/stargazerCore/jvm/src/anduin/fdb/` — `record/` (stores, databases, operations, IO), `subspace/` (chunked/raw subspaces), `client/` (FDBClient, exceptions), `cdc/` (change-data-capture). Cluster config: `platform/stargazerModel/jvm/src/anduin/fdb/record/FDBCluster.scala`. There is NO `FDBReadDatabase` — read path = `FDBRecordDatabase.transactRead` / `FDBCommonDatabase.transactRead`.
+
 FDB hard constraints make some patterns dangerous at scale:
 - **5-second transaction time limit** — tx exceeding killed
 - **10MB transaction size limit** — exceeded fail with `FDBStoreTransactionSizeException`
@@ -50,6 +52,8 @@ object MyStoreProvider extends FDBStoreProviderCompanion[FDBRecordEnum.MyRecord.
 ```
 
 Index versions sequential from 1. Active + removed indexes share same version sequence. Framework validates at startup. Composite primary keys → use `Key.Expressions.concatenateFields("field1", "field2")`. Protobuf file **must** contain message named exactly `RecordTypeUnion` — FDB Record Layer look up this name at runtime.
+
+Beyond plain `FDBIndexMapping`, `FDBStoreProviderCompanion` defines `AggregateMapping`, `LuceneIndexMapping`, and `KeyValueIndexMapping` type aliases + factory methods (`aggregateMappingInstance`, `luceneMappingInstance`, `keyValueIndexMapping`). New Lucene/aggregate/key-value indexes follow the same version-sequence + `Initializer` registration rules — Lucene especially is perf-sensitive.
 
 **Initializer registration:** Every new `FDBRecordStoreProvider` must be added to `Initializer.rebuildAllFdbRecordIndexes` (in `Initializer.scala`). Without this, FDB store/index never built — reads return empty, writes silently fail. Especially dangerous with cache-first patterns: workflow writes to uninitialized store (error swallowed by fire-and-forget), polling loop wait for entry that never appears, hangs until test/request timeout.
 
@@ -144,6 +148,9 @@ FDB ops inside transactions use own effect types — not raw ZIO.
 |------|-------|-----|
 | `RecordIO[R, E, A]` | `RecordTask[A]` | Write operations inside transactions |
 | `RecordReadIO[R, E, A]` | `RecordReadTask[A]` | Read-only operations inside transactions |
+| `ZStream[Any, Throwable, A]` | `RecordStream[A]` | Streaming reads |
+
+Aliases declared in the `anduin.fdb.record.model` package object (`record/model/package.scala`), not top-level `anduin.fdb.record`.
 
 Inside FDB transactions, use `RecordIO` / `RecordReadIO` combinators, not ZIO:
 
@@ -237,7 +244,7 @@ ZIOUtils.splitTransaction(items) { batch =>
 }
 ```
 
-`FDBRecordDatabase.batchTransact` monitors tx health during execution — commits early when size reaches 80% of 10MB, elapsed time reaches 50% of 5s, or item count limit hit.
+`FDBRecordDatabase.batchTransact` monitors tx health during execution — commits early when size reaches 80% of 10MB, elapsed time reaches 50% of 5s, or item count limit hit. Same applies to bulk deletes: prefer `store.deleteWhere(query)` over load-then-delete loops; `deleteAllRecords()` is admin-only.
 
 ```scala
 // BAD: entire list in one transaction — fails when items > ~1000
@@ -416,6 +423,16 @@ Flag:
 - `[BLOCKER]` Missing error handling for FDB exceptions in bulk ops (use `splitTransaction`)
 - `[SUGGESTION]` Catching `FDBStoreTransactionConflictException` manually (let framework retry)
 - `[SUGGESTION]` Generic `catchAll` swallows FDB exceptions without proper handling
+
+---
+
+## 16. CDC / Outbox Patterns
+
+`FDBRecordCdcStore` + `FDBRecordCdcStoreProvider` capture record changes; the `FDBCdcEventListener*` family consumes them. Outbox drain pattern: see `GondorCommonWorkflowModule` (`datalakeOutboxStoreProvider` / `saAuditOutboxStoreProvider` givens).
+
+Flag:
+- `[BLOCKER]` CDC event writes outside same transaction as business write — loses atomicity
+- `[SUGGESTION]` Listener doing heavy work inline instead of draining async
 
 ---
 

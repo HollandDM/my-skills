@@ -32,12 +32,13 @@ apps/, gondor/, itools/     (top)
 
 ### Section 2: Layer Leaks
 
-Three layers per module: **Endpoint → Service → Store**.
+Four layers (see `wikis/service-layer-architecture.md`): **L4 Endpoint → L3 Business → L2 Platform → L1 Store**. L4 calls only L3; L3 calls L2 + its own L1; L2 calls L1.
 
 Flag only clear layer skips:
-- Raw FDB/SQL access in endpoint files (should go through service → store)
+- Raw FDB/SQL access in endpoint files (L4→L1 skip; should go through service → store)
 - Business logic (conditionals, orchestration) in endpoint definitions
 - Store operations called directly from endpoints, bypassing service layer
+- Business services doing raw store work inline where an L1/L2 operation exists
 
 ### Section 3: Code Placement
 
@@ -77,7 +78,8 @@ Compile but break at runtime:
 - `JsonCodecMaker.make` without `defaultConfig` — wrong defaults (None handling, empty collections)
 - Sealed trait children deriving **different** variant than parent — breaks deserialization
 - Protobuf field number gaps without `reserved` — breaks backward compatibility
-- Protobuf `TypeMapper` silently drops fields
+- Protobuf `TypeMapper` silently substitutes the default value on decode failure (e.g. unparsable `UserId` → `UserId.defaultValue`) — data appears valid but is wrong
+- Proto storage envelope must keep the record message named exactly `RecordTypeUnion` per file; new record types append to it (see `dataextract/test_case.proto`, `checkreview/lp_review_summary.proto` for the convention + collision notes)
 
 Only custom codecs found → frame as notifications, not blockers.
 Nothing found → report "Serialization looks clean — no custom codecs or runtime risks detected."

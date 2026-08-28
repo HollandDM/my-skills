@@ -19,8 +19,8 @@ When production behavior changes without test-file changes, inspect the nearest 
 
 | Test type | Must extend | Location |
 |-----------|-------------|----------|
-| Unit test (ZIO) | `ZIOSpecDefault` | `**/test/src/` |
-| Unit test (ScalaTest) | `UnitSpec` | `**/test/src/` |
+| Unit test (ZIO) | `ZIOBaseSpec` (`anduin.testing.ZIOBaseSpec`, `platform/stargazerTest/shared`) — applies `TestAspect.sequential` spec-wide; 930+ suites use it | `**/test/src/` |
+| Unit test (ScalaTest) | `AnyWordSpec`/`WordSpec` `with Matchers` (no shared base class exists in repo) | `**/test/src/` |
 | Integration test | Module-specific `*BaseInteg` (e.g., `FundSubBaseInteg`, `GaiaBaseInteg`) | `**/it/src/` |
 | Temporal workflow test | Module base + `TemporalFixture` | `**/it/src/` |
 | Multi-region test | `ZIOBaseInteg` | `**/multiregionit/` |
@@ -140,7 +140,7 @@ override def spec = suite("MyInteg")(
 ```
 
 Flag:
-- Shared `var` state across tests without `@@ TestAspect.sequential` — `[BLOCKER]`
+- Shared `var` state across tests without `@@ TestAspect.sequential` — `[BLOCKER]` (only for suites extending raw `ZIOSpecDefault`; `ZIOBaseSpec` already applies `sequential` spec-wide)
 - `var` in test class without `// scalafix:off DisableSyntax.var` comment — `[SUGGESTION]`
 - `scala.compiletime.uninitialized` vars never assigned in any test — `[SUGGESTION]`
 
@@ -238,7 +238,7 @@ Flag tests overriding global timeout to very large value (>10 minutes) without j
 ### Concurrency and Multi-Region Constraints
 
 - Tests sharing process-global state, singleton services, databases, ports, clocks, or mutable fixtures must explicitly serialize or isolate those resources. Do not infer a need for sequencing without evidence of sharing.
-- Stargazer multi-region integration tests require non-parallel execution (`-j1`) because they share `MultiRegionMockService` state and FDB singletons. Review new suites/fixtures for assumptions that violate this constraint.
+- Stargazer multi-region integration tests must not run in parallel: they share `MultiRegionMockService` state and FDB singletons. Sequential execution is provided by the dedicated `gondor.gondor.jvm.multiregionitseq` module (`AnduinSequentialIntegTests`) alongside `multiregionit`; place order-dependent multi-region suites there. Review new suites/fixtures for assumptions that violate this constraint.
 - Prefer deterministic synchronization (promises, queues, barriers, TestClock, explicit eventual assertions) over timing sleeps. Bound fibers and ensure failures/cancellation are observed so tests do not leak work into later tests.
 - For parallel tests, use unique/randomized data and cleanup that is safe when other tests run concurrently; verify assertions do not depend on execution order.
 

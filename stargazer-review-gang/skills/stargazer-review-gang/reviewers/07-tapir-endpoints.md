@@ -29,6 +29,7 @@ A diff touches public API if **any** of these is true on a changed line:
    - `modules/brienne/**/tapir/server/PublicApiTapirServerAuthentication.scala`
    - `apps/gondor/**/GondorPublicApiSchema.scala` (or `GondorPublicApiSchemaApp`)
    - `js/public-api-specs/**` (any file under generated public spec npm pkg)
+   - `modules/integplatform/**/api/PublicApiEndpointService.scala` (public-API-adjacent service — verify scope before touching)
 
 2. **Symbol extends** `PublicApiEndpoints` — `object Foo extends PublicApiEndpoints`
 
@@ -116,7 +117,7 @@ Flag:
 ### A1. Endpoint & Server Base Classes
 
 Endpoint def must extend `AuthenticatedEndpoints` (or `PublicEndpoints` w/ justification).
-Server must extend `AuthenticatedValidationEndpointServer`.
+Server must extend `AuthenticatedEndpointServer` (`authRoute*` handlers) or `AuthenticatedValidationEndpointServer` (`validateRoute*` handlers) — pick per the validation requirements of the endpoint.
 
 Flag:
 - Raw Tapir `endpoint` bypassing `authEndpoint` — missing auth
@@ -249,14 +250,13 @@ API clients must extend appropriate base:
 
 | Base class | When |
 |-----------|------|
-| `PublicEndpointClient` | Public endpoints (no auth) |
-| `AuthenticatedEndpointClient` | Endpoints requiring auth |
+| `AuthenticatedEndpointClient` (`heimdallCore` js `anduin.tapir.client`) | Endpoints requiring auth |
 | `AsyncEndpointClient` | Long-running ops w/ polling (legacy AsyncApiV2) |
 
 Flag:
 - Raw `Fetch.fetch()`, `XMLHttpRequest`, `Ajax`, custom HTTP calls bypassing base clients — loses auth, rate limiting, telemetry
 - Hand-built request/response parsing instead of Tapir-generated client methods (`toClientThrowDecodeAndSecurityFailures`)
-- `PublicEndpointClient` used for auth-required endpoints
+- Unauthenticated client base used for auth-required endpoints
 - Manual token handling (`localStorage.getItem("token")`) instead of `AuthenticationTokenService`
 
 ### B2. NDJSON / SSE Stream Clients
@@ -271,7 +271,7 @@ val byteStream: Task[Either[E, ZStream[Any, Throwable, Byte]]] =
 val events: ZStream[Any, Throwable, NdjsonEvent[T]] =
   NdjsonParser.parse[T](byteStream)
 
-// 3. Accumulate inline via scanLeft (no dedicated Accumulator class)
+// 3. Accumulate inline via scanLeft; NdjsonAccumulator (anduin.tapir.ndjson) exists for shared accumulation logic
 events.scanLeft(Seq.empty[T]) { (acc, event) =>
   event match {
     case NdjsonEvent.Item(x)    => acc :+ x
@@ -350,7 +350,7 @@ Per issue, report:
 
 ## Part C: GraphQL, Protobuf, OpenAPI, and Generated Clients
 
-- GraphQL/Caliban: preserve field names, argument/default/nullability semantics, authorization at resolvers, batching boundaries, depth/complexity controls where configured, and prevent tenant data leakage through nested resolvers.
+- GraphQL/Caliban (3.1.2, caliban-tapir; Narya server; public GraphQL spec generated via `js/public-api-specs/scripts/generate-graphql.mjs`): treat the public GraphQL schema like the OpenAPI surface — field names, argument/default/nullability semantics changes are compatibility-sensitive; preserve authorization at resolvers, batching boundaries, depth/complexity controls where configured, and prevent tenant data leakage through nested resolvers.
 - Protobuf: never reuse field numbers; reserve removed numbers/names; preserve oneof semantics and defaults; check unknown-field and mixed-version behavior. Route changed generated sources and their schemas together.
 - OpenAPI: treat path, method, parameter location/name, request/response/error shape, enum values, requiredness, and wire field names as compatibility-sensitive. Confirm intentional changes account for known generated clients/spec consumers.
 - Generated clients/specs: do not hand-edit generated output unless local instructions explicitly permit it. Review generator inputs, output registration, versioning, and compatible rollout of producer and consumer.

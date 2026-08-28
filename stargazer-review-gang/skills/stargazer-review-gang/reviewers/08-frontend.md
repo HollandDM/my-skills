@@ -621,7 +621,7 @@ Flag:
 - List items without `^.key` attribute in `toVdomArray`
 - Index-based keys (`^.key := index`) instead of stable ID-based keys
 - Raw `<.button>`, `<.input>`, `<.select>` instead of Anduin design system components
-  (`AnduinButtonR`, `TextBoxR`, etc.)
+  (e.g. `AnduinButtonR`; Laminar side uses `AnduinButtonL`, `TextBoxL`, ...)
 - Missing `TagMod.when()` / `TagMod.unless()` for conditional rendering (using if/else with TagMod.empty)
 
 ## 8. Lifecycle Methods
@@ -634,13 +634,23 @@ Flag:
 
 ## 9. React-Laminar Bridge
 
-When embedding Laminar components in React or vice versa, use established bridge patterns:
+When embedding Laminar components in React or vice versa, use established bridge patterns.
+
+PREFERRED for migrating a React component to Laminar (post `laminar-bridge` introduction, commit ae0b524bcc0): `design.anduin.bridge.LaminarBridge[Props] { propsSignal => ... }` (external artifact `design.anduin.ui::laminarBridge`). Conventions:
+- Body returns a Laminar element/component; derive reactive props via `propsSignal.map(_.field).distinct` — always `.distinct` mapped props.
+- Observers must read callbacks at event time, not build time: `Observer[T] { v => propsSignal.now().onThing(v).runNow() }` — the React parent may recommit fresh closures after the Laminar tree was built.
+- Do NOT reintroduce `ScalaComponent.builder` / `Backend` / `ReactiveWrapperR` boilerplate for the migrated component.
+
+Legacy bridges (still valid in unmigrated code):
 
 - **Laminar in React**: `WrapperR` component wrapping a Laminar element
 - **React observing Airstream**: `SignalReactor` with `OneTimeOwner` lifecycle management
 - **Callback bridging**: `props.onClose.runNow()` inside Laminar `Observer`
 
 Flag:
+- Migrating a React component to Laminar via `ScalaComponent` + `ReactiveWrapperR` + `Backend` instead of `LaminarBridge[Props]`
+- `LaminarBridge` body capturing props callbacks at build time instead of reading via `propsSignal.now()` inside the Observer
+- Missing `.distinct` on `propsSignal.map(...)` derived signals in a `LaminarBridge` body
 - Direct DOM manipulation to embed Laminar in React (use `WrapperR`)
 - Missing `rootNode.unmount()` / `.kill()` cleanup in `componentWillUnmount`
 - Airstream subscriptions in React without `OneTimeOwner` lifecycle scoping

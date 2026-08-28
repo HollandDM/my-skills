@@ -85,7 +85,7 @@ Review every changed or newly relied-upon use of `.runtimeChecked`, `@unchecked`
 - `@unchecked` can suppress evidence the JVM never established.
 - `asMatchable` bypasses matchability restrictions.
 - warning and Scalafix suppressions hide diagnostics rather than add proof.
-- Evidence-bypassing assertions require an adjacent `SAFETY:` comment naming the invariant, the code/boundary that establishes it, and why the unsafe scope is minimal. A comment does not substitute for an available type-level proof.
+- Evidence-bypassing assertions require an adjacent `SAFETY:` comment naming the invariant, the code/boundary that establishes it, and why the unsafe scope is minimal. A comment does not substitute for an available type-level proof. The repo has almost none today; introduce the comment when adding or touching a suppression rather than expecting to find one.
 - Ordinary lint suppressions must name the exact rule, use the narrowest practical scope, and explain the external constraint or invariant.
 
 ### Use typed elimination and valid-state models

@@ -11,8 +11,8 @@ Review by reading the diff, surrounding source, applicable local instructions, `
 Stargazer currently resolves Scala 3.8.4 and enforces repository conventions through Scalafix and compiler options. These are not universal Scala language errors, but new code violating the effective rules will fail its repository checks:
 
 - no `var`, `null`, `return`, `while`, `implicit`, XML literals, `final val`, `finalize`, val-pattern bindings, `asInstanceOf`, `isInstanceOf`, covariant, or contravariant type parameters
-- no `print`/`println`/`printf`, `scalastyle`, or `ZIO.foreachPar`; use the established ZIO logging and `ZIOUtils.foreachPar` patterns where applicable
-- watch configured rules including `CollectHead`, `CollectHeadOption`, `CompareSameValue`, `OptionMapFlatMap`, `RedundantCaseClassVal`, `SameParamOverloading`, `UnnecessarySort`, unused constructor/type parameters, and directory/package alignment
+- no `print`/`println`/`printf`, `scalastyle`, or `ZIO.foreachPar`; use the established ZIO logging and `ZIOUtils.foreachPar` patterns where applicable. Production code must not reference `AdminBypassReason.IntegrationTest` (tests suppress via `// scalafix:ok DisableSyntax.integrationTestBypassReason` plus justification)
+- watch configured rules including `CollectHead`, `CollectHeadOption`, `CompareSameValue`, `OptionMapFlatMap`, `RedundantCaseClassVal`, `SameParamOverloading`, `UnnecessarySort`, `InterpolationToStringWarn`, `ObjectSelfType`, `WarnUnusedCode`, unused constructor/type parameters, directory/package alignment, and the custom Doris chokepoint rules `NoDorisRuntimeLeakage`/`NoPerElementDatalakeRead` (lint-error level; rule sources live in the external osiris plugin, not this repo)
 - preserve a scoped, justified `scalafix:off`/`scalafix:on` pair when a suppression is genuinely necessary
 - modules normally enable strict equality, unchecked/value-discard/unused warnings, warnings as errors, `-old-syntax`, and `-no-indent`; inspect module overrides before claiming enforcement, and do not recommend significant-indentation syntax where those options apply
 
@@ -22,14 +22,15 @@ A scoped suppression only addresses the repository check. Reviewer 04 separately
 
 ## Scala 3.8.4 language mechanics
 
-- Scala 3.8 requires JDK 17. The Scala standard library is compiled with Scala 3; review binary/tooling compatibility when a dependency or build change touches the compiler, scalafmt, scalameta, or Mill. Route version-resolution ownership to infrastructure review.
+- Scala 3.8 requires at least JDK 17; the repo does not pin a JDK (`.mill-jvm-version` = `system`), so review binary/tooling compatibility rather than assuming a specific JVM. The Scala standard library is compiled with Scala 3; review binary/tooling compatibility when a dependency or build change touches the compiler, scalafmt, scalameta, or Mill. Route version-resolution ownership to infrastructure review.
 - Context bounds expand to `using` parameters in Scala 3.8, including standard-library APIs now compiled with Scala 3. Supplying evidence explicitly therefore requires `(using evidence)` rather than an ordinary argument list. Named and aggregate context bounds are valid; review their scope and placement only when behavior or resolution changes.
 - Better Fors is stable and enabled by default. It permits aliases before generators and removes some redundant maps. Do not flag those forms as non-idiomatic. When aliases occur between generators on a type with overloaded `map`/`flatMap`, especially `Map`, check the documented Scala 3.8 result-type/overload migration hazard: removing the synthetic tuple-producing `map` can preserve `Map` where older code produced a generic `Iterable`.
 - `runtimeChecked` is stable and makes a refutable pattern/runtime failure explicit. Reviewer 04 owns whether its asserted invariant has sufficient evidence; here check only changed language-level behavior and call-site compatibility.
-- `into` is preview only. Flexible varargs, strict-equality pattern matching, relaxed lambda syntax, subcases, safe mode, and capture checking are experimental. Do not recommend or introduce experimental features without an explicit repository opt-in.
+- The build compiles with `-preview` repo-wide, so preview syntax compiles without error — treat that as toolchain configuration, not per-feature opt-in. `into` is preview only. Flexible varargs, strict-equality pattern matching, relaxed lambda syntax, subcases, safe mode, and capture checking are experimental. Do not recommend or introduce experimental features without an explicit repository opt-in.
 - For changed `for` comprehensions, check generator-pattern failure, guards, alias scope, error/value propagation, and desugaring-sensitive behavior. Do not require a comprehension or a `map`/`flatMap` chain when both preserve those semantics.
 - For changed `given`/`using` and named or aggregate context bounds, verify the evidence the implementation actually uses, its intended placement, and any call-site change. Do not introduce contextual abstractions merely to look modern.
 - Treat enums, opaque types, extension methods, and context functions as available tools, not mandatory replacements for established correct code.
+- Source files normally begin with `// Copyright (C) 2014-<current year> Anduin Transactions Inc.`
 
 ## Parametric behavior and representation mechanics
 
