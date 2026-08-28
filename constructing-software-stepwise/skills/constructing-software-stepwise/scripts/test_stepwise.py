@@ -49,17 +49,20 @@ assert n["contract"]["pre"] == "Job Key is caller-supplied" and n["depends"] == 
 
 # body + autotag + frontier
 body = """run_job(key, spec):
-  job <- establish_job(key, spec)                 -- D-010
+  job <- establish_job(key, spec)                 -- D-010: create or load the job row
   { job durable }
   loop until done(job):
-    job <- advance(job)                           -- D-020
+    job <- advance(job)                           -- D-020: move the job one durable step
   -> finish(job)
 """
 t = run("body", "D-000", stdin=body, ok=False)
 assert "D-010" in t and "D-020" in t and "untagged call '-> finish(job)'" in t
 t = run("approve", "D-000", ok=False)
-assert "untagged call '-> finish(job)'" in t and "composition missing" in t
-run("body", "D-000", stdin=body.replace("-> finish(job)", "-> finish(job)                                  -- D-030"))
+assert "untagged call '-> finish(job)'" in t and "composition missing" in t and "walkthrough missing" in t
+run("body", "D-000", stdin=body.replace("-> finish(job)", "-> finish(job)                                  -- D-030: record the outcome"))
+t = run("set", "D-000", "walkthrough", "a", "b", "c", "d", ok=False)
+assert "4 lines > 3" in t
+run("set", "D-000", "walkthrough", "Establishes the job row, advances it until done, then records the outcome.")
 run("set", "D-000", "composition", "Data flow: key -> job -> outcome", "Failures: each child owns its retry")
 run("set", "D-000", "decisions", "one job per key")
 t = run("approve", "D-000")
@@ -88,7 +91,8 @@ assert "-- D-000" in design.splitlines()[[i for i, l in enumerate(design.splitli
 run("new", "D-020")
 for f, v in (("gloss", "one step"), ("effect", "Job advances one durable step."), ("pre", "job active"), ("post", "job advanced")):
     run("set", "D-020", f, v)
-run("body", "D-020", stdin="advance(job):\n  step <- pick_step(job)   -- D-021\n  job <- establish_job(job.key, job.spec)   -- ↗ D-010\n")
+run("body", "D-020", stdin="advance(job):\n  step <- pick_step(job)   -- D-021: choose the next step\n  job <- establish_job(job.key, job.spec)   -- ↗ D-010\n")
+run("set", "D-020", "walkthrough", "Picks the next step, then re-establishes the job row.")
 run("set", "D-020", "composition", "pick then re-establish")
 run("approve", "D-020")
 design = (d / "DESIGN.md").read_text()
@@ -98,7 +102,7 @@ assert design.count("D-010 ⇒ postgres") == 2 and "↗" not in design, design  
 run("body", "D-020", stdin="x", ok=False)
 run("reopen", "D-020", "user wants a pause step")
 assert "## Superseded refinement" in (d / "nodes" / "D-020.md").read_text() and "↗ D-010" in (d / "nodes" / "D-020.md").read_text()
-run("body", "D-020", stdin="advance(job):\n  step <- pick_step(job)   -- D-021\n  wait_for(step)   -- D-022\n")
+run("body", "D-020", stdin="advance(job):\n  step <- pick_step(job)   -- D-021: choose the next step\n  wait_for(step)   -- D-022: block until the step settles\n")
 t = run("approve", "D-020")
 assert "approved D-020" in t
 n = ledger()["nodes"]["D-020"]
@@ -160,10 +164,15 @@ assert "D-010 ✓ postgres" in (d / "DESIGN.md").read_text()
 run("new", "D-021")
 for f, v in (("gloss", "choose the next step"), ("effect", "Next step is chosen from the job spec."), ("pre", "job active"), ("post", "step chosen")):
     run("set", "D-021", f, v)
-run("body", "D-021", stdin="pick_step(job):\n  steps <- job.spec.steps   -- ⇒ typescript: property access\n  -> steps[job.done]        -- ⇒ typescript: index access\n")
+run("body", "D-021", stdin="pick_step(job):\n  steps <- job.spec.steps   -- ⇒ typescript: property access -- read the declared step list\n  -> steps[job.done]        -- ⇒ typescript: index access -- take the one after the last done step\n")
+run("set", "D-021", "walkthrough", "Indexes the step list of the spec by how many steps are done.")
 run("set", "D-021", "composition", "pure lookup")
 run("approve", "D-021")
 assert "Collapsed leaf. Targets: `typescript`" in (d / "nodes" / "D-021.md").read_text()
+v21 = (d / "nodes" / "D-021.md").read_text()
+assert "- typescript: property access — read the declared step list" in v21, v21
+v0 = (d / "nodes" / "D-000.md").read_text()
+assert "What it does:" in v0 and "- D-010 — create or load the job row" in v0, v0
 
 # supersede + views drift + log
 run("new", "D-030")

@@ -12,10 +12,11 @@ Every verb ends with render + lint; exit 1 and `error <where>: <msg>` lines when
   new       <dir> D-NNN ["stmt"]                      draft node (frontier id, or the root with its statement)
   set       <dir> D-NNN gloss|effect "text"           one-line prose fields
   set       <dir> D-NNN pre|post|failure|invariant|<label> "clause"   contract clause, any lowercase label (<= 6 clauses; unknowns as ?slug)
+  set       <dir> D-NNN walkthrough "l1" ["l2" "l3"]  <= 3 lines: what the function does (above the body)
   set       <dir> D-NNN composition|decisions|deferred|adaptation "b1" "b2" ...    bullet lists (replace)
   set       <dir> D-NNN depends "Name" ...            add dependencies that carry no ?slug (append; each must exist)
   set       <dir> D-NNN realization|verification <vocab>
-  body      <dir> D-NNN [--file F]                    refinement body from stdin/file (pseudocode, `-- D-NNN` / `-- ↗ D-NNN` / `-- ⇒ target` tags)
+  body      <dir> D-NNN [--file F]                    refinement body from stdin/file (pseudocode, `-- D-NNN: <one line>` / `-- ↗ D-NNN -- <one line>` / `-- ⇒ target -- <one line>`; every tagged line says what it does)
   answer    <dir> D-NNN slug "Name"                   ?slug -> name in every clause; name added to depends
   terminal  <dir> D-NNN "<target>: <identifier>"      leaf: the real thing (Exists test enforced)
   approve   <dir> D-NNN                               after the user says yes; refuses while anything is missing
@@ -50,7 +51,7 @@ LOG = ".stepwise.log"
 CODE_COL = 58
 CONTRACT_KEYS = ("pre", "post", "failure", "cancellation", "invariant", "progress")
 TEXT_FIELDS = ("gloss", "effect")
-LIST_FIELDS = ("composition", "decisions", "deferred", "adaptation")
+LIST_FIELDS = ("walkthrough", "composition", "decisions", "deferred", "adaptation")
 REALIZATION = ("not-started", "partial", "implemented")
 VERIFICATION = ("unverified", "partial", "verified", "stale")
 DESIGN = ("draft", "approved", "stale", "superseded")
@@ -176,13 +177,21 @@ def parse_body(text: str, fn: str) -> list[dict]:
         item: dict = {"indent": len(ln) - len(ln.lstrip()) - base, "code": code.strip()}
         if sep:
             t = tag.strip()
+            if " -- " in t:  # `-- <tag> -- <one line saying what this line does>`
+                t, _, gl = t.partition(" -- ")
+                t = t.strip()
+                if gl.strip():
+                    item["gloss"] = gl.strip()
             words = t.split()
             if t.startswith("↗") and len(words) > 1:
                 item["reuse"] = words[1]
             elif t[:1] in ("⇒", "✓"):
                 item["target"] = t[1:].strip()
-            elif words and is_node_id(words[0]):
-                item["child"] = words[0]
+            elif words and is_node_id(words[0].rstrip(":")):
+                item["child"] = words[0].rstrip(":")
+                rest = t[len(words[0]):].strip().lstrip(":").strip()
+                if rest:
+                    item["gloss"] = rest  # `-- D-NNN: <one line>`
             else:
                 item["note"] = t
         items.append(item)
@@ -191,11 +200,12 @@ def parse_body(text: str, fn: str) -> list[dict]:
 
 def item_tag(it: dict) -> str:
     if "child" in it:
-        return it["child"]
+        return f"{it['child']}: {it['gloss']}" if it.get("gloss") else it["child"]
+    gloss = f" -- {it['gloss']}" if it.get("gloss") else ""
     if "reuse" in it:
-        return f"↗ {it['reuse']}"
+        return f"↗ {it['reuse']}{gloss}"
     if "target" in it:
-        return f"⇒ {it['target']}"
+        return f"⇒ {it['target']}{gloss}"
     return it.get("note", "")
 
 
@@ -426,7 +436,15 @@ def render_node(led: Ledger, nid: str) -> str:
     L += [f"- {k.title()}: {v}" for k, v in n.get("contract", {}).items()] or ["-"]
     if n.get("body"):
         sig = n["statement"].split("<-", 1)[-1].strip().removeprefix("->").strip()
-        L += ["", "## Refinement", "", "```pseudo", sig + ":", *body_text(n["body"]), "```"]
+        L += ["", "## Refinement", ""]
+        if n.get("walkthrough"):
+            L += ["What it does:", *[f"{ln}" for ln in n["walkthrough"]], ""]
+        L += ["```pseudo", sig + ":", *body_text(n["body"]), "```"]
+        lines = [(it.get("child") or it.get("reuse") or it.get("target", ""),
+                  it.get("gloss") or led.nodes.get(it.get("child") or it.get("reuse", ""), {}).get("gloss", ""))
+                 for it in n["body"] if any(k in it for k in ("child", "reuse", "target"))]
+        if any(g for _, g in lines):
+            L += ["", *[f"- {c} — {g}" for c, g in lines if g]]
     children = {it.get("child") for it in n.get("body", []) if it.get("child")}
     deferred = [*n.get("deferred", []), *[f"{a['claim']} — {a['conflict']} → {a['resolves_at']}" for a in led.data.get("ambiguities", []) if a["resolves_at"] in children]]
     for f, title, items in (("composition", "Composition argument", n.get("composition", [])), ("decisions", "Decisions", n.get("decisions", [])), ("deferred", "Deferred", deferred)):
@@ -797,6 +815,8 @@ def v_set(led: Ledger, a) -> int:
             return fail(f"{a.id}: contract would have {len(n['contract'])} clauses > 6")
     elif f in LIST_FIELDS:
         n[f] = [v.strip() for v in vals if v.strip()]
+        if f == "walkthrough" and len(n[f]) > 3:
+            return fail(f"{a.id}: walkthrough is {len(n[f])} lines > 3 — say what the function does, not how")
     elif f == "depends":
         deps = n.setdefault("depends", [])
         for v in vals:
@@ -902,8 +922,16 @@ def v_approve(led: Ledger, a) -> int:
     body = n.get("body", [])
     if not body and not n.get("target"):
         problems.append("no refinement body and no target — `body` (composite) or `terminal` (leaf)")
+    if body and not n.get("walkthrough"):
+        problems.append(f"walkthrough missing — `set {a.id} walkthrough \"...\"` (<= 3 lines: what the function does)")
     if body and not led.is_collapsed(n) and not n.get("composition"):
         problems.append(f"composition missing — `set {a.id} composition ...`")
+    for it in body:
+        tagged = next((k for k in ("child", "reuse", "target") if k in it), "")
+        known = led.nodes.get(it.get("child") or it.get("reuse", ""), {}).get("gloss")
+        if tagged and not it.get("gloss") and not known:
+            how = f"-- {it['child']}: <one line>" if tagged == "child" else f"-- {item_tag(it)} -- <one line>"
+            problems.append(f"{it['code']!r} says nothing about what it does — tag it `{how}`")
     for it in body:
         if stmt_kind(it["code"]) == "stmt" and not any(k in it for k in ("child", "reuse", "target")) and call_names(it["code"]):
             problems.append(f"untagged call {it['code']!r}")

@@ -62,7 +62,7 @@ Pseudocode above terminal. Target only in a terminal's `target` or a collapsed l
 - `x <- expr` assign · `-> value` return · `name(args)` abstract call; multi-line calls (open parenthesis) joined
 - `if cond: … else: …` · `loop until cond: …` · `for each x in S: …`
 - `{ assertion }` = condition holding at that point. One wherever the composition argument leans on it
-- `-- D-NNN` child · `-- ↗ D-NNN` call to approved node · `-- ⇒ <target>: <identifier>` collapsed-leaf line · other text after `--` = note
+- `-- D-NNN: <one line>` child · `-- ↗ D-NNN -- <one line>` call to approved node · `-- ⇒ <target>: <identifier> -- <one line>` collapsed-leaf line · other text after `--` = note. The one line says what that pseudocode line does; an existing child's or reused node's own gloss stands in for it.
 - untagged call → `body` auto-tags when exactly one node's statement is `name(`; else lint error until tagged
 - `?slug` unknown, draft prose only (gloss / effect / contract), never in a body
 - abstract data only: `set`, `seq`, `map`, `record{…}`. Concrete types, library / framework / service names → terminal `target`
@@ -83,7 +83,7 @@ Program tags are rendered from status: `(frontier)` · `(draft, k ?)` · `(draft
 | Kind | Test | Verbs |
 |---|---|---|
 | Terminal — real | Statement = ONE real thing that passes Exists test, or Contract already met by ONE such thing cited in a fact | `terminal`, `set adaptation`, `approve`; later `evidence` |
-| Leaf — collapsed | User rules node not worth child-by-child review; body still fully written to real lines | `body` with every statement `-- ⇒ <target>: <identifier>` (≤ 12 lines, no `-- D-NNN`), `set composition`, `approve` |
+| Leaf — collapsed | User rules node not worth child-by-child review; body still fully written to real lines | `body` with every statement `-- ⇒ <target>: <identifier> -- <one line>` (≤ 12 lines, no `-- D-NNN`), `set walkthrough`, `set composition`, `approve` |
 | Terminal — reuse | Statement = call to existing `approved` node, Statement + Contract used verbatim | no new node; parent body line `-- ↗ D-NNN` |
 | Composite | else | `body` (2–7 child statements), `set composition` (+ `decisions`, `deferred`), `approve` |
 
@@ -115,16 +115,18 @@ Approved: 2026-08-28 by user
 ## Refinement
 ```pseudo
 next_step(run):
-  msgs <- journal_to_prompt(run)                          -- D-021
+  msgs <- journal_to_prompt(run)                          -- D-021: project history into a prompt
   { msgs provider-neutral ∧ within run.budget.tokens }
-  reply <- call_model(msgs)                               -- D-022
-  -> decide(reply)                                        -- D-023
+  reply <- call_model(msgs)                               -- D-022: one provider call
+  -> decide(reply)                                        -- D-023: classify the reply
 ```
 ## Composition argument / Decisions / Deferred
 ## Realization      (Target: … · Adaptation: …)
 ## Evidence         (### EV-n kind — result)
 ## History          (- date — event: reason)
 ```
+
+Walkthrough: `set D-NNN walkthrough "…"` — at most 3 plain lines saying what the function does, rendered above the pseudocode. Every tagged pseudocode line carries one line of explanation, so a reader knows what each line does before its node exists; an existing child's or reused node's own gloss takes over once it does. `approve` refuses a body missing either.
 
 Composition argument: five bullets — data flow, failures, cleanup, invariants, progress (≤ 2 lines each). Not applicable → `n/a: <reason>`. Never omit. `approve` refuses a composite without composition.
 

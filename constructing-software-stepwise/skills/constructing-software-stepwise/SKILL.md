@@ -7,7 +7,7 @@ description: Use when designing or implementing systems with interacting compone
 
 Stepwise refinement (Dijkstra EWD249/EWD340, Wirth CACM 1971): minute steps, decide as little as possible per step, proof grows with program, representation deferred, back up to any ancestor when needed. Spec not given here → interview builds it, per node.
 
-Cycle, this order: (1) pick ONE node (`frontier`), `new` it, `set` its abstract statement gloss + effect + contract ≤ 6 clauses, unknowns `?slug` → (2) one question per `?`, this node only; each answer → `entry` + `answer` → (3) propose ONE refinement: pseudocode body + composition argument → (4) user approves / denies → (5) `body` (or `terminal`) + `set composition` + `approve` → pick next node, same turn. Turn ends only at a question or a Proposal block; loop runs until frontier empty or user says stop.
+Cycle, this order: (1) pick ONE node (`frontier`), `new` it, `set` its abstract statement gloss + effect + contract ≤ 6 clauses, unknowns `?slug` → (2) one question per `?`, this node only; each answer → `entry` + `answer` → (3) propose ONE refinement: what the function does (≤ 3 lines) + pseudocode body, one line per tagged pseudocode line + composition argument → (4) user approves / denies → (5) `body` (or `terminal`) + `set composition` + `approve` → pick next node, same turn. Turn ends only at a question or a Proposal block; loop runs until frontier empty or user says stop.
 
 Design is pseudocode until a node is terminal; only there adapt to the real thing — language construct, framework API, platform primitive, service, infra, existing repo fn — written `<target>: <identifier>`. `DESIGN.md ## Program` = whole design, every approved body substituted in place, pseudo + realized lines mixed — a view rendered from `ledger.json`. Evidence lives inside the node it verifies.
 
@@ -37,9 +37,9 @@ Small refinement → small contract → small vocabulary. Many questions = scope
 | Kind | Test | Verbs |
 |---|---|---|
 | Terminal | Statement = ONE real thing that exists outside the design today (language construct / framework API / platform primitive / managed service / repo fn on disk), or Contract already met by ONE such thing cited in a fact | `terminal D-NNN "<target>: <identifier>"` + `set adaptation` (clause → concrete construct) + `approve`; later `evidence` |
-| Leaf — collapsed | User says not worth digging | `body` to real lines (≤ 12, each `-- ⇒ <target>: <identifier>`, no children) + `set composition` + `approve` |
+| Leaf — collapsed | User says not worth digging | `body` to real lines (≤ 12, each `-- ⇒ <target>: <identifier> -- <one line>`, no children) + `set walkthrough` + `set composition` + `approve` |
 | Terminal — reuse | Statement = call to existing node with `design: approved`, its Statement + Contract verbatim | no new node; body line `-- ↗ D-NNN`; parents derive |
-| Composite | else | `body` (2–7 child statements) + `set composition` (+ `decisions`, `deferred`) + `approve`; every field in [design-ledger.md](references/design-ledger.md) |
+| Composite | else | `body` (2–7 child statements, each `-- D-NNN: <one line>`) + `set walkthrough` + `set composition` (+ `decisions`, `deferred`) + `approve`; every field in [design-ledger.md](references/design-ledger.md) |
 
 Composite → 2–7 child statements. 1 = rename. >7 = missing intermediate node. Terminal = where refinement stops: adapt to real, or call approved node. Terminal test runs before every body: one real thing (cited fact) satisfies Contract → terminal, `adaptation` maps each clause onto it. Decomposing what the platform guarantees = re-deriving it; five levels of get-or-start / CAS / schedule above `dbos: startWorkflow` = this failure. Own unwritten code (`service: AgentLedger.read`) is not a real thing — it is the design; `terminal` refuses it. Adaptation that restates Contract verbs is not adaptation. User rules "not worth digging" → collapsed leaf: review collapses, refinement does not; body still reaches real constructs line by line, > 12 lines means it was worth digging. Reused node's body appears once in `Program ### Procedures`; call sites point at it. "Trivial / obvious / clear enough" not decision words; tables decide.
 
@@ -82,16 +82,17 @@ Rules:
 | interview | `answer <dir> D-NNN slug "Name"` · `set <dir> D-NNN depends "Name" …` | `?slug` → name in every clause; depends += name. `set depends` for a dependency with no `?` (e.g. a fact born later) |
 | interview | `ambiguity <dir> "claim" "conflict" D-NNN` · `meta <dir> scope\|title "…"` · `meta <dir> nongoals "a" "b"` | deferred question; scope; non-goals |
 | propose→persist | `body <dir> D-NNN` (stdin heredoc or `--file`) | pseudocode body; tags `-- D-NNN` / `-- ↗ D-NNN` / `-- ⇒ target`; single-match calls auto-tagged |
+| propose→persist | `set <dir> D-NNN walkthrough "l1" ["l2" "l3"]` | ≤ 3 lines: what the function does; rendered above the body |
 | propose→persist | `set <dir> D-NNN composition\|decisions\|deferred "b1" "b2" …` | bullets, replace whole list |
 | propose→persist | `terminal <dir> D-NNN "<target>: <identifier>"` · `set <dir> D-NNN adaptation "clause → construct" …` | leaf; Exists test enforced |
-| persist | `approve <dir> D-NNN` | refuses on `?`, empty prose, no body/target, missing composition, untagged call, pending ADR; drops ambiguity rows resolving at this node; prints next frontier id |
+| persist | `approve <dir> D-NNN` | refuses on `?`, empty prose, no body/target, missing walkthrough, a tagged body line that says nothing about what it does, missing composition, untagged call, pending ADR; drops ambiguity rows resolving at this node; prints next frontier id |
 | change | `reopen <dir> D-NNN "reason"` · `stale <dir> D-NNN "reason"` · `supersede <dir> D-OLD D-NEW "reason"` | status + history; `reopen` files the body it replaces under `## Superseded refinement` |
 | change | `change <dir> <name\|CTX-id> [--definition …] [--rename "New heading"] [--status stale] --reason "…" [--minor]` | entry changed; approved dependents fail lint until `stale` / re-`approve` |
 | decision | `adr <dir> new "Title" --constrains D-NNN[,D-MMM]` · `adr <dir> accept ADR-NNNN` | stub (nodes → `draft (ADR pending)`); accept unblocks |
 | implement | `set <dir> D-NNN realization implemented` · `evidence <dir> D-NNN --kind K --ref R --result pass\|fail` | pass → `verified` |
 | audit | `sync <dir>` · `check <dir>` | re-render after an ADR paragraph edit; lint only |
 
-Lint covers: one root; status vocabulary; caps; untagged calls; reuse of non-approved node; Target format + Exists test; approved with `?` / no body / no composition / body changed / pending ADR; dependency names that do not exist; entry changed after approval; ADR constrains stale or missing node; ambiguity at approved node; hand-edited view. Judgment (contract, body, composition, questions) stays with agent + user.
+Lint covers: one root; status vocabulary; caps; untagged calls; reuse of non-approved node; Target format + Exists test; approved with `?` / no body / no walkthrough / unglossed body line / no composition / body changed / pending ADR; dependency names that do not exist; entry changed after approval; ADR constrains stale or missing node; ambiguity at approved node; hand-edited view. Judgment (contract, body, composition, questions) stays with agent + user.
 
 ## Core Loop
 
@@ -197,7 +198,7 @@ Never: batch questions; ask what code answers; ask without a `?`; propose childr
 
 Terminal test first: one real thing, cited in a fact, satisfies the Contract → propose `<target>: <identifier>` + one adaptation line per clause, no body. Target must exist outside the design today; adaptation names query / call / type, not Contract verbs. User says not worth digging → collapsed leaf: propose full body to real lines (each `-- ⇒ <target>: <identifier>`, ≤ 12, no child tags) in one Proposal block. Else:
 
-Parent statement → body: pseudocode ≤ 12 lines, 2–7 child statements each tagged `-- D-NNN` (next free ids), control structure (sequence / choice / loop) lives here, `{ assertion }` line wherever composition leans on a condition. Notation in [design-ledger.md](references/design-ledger.md). No language keyword, library, concrete type — representation, storage, framework → deepest node needing them. Child already exists as approved node → call it (`-- ↗ D-NNN`), Statement + Contract verbatim; contract doesn't fit → `reopen` it or new node, never a tweaked copy.
+Say what the function does first: ≤ 3 lines, plain prose, above the body (`set walkthrough`). Then parent statement → body: pseudocode ≤ 12 lines, 2–7 child statements each tagged `-- D-NNN: <one line saying what that child does>` (next free ids), control structure (sequence / choice / loop) lives here, `{ assertion }` line wherever composition leans on a condition. Notation in [design-ledger.md](references/design-ledger.md). No language keyword, library, concrete type — representation, storage, framework → deepest node needing them. Every tagged line carries one line of plain explanation: `-- D-NNN: <one line>` for a child, `-- ↗ D-NNN -- <one line>` / `-- ⇒ <target>: <id> -- <one line>` elsewhere (a reused or existing node's own gloss counts). Child already exists as approved node → call it (`-- ↗ D-NNN`), Statement + Contract verbatim; contract doesn't fit → `reopen` it or new node, never a tweaked copy.
 
 Composition argument (data flow / failures / cleanup / invariants / progress, ≤ 2 lines each) = proof obligation: body preserves parent `{Pre} S {Post}`. Checklist: Refinement Obligation. Fails → revise body or reopen ancestor.
 
@@ -206,13 +207,14 @@ Then STOP. Show block. Nothing else that turn.
 ```markdown
 ## Proposal — D-NNN — <statement>
 Contract: Pre <…> · Post <…> · Failure <…> · Invariant <…>
+What it does: <≤ 3 lines, plain prose>
 Refinement:
     <statement>:
-      x <- child_a(…)              -- D-a
+      x <- child_a(…)              -- D-a: <one line>
       { assertion }
       loop until cond:
-        child_b(x)                 -- D-b
-      -> child_c(x)                -- D-c
+        child_b(x)                 -- D-b: <one line>
+      -> child_c(x)                -- D-c: <one line>
 Composition:
 - Data flow: <≤2 lines>
 - Failures: <≤2 lines>
