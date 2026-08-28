@@ -1,5 +1,5 @@
 {
   "name": "constructing-software-stepwise",
-  "description": "Stepwise refinement for hard designs: one node per approval cycle, one-question-at-a-time interview, contract-preserving decomposition, ADR-gated decisions, evidence-backed verification in atomic one-item-per-file ledgers",
-  "version": "359fba1"
+  "description": "Stepwise refinement for hard designs: one node per approval cycle, one-question-at-a-time interview, contract-preserving decomposition, ADR-gated decisions, evidence-backed verification; one file per node and ADR, context and evidence grouped behind central CONTEXT.md and EVIDENCE.md indexes",
+  "version": "7163efa"
 }
