@@ -80,7 +80,7 @@ run("set", "D-010", "post", "row exists")
 t = run("terminal", "D-010", "application service: JobStore.create", ok=False)
 assert "design-owned" in t
 run("terminal", "D-010", "postgres: INSERT ... ON CONFLICT (key) DO NOTHING")
-run("set", "D-010", "adaptation", "establish -> INSERT ON CONFLICT")
+run("set", "D-010", "adaptation", "establish -> INSERT ON CONFLICT", "Post: the unique index makes the second insert a no-op")
 run("approve", "D-010")
 design = (d / "DESIGN.md").read_text()
 assert "D-010 ⇒ postgres: INSERT ... ON CONFLICT (key) DO NOTHING" in design, design
@@ -164,6 +164,16 @@ assert "D-010 ✓ postgres" in (d / "DESIGN.md").read_text()
 run("new", "D-021")
 for f, v in (("gloss", "choose the next step"), ("effect", "Next step is chosen from the job spec."), ("pre", "job active"), ("post", "step chosen")):
     run("set", "D-021", f, v)
+wrapped = """pick_step(job):
+  rows <- SELECT step FROM job_steps
+          WHERE key = job.key
+          ORDER BY seq ASC                -- ⇒ postgres: SELECT ... ORDER BY -- read the declared steps in order
+  -> rows[job.done]                       -- ⇒ typescript: index access -- take the one after the last done step
+"""
+run("body", "D-021", stdin=wrapped)
+import stepwise as _sw
+_b = json.loads((d / "ledger.json").read_text())["nodes"]["D-021"]["body"]
+assert len(_b) == 2 and "ORDER BY seq ASC" in _b[0]["code"], _b
 run("body", "D-021", stdin="pick_step(job):\n  steps <- job.spec.steps   -- ⇒ typescript: property access -- read the declared step list\n  -> steps[job.done]        -- ⇒ typescript: index access -- take the one after the last done step\n")
 run("set", "D-021", "walkthrough", "Indexes the step list of the spec by how many steps are done.")
 run("set", "D-021", "composition", "pure lookup")

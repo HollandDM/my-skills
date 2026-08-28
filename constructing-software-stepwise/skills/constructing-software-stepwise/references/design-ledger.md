@@ -53,6 +53,8 @@ An ADR's `Constrains:` list makes it a dependency of each node it names: the lin
 
 `reopen` snapshots the body, composition, decisions and deferred it invalidates into the node view's `## Superseded refinement` section, so the replaced refinement stays readable while the node is redrafted.
 
+Adaptation lines name the clause they map: `<clause> → <concrete construct>` or `<Clause>: <concrete construct>`. A wrapped pseudocode line (multi-line SQL, a long expression) is joined onto the statement above it, so its tag goes on the last line.
+
 Pseudocode above terminal. Target only in a terminal's `target` or a collapsed leaf's `-- ⇒` body lines. A collapsed leaf's node view derives its own Realization line (`Collapsed leaf. Targets: …`) from those tags — no verb, no prose.
 
 ## Pseudocode Notation — what `body` accepts

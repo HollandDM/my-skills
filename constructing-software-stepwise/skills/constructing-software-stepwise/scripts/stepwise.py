@@ -151,9 +151,16 @@ def target_ok(target: str) -> str:
 # ----------------------------------------------------------------------------- body text <-> items
 
 
+def indent_of(line: str) -> int:
+    return len(line) - len(line.lstrip())
+
+
 def join_continuations(raw: list[str]) -> list[str]:
     out, buf, depth = [], "", 0
     for ln in raw:
+        if depth <= 0 and out and ln.strip() and continues(out[-1], ln):
+            out[-1] = merge(out[-1], ln)
+            continue
         buf = ln if depth <= 0 else buf.rstrip() + ("" if ln.strip().startswith(")") or buf.rstrip().endswith("(") else " ") + ln.strip()
         depth += ln.count("(") - ln.count(")")
         if depth <= 0:
@@ -162,6 +169,18 @@ def join_continuations(raw: list[str]) -> list[str]:
     if buf:
         out.append(buf)
     return out
+
+
+def continues(prev: str, ln: str) -> bool:
+    """A deeper-indented line under an untagged, non-block statement wraps it (multi-line SQL, long expressions)."""
+    code = prev.partition("--")[0]
+    return bool(code.strip()) and "--" not in prev and not code.rstrip().endswith(":") and indent_of(ln) > indent_of(prev)
+
+
+def merge(prev: str, ln: str) -> str:
+    code, sep, tag = ln.partition("--")
+    joined = prev.rstrip() + " " + code.strip()
+    return f"{joined} --{tag}" if sep else joined
 
 
 def parse_body(text: str, fn: str) -> list[dict]:
@@ -651,8 +670,9 @@ def check(led: Ledger) -> None:
             if n.get("adr_pending"):
                 E(f"{where}: approved while {n['adr_pending']} is pending; `adr accept` first")
         for ad in n.get("adaptation", []):
-            if "→" not in ad and "->" not in ad:
-                E(f"{where}: adaptation {ad!r} must read '<clause> → <concrete construct>' (query text, API call + args, type); behaviour prose is not adaptation")
+            clause = ad.partition(":")[0].strip().lower()
+            if "→" not in ad and "->" not in ad and clause not in n.get("contract", {}):
+                E(f"{where}: adaptation {ad!r} must name the clause it maps — '<clause> → <concrete construct>' or '<Clause>: <concrete construct>' (query text, API call + args, type); behaviour prose is not adaptation")
         if n.get("target"):
             if (why := target_ok(n["target"])):
                 E(f"{where}: {why}")
