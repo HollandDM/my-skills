@@ -37,6 +37,23 @@ This file is compressed on purpose. Nothing it writes is. Every artifact — glo
 | Lint error = design conflict | Read what the error says is inconsistent and fix the design. Never write content whose only purpose is to make the message go away |
 | Back up freely | Obligation fails → revise children or `reopen` ancestor |
 
+## Design State Machine
+
+Every node is in exactly one design state. Only the listed verb moves it; the tool refuses anything else and names the legal moves. `status <dir>` prints each node's state and the single move that advances it — progress is reading that line and running it.
+
+| From | Verb | To | Meaning |
+|---|---|---|---|
+| — | `new` | `draft` | node exists, being written |
+| `draft` | `approve` | `approved` | user accepted statement + contract + body/target |
+| `approved` | `reopen "reason"` | `draft` | revision starts; the replaced body is filed as `## Superseded refinement` |
+| `approved` \| `draft` | `stale "reason"` | `stale` | a term / fact / ADR / ancestor changed under it; still the current design |
+| `stale` | `reopen "reason"` → `approve` | `approved` | revised against the change. `approve` on a stale node is refused |
+| any live | `supersede D-OLD D-NEW "reason"` | `superseded by D-NEW` | another node took the work; the replacement must exist |
+| any live | `retire "reason"` | `retired` | design dropped it, nothing replaces it; refused while a body still calls it |
+| `retired` | `reopen "reason"` | `draft` | revived |
+
+`superseded` and `retired` are ends: nothing advances from them but a deliberate `reopen` of a retired node. Verification follows the same rule — evidence moves `unverified → verified`, and any move out of `approved` drops a `verified` node to `stale` evidence.
+
 ## Node Kinds
 
 | Kind | Test | Verbs |
@@ -80,7 +97,7 @@ Rules:
 
 | Phase | Verb | Effect |
 |---|---|---|
-| orient | `frontier <dir>` · `show <dir> D-NNN` | what to pick; one node view |
+| orient | `frontier <dir>` · `status <dir>` · `show <dir> D-NNN` | what to pick; every node's state + its one legal next move; one node view |
 | draft | `new <dir> D-NNN ["stmt"]` | node from frontier line (root: pass statement) |
 | draft | `set <dir> D-NNN gloss\|effect "…"` · `set <dir> D-NNN pre\|post\|failure\|invariant\|<any lowercase label> "…"` | prose + contract clause (≤ 6; labels free: `budget`, `determinism`, `boundary` …); `?slug` allowed |
 | interview | `entry <dir> term\|fact\|scenario "Name" "definition" [--source --avoid --not --example \| --given --when --then --excludes --settles]` | context entry; ids allocated |
@@ -95,7 +112,7 @@ Rules:
 | change | `change <dir> <name\|CTX-id> [--definition …] [--rename "New heading"] [--status stale] --reason "…" [--minor]` | entry changed; approved dependents fail lint until `stale` / re-`approve` |
 | decision | `adr <dir> new "Title" --constrains D-NNN[,D-MMM]` · `adr <dir> accept ADR-NNNN` | stub (nodes → `draft (ADR pending)`); accept unblocks |
 | implement | `set <dir> D-NNN realization implemented` · `evidence <dir> D-NNN --kind K --ref R --result pass\|fail` | pass → `verified` |
-| audit | `sync <dir>` · `check <dir>` | re-render after an ADR paragraph edit; lint only |
+| audit | `status <dir> [--all]` · `sync <dir>` · `check <dir>` | re-render after an ADR paragraph edit; lint only |
 
 Every error names a real inconsistency between two things you wrote. Resolve it in the design: `retire` a node the refinement dropped, `stale` / `reopen` what a changed entry invalidated, `supersede` what a replacement took over, restore a call you removed by mistake. Never invent a body line, a call, a clause, or a node to silence a message — a green `check` bought that way records a design nobody chose, and the next reader cannot tell. No verb fits → say so and ask; do not improvise.
 

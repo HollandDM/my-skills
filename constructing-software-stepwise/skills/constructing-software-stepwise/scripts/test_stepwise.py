@@ -119,8 +119,14 @@ run("stale", "D-010", "Job Key redefined")
 v10 = (d / "nodes" / "D-010.md").read_text()
 assert "Stale: " in v10 and "Job Key redefined" in v10 and "invalidated by Job Key (" in v10, v10
 run("check", ok=True)
+t = run("approve", "D-000", ok=False)
+assert "is stale" in t and "From stale: reopen, retire, supersede" in t, t
+run("reopen", "D-000", "Job Key definition sharpened")
 run("approve", "D-000")
+run("reopen", "D-010", "Job Key definition sharpened")
 run("approve", "D-010")
+st = run("status")
+assert "D-000  approved" in st and "refine its children" in st, st
 
 # facts, scenarios, ambiguity, meta, adr
 t = run("entry", "fact", "Postgres unique index", "A unique index rejects a second row with the same key.", "--source", "pg docs")

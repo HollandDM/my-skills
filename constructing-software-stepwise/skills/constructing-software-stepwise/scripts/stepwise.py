@@ -33,6 +33,7 @@ Every verb ends with render + lint; exit 1 and `error <where>: <msg>` lines when
   adr       <dir> new "Title" --constrains D-NNN[,D-MMM] | adr <dir> accept ADR-NNNN | adr <dir> supersede ADR-OLD ADR-NEW
                                                       adr <dir> constrains ADR-NNNN --constrains D-NNN[,D-MMM]   rewrite the constrained set
   sync      <dir>                                     render + lint (after hand-editing an ADR paragraph)
+  status    <dir> [--all]                             every node, its design state, and the one move that advances it
   check     <dir>                                     lint only, no writes
 
 Stdlib only, no regex: the ledger is typed data, not text to be parsed.
@@ -56,6 +57,30 @@ LIST_FIELDS = ("walkthrough", "composition", "decisions", "deferred", "adaptatio
 REALIZATION = ("not-started", "partial", "implemented")
 VERIFICATION = ("unverified", "partial", "verified", "stale")
 DESIGN = ("draft", "approved", "stale", "superseded", "retired")
+# design state machine: (from, to) -> verb that makes the move. Nothing else moves a node.
+TRANSITIONS = {
+    ("draft", "approved"): "approve",
+    ("approved", "draft"): "reopen",
+    ("stale", "draft"): "reopen",
+    ("retired", "draft"): "reopen",
+    ("approved", "stale"): "stale",
+    ("draft", "stale"): "stale",
+    ("approved", "superseded"): "supersede",
+    ("stale", "superseded"): "supersede",
+    ("draft", "superseded"): "supersede",
+    ("approved", "retired"): "retire",
+    ("stale", "retired"): "retire",
+    ("draft", "retired"): "retire",
+    ("approved", "approved"): "approve",
+}
+# what a node in each state is waiting for; `status` prints it, the skill follows it
+NEXT_STEP = {
+    "draft": "finish the draft (`set`, `answer`, `body`/`terminal`, `set walkthrough`/`composition`) then `approve`",
+    "approved": "nothing — refine its children, or `reopen` / `stale` / `supersede` / `retire` when something changes",
+    "stale": "`reopen` and re-`approve` it, or `retire` / `supersede` it",
+    "superseded": "nothing — the replacement carries the work",
+    "retired": "nothing — the design dropped it; `reopen` only to revive it",
+}
 CONTROL = {"if", "else", "elif", "loop", "while", "for", "until", "case", "match", "try", "finally"}
 OWN_CODE = {"service", "module", "application", "application-service", "app", "own", "internal", "our", "runtime"}
 ENTRY_FILE = {"term": "terms", "fact": "facts", "scenario": "scenarios"}
@@ -986,6 +1011,9 @@ def v_approve(led: Ledger, a) -> int:
         for p in problems:
             print(f"  - {p}", file=sys.stderr)
         return 1
+    if TRANSITIONS.get((n["design"], "approved")) is None:
+        legal = sorted({v for (f, _), v in TRANSITIONS.items() if f == n["design"]})
+        return fail(f"{a.id} is {n['design']}; `approve` moves a draft. From {n['design']}: {', '.join(legal) or 'none'}")
     re_approval = bool(n.get("approved"))
     n.pop("stale_by", None)
     n["design"] = "approved"
@@ -1011,6 +1039,10 @@ def flip(led: Ledger, nid: str, design: str, event: str, reason: str, **extra) -
     n = need(led, nid)
     if n is None:
         return 1
+    verb = TRANSITIONS.get((n["design"], design))
+    if verb is None:
+        legal = sorted({v for (f, _), v in TRANSITIONS.items() if f == n["design"]})
+        return fail(f"{nid} is {n['design']}; it cannot become {design}. From {n['design']} the legal moves are: {', '.join(legal) or 'none'}")
     if design != "stale":
         n.pop("stale_by", None)
     n["design"] = design
@@ -1238,6 +1270,17 @@ def v_sync(led: Ledger, a) -> int:
     return finish(led)
 
 
+def v_status(led: Ledger, a) -> int:
+    for nid, n in led.nodes.items():
+        state = n["design"]
+        if state in ("superseded", "retired") and not a.all:
+            continue
+        print(f"{nid}  {led.status(nid):28}  {NEXT_STEP[state]}")
+    for fid, (stmt, parent) in sorted(led.frontier().items()):
+        print(f"{fid}  {'frontier':28}  `new <dir> {fid}` — {stmt} (child of {parent})")
+    return 0
+
+
 def v_check(led: Ledger, a) -> int:
     check(led)
     return report(led)
@@ -1267,7 +1310,7 @@ def main(argv: list[str]) -> int:
             s.add_argument("--" + k.rstrip("_"), dest=k, **kw)
         return s
 
-    add("frontier"); add("sync"); add("check"); add("show", "id")
+    add("frontier"); add("sync"); add("check"); add("show", "id"); add("status", all={"action": "store_true"})
     add("new", "id", ("statement", {"nargs": "?"}))
     add("set", "id", "field", ("value", {"nargs": "+"}))
     add("body", "id", file={"default": ""})

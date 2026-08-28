@@ -53,6 +53,8 @@ Adaptation = one line per Contract clause, `<clause> → <concrete construct>`: 
 
 An ADR's `Constrains:` list makes it a dependency of each node it names: the link appears under `Depends on` with no verb.
 
+State is a machine, not a label: `new → draft → approved`, and out of `approved` only `reopen` (back to draft), `stale`, `supersede`, `retire`. A stale node returns through `reopen` + `approve`, never straight to `approved`. The tool refuses any move outside the table and prints the legal ones; `status <dir>` prints every node's state with the single move that advances it.
+
 `stale` and `superseded` are not synonyms. `stale`: the node is still the design, but a term, fact, ADR or ancestor changed under it — the node view carries `Stale: <date> — <reason> · invalidated by <entry> (<date>)`, listing every dependency whose entry changed after this node's approval. `superseded by D-NNN`: a different node does the work now, and the replacement must exist. `retired`: dropped with no replacement.
 
 A body rewrite that drops a child leaves that child with no caller — lint says so. `retire D-NNN "reason"` records that the design dropped it; the node keeps its history and stops appearing on the frontier. Adding the call back to quiet the message writes a refinement nobody approved.
