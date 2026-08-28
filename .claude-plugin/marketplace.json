@@ -94,7 +94,7 @@
       "name": "constructing-software-stepwise",
       "source": "./constructing-software-stepwise",
       "description": "Stepwise refinement for hard designs: one node per approval cycle, one-question-at-a-time interview, contract-preserving decomposition, ADR-gated decisions, evidence-backed verification in atomic one-item-per-file ledgers",
-      "version": "072eba8",
+      "version": "359fba1",
       "author": {
         "name": "HollandDM"
       },
