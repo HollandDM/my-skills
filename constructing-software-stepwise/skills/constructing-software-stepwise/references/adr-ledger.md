@@ -17,6 +17,7 @@ Typical: persistent data formats, ownership boundaries, public protocols, consis
 ## Atomic File Rules
 
 - **One decision per file.** Two decisions → two ADRs, cross-linked.
+- **Written for a stranger.** Full sentences, exact nouns, no session context assumed (SKILL.md → Voice).
 - **Paragraph first.** Title + 1–3 sentences (context, decision, why) = complete ADR. Sections only when they add value.
 - **Self-describing header.** `Kind`, ID, `Status`, `Date`, `Constrains` node ids — written by `stepwise.py adr new "<title>" --constrains D-NNN[,D-MMM]`.
 - **Name, never repeat.** Reference context entries + nodes by name / id. Never restate a definition.

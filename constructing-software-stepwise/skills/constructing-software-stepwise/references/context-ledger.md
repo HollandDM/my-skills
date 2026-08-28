@@ -12,6 +12,8 @@ docs/design/<topic>/
   CONTEXT.md      generated view: scope, three tables, open ambiguities, non-goals, then every entry in full
 ```
 
+Every definition is a full sentence naming the thing itself, readable by someone who was not in the session (SKILL.md → Voice).
+
 Entries change in place (meaning sharpens, facts go stale) → `change` appends a dated reason and lint names every approved dependent.
 
 ## Records — `ledger.json`
