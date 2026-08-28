@@ -57,6 +57,8 @@ State is a machine, not a label: `new → draft → approved`, and out of `appro
 
 `stale` and `superseded` are not synonyms. `stale`: the node is still the design, but a term, fact, ADR or ancestor changed under it — the node view carries `Stale: <date> — <reason> · invalidated by <entry> (<date>)`, listing every dependency whose entry changed after this node's approval. `superseded by D-NNN`: a different node does the work now, and the replacement must exist. `retired`: dropped with no replacement.
 
+Staleness travels the link graph rather than being spotted by eye. The edges are: a body's `-- D-NNN` calls and `-- ↗ D-NNN` reuses, and every id in `depends` (node ids in a node's prose are derived into `depends` exactly like terms, CTX ids and ADR ids). What a dependent rests on is the upstream node's **contract** — its statement and clauses — so re-`approve` cascades only when that hash changed, transitively marking each approved dependent `stale` with `invalidated by D-NNN (contract changed <date>)`; a body-only revision cascades nothing. `supersede` and `retire` always cascade, since the contract the dependents named is gone. `check` then refuses an approved node depending on a stale / superseded / retired node, and a body still calling a superseded child.
+
 A body rewrite that drops a child leaves that child with no caller — lint says so. `retire D-NNN "reason"` records that the design dropped it; the node keeps its history and stops appearing on the frontier. Adding the call back to quiet the message writes a refinement nobody approved.
 
 `reopen` snapshots the body, composition, decisions and deferred it invalidates into the node view's `## Superseded refinement` section, so the replaced refinement stays readable while the node is redrafted.

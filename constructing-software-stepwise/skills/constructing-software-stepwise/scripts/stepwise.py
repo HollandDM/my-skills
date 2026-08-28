@@ -267,6 +267,11 @@ def body_hash(items: list[dict]) -> str:
     return hashlib.sha1(json.dumps(items, sort_keys=True).encode()).hexdigest()[:12]
 
 
+def contract_hash(n: dict) -> str:
+    """What a caller depends on: the statement and the contract clauses. The body is the node's own business."""
+    return hashlib.sha1(json.dumps([n.get("statement", ""), n.get("target", ""), n.get("contract", {})], sort_keys=True).encode()).hexdigest()[:12]
+
+
 def frontier_statement(code: str) -> str:
     lhs, sep, rhs = code.partition("<-")
     if sep:
@@ -313,6 +318,10 @@ class Ledger:
     # --- derived structure
     def parents(self, nid: str) -> list[str]:
         return sorted(pid for pid, p in self.nodes.items() if any(it.get("child") == nid or it.get("reuse") == nid for it in p.get("body", [])))
+
+    def dependents(self, nid: str) -> list[str]:
+        """Nodes whose own design rests on this one: the bodies that call or reuse it, and anyone naming it in `depends`."""
+        return sorted(set(self.parents(nid)) | {m for m, v in self.nodes.items() if nid in v.get("depends", [])})
 
     def roots(self) -> list[str]:
         return [nid for nid in self.nodes if not self.parents(nid)]
@@ -671,7 +680,7 @@ def check(led: Ledger) -> None:
     W = led.warnings.append
     nodes = led.nodes
     fr = led.frontier()
-    live_roots = [r for r in led.roots() if nodes[r]["design"] != "retired"]
+    live_roots = [r for r in led.roots() if nodes[r]["design"] not in ("retired", "superseded")]
     if nodes and len(live_roots) != 1:
         first = min(live_roots, default="")
         orphans = [r for r in live_roots if r != first]
@@ -701,6 +710,8 @@ def check(led: Ledger) -> None:
         for it in stmts:
             if not any(k in it for k in ("child", "reuse", "target")) and call_names(it["code"]):
                 E(f"{where}: untagged call {it['code']!r}; tag `-- D-NNN` (new id), `-- ↗ D-NNN` (reuse) or `-- ⇒ <target>: <identifier>`")
+            if (cid := it.get("child")) in nodes and nodes[cid]["design"] == "superseded":
+                E(f"{where}: calls {cid} which is {led.status(cid)}; call the node that replaced it")
             if "reuse" in it and (it["reuse"] not in nodes or nodes[it["reuse"]]["design"] != "approved"):
                 E(f"{where}: reuse ↗ {it['reuse']} but it is not an approved node")
             if "target" in it and (why := target_ok(it["target"])):
@@ -729,6 +740,8 @@ def check(led: Ledger) -> None:
             if is_node_id(r) or is_adr_id(r):
                 if not led.resolves(r):
                     E(f"{where}: depends on {r} which does not exist")
+                elif is_node_id(r) and n["design"] == "approved" and (u := nodes.get(r)) and u["design"] in ("stale", "superseded", "retired"):
+                    E(f"{where}: depends on {r} which is {led.status(r)}; `stale` this node and re-approve it against the live design, or re-point the dependency")
                 continue
             e = led.entry(r)
             if not e:
@@ -789,12 +802,14 @@ def derive_depends(led: Ledger) -> None:
             n = led.nodes.get(nid)
             if n is not None and adr["id"] not in n.setdefault("depends", []):
                 n["depends"].append(adr["id"])
-    for n in led.nodes.values():
+    for nid, n in led.nodes.items():
         text = " ".join([n.get("gloss", ""), n.get("effect", ""), *n.get("contract", {}).values()])
         deps = n.setdefault("depends", [])
+        called = {it.get("child") or it.get("reuse") for it in n.get("body", [])}  # body edges already carry these
         for word in text.split():
             w = word.strip(",.;:()[]`")
-            if (is_ctx_id(w) and led.entry(w)) or (is_adr_id(w) and w in adr_ids):
+            if (is_ctx_id(w) and led.entry(w)) or (is_adr_id(w) and w in adr_ids) \
+                    or (is_node_id(w) and w != nid and w not in called and w in led.nodes):
                 if w not in deps:
                     deps.append(w)
         padded = f" {text} "
@@ -1015,17 +1030,22 @@ def v_approve(led: Ledger, a) -> int:
         legal = sorted({v for (f, _), v in TRANSITIONS.items() if f == n["design"]})
         return fail(f"{a.id} is {n['design']}; `approve` moves a draft. From {n['design']}: {', '.join(legal) or 'none'}")
     re_approval = bool(n.get("approved"))
+    contract_changed = re_approval and n.get("contract_hash", contract_hash(n)) != contract_hash(n)
     n.pop("stale_by", None)
     n["design"] = "approved"
     n["approved"] = f"{today()} by user"
     n["approved_at"] = now()
     n["approved_hash"] = body_hash(body)
+    n["contract_hash"] = contract_hash(n)
     if re_approval:
         hist(n, "re-approved")
+    cascaded = cascade_stale(led, a.id, "contract changed") if contract_changed else []
     ambs = led.data.get("ambiguities", [])
     resolved = [x["claim"] for x in ambs if x["resolves_at"] == a.id]
     ambs[:] = [x for x in ambs if x["resolves_at"] != a.id]
-    rc = finish(led, f"approved {a.id}" + (f"; resolved ambiguities dropped: {', '.join(resolved)}" if resolved else ""))
+    rc = finish(led, f"approved {a.id}"
+                + (f"; contract changed, now stale: {', '.join(cascaded)}" if cascaded else "")
+                + (f"; resolved ambiguities dropped: {', '.join(resolved)}" if resolved else ""))
     fr = led.frontier()
     new = [it["child"] for it in body if it.get("child") in fr]
     if new:
@@ -1050,7 +1070,8 @@ def flip(led: Ledger, nid: str, design: str, event: str, reason: str, **extra) -
     if design != "approved" and n["verification"] == "verified":
         n["verification"] = "stale"
     hist(n, event, reason)
-    return finish(led, f"{nid} -> {led.status(nid)}")
+    cascaded = cascade_stale(led, nid, event) if design in ("superseded", "retired") else []
+    return finish(led, f"{nid} -> {led.status(nid)}" + (f"; now stale: {', '.join(cascaded)}" if cascaded else ""))
 
 
 def v_reopen(led: Ledger, a) -> int:
@@ -1072,10 +1093,34 @@ def changed_deps(led: Ledger, n: dict) -> list[str]:
     """Entries this node depends on that changed after it was approved — the reason it is stale."""
     since, out = n.get("approved_at", ""), []
     for r in n.get("depends", []):
-        e = led.entry(r)
-        if e and (last := max((c["at"] for c in e[2].get("changed", [])), default="")) > since:
+        if is_node_id(r):
+            u = led.nodes.get(r)
+            if u and (u["design"] in ("stale", "superseded", "retired") or u.get("approved_at", "") > since):
+                out.append(f"{r} ({led.status(r)})")
+        elif (e := led.entry(r)) and (last := max((c["at"] for c in e[2].get("changed", [])), default="")) > since:
             out.append(f"{e[1]} ({last[:10]})")
     return out
+
+
+def cascade_stale(led: Ledger, origin: str, why: str) -> list[str]:
+    """origin's contract changed or died; every approved node downstream of it rests on the old one, so it is stale."""
+    seen, queue, out = {origin}, led.dependents(origin), []
+    while queue:
+        nid = queue.pop()
+        if nid in seen:
+            continue
+        seen.add(nid)
+        queue += led.dependents(nid)  # a dead contract travels the whole graph, not one hop
+        n = led.nodes[nid]
+        if n["design"] != "approved":
+            continue
+        n["design"] = "stale"
+        n["stale_by"] = [f"{origin} ({why} {today()})"]
+        if n["verification"] == "verified":
+            n["verification"] = "stale"
+        hist(n, "stale", f"{origin} {why}")
+        out.append(nid)
+    return sorted(out)
 
 
 def v_stale(led: Ledger, a) -> int:

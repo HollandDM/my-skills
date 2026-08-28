@@ -54,6 +54,14 @@ Every node is in exactly one design state. Only the listed verb moves it; the to
 
 `superseded` and `retired` are ends: nothing advances from them but a deliberate `reopen` of a retired node. Verification follows the same rule — evidence moves `unverified → verified`, and any move out of `approved` drops a `verified` node to `stale` evidence.
 
+Staleness propagates along the link graph; you never hunt for what a change broke. A node's callers, the nodes that reuse it, and every node naming it under `Depends on` rest on its **contract**, so:
+
+- re-`approve` with a changed statement or contract → every approved node downstream, transitively, becomes `stale` with `invalidated by D-NNN (contract changed <date>)`;
+- re-`approve` with only the body changed → nothing cascades, because no caller depended on the body;
+- `supersede` or `retire` → the same cascade, because the contract those nodes referenced is gone.
+
+`check` refuses an approved node that depends on a `stale` / `superseded` / `retired` node, and a body that still calls a superseded child. The fix is design work — re-approve the dependent against the new contract, or re-point the call — never editing the message away.
+
 ## Node Kinds
 
 | Kind | Test | Verbs |

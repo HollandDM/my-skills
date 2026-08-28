@@ -204,11 +204,33 @@ run("approve", "D-020")
 run("check")
 assert "retired" in (d / "nodes" / "D-022.md").read_text()
 
+# a changed contract travels the graph; a body-only revision does not
+run("reopen", "D-021", "reword the body", ok=False)  # D-020 reuses it: red until re-approved
+run("body", "D-021", ok=False, stdin="pick_step(job):\n  done <- job.stepsDone   -- ⇒ typescript: property access -- read the counter\n  -> job.spec.steps[done]  -- ⇒ typescript: index -- take the step at that position\n")
+run("approve", "D-021")
+assert json.loads((d / "ledger.json").read_text())["nodes"]["D-020"]["design"] == "approved"
+run("reopen", "D-021", "the step index now starts at one", ok=False)
+run("set", "D-021", "contract", "Post: returns the step at stepsDone + 1.", ok=False)
+t = run("approve", "D-021", ok=False)  # red until every stalled caller is re-approved
+assert "contract changed, now stale: D-000, D-020" in t, t  # travels past the direct caller
+assert "D-021 (contract changed" in (d / "nodes" / "D-020.md").read_text()
+run("reopen", "D-020", "follow the new step index", ok=False)
+run("approve", "D-020", ok=False)
+run("reopen", "D-000", "its child moved with the step index", ok=False)
+run("approve", "D-000")
+
 # supersede + views drift + log
 run("new", "D-030")
 t = run("supersede", "D-030", "D-021", "folded into advance", ok=False)
 assert "constrains D-030 which is superseded by D-021" in t  # ADR must be re-pointed by hand
+assert "now stale: D-000" in t, t  # the caller rests on a dead contract
+assert "invalidated by D-030 (superseded" in (d / "nodes" / "D-000.md").read_text()
 assert "superseded by D-021" in (d / "DESIGN.md").read_text()
+t = run("check", ok=False)
+assert "D-000: calls D-030 which is superseded by D-021" in t
+run("reopen", "D-000", "record the outcome through D-021", ok=False)
+run("body", "D-000", ok=False, stdin=body.replace("-> finish(job)", "-> finish(job)                                  -- ↗ D-021"))
+run("approve", "D-000", ok=False)  # ADR-0001 still constrains the superseded D-030
 adr = next((root / "adr").glob("0001-*.md"))
 adr.write_text(adr.read_text().replace("D-010, D-030", "D-010, D-021"))
 run("sync")
