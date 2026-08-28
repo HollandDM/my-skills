@@ -37,7 +37,7 @@ Term → project-wide glossary only when used across multiple designs / bounded 
 # <Design area> — Shared Context
 
 Kind: index · Status: active · Last confirmed: YYYY-MM-DD
-Design: [./DESIGN.md](./DESIGN.md) · Evidence: [./EVIDENCE.md](./EVIDENCE.md)
+Design: [./DESIGN.md](./DESIGN.md)
 
 ## Scope
 
