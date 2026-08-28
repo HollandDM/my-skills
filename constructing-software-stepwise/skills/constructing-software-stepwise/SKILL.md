@@ -34,9 +34,10 @@ Small refinement → small contract → small vocabulary. Many questions = scope
 | Kind | Test | Record |
 |---|---|---|
 | Terminal | Statement = ONE real thing (language construct / framework API / platform primitive / service / repo fn), named `<target>: <identifier>` in `Realization` | Statement + Contract + Realization (`Adaptation` lines) + Evidence |
+| Terminal — reuse | Statement = call to existing node with `Design: approved`, its Statement + Contract verbatim | no new file; body line `-- ↗ D-NNN`; caller added to that node's `Parents` |
 | Composite | else | Statement + Contract + pseudocode Refinement + every field in [design-ledger.md](references/design-ledger.md) |
 
-Composite → 2–7 child statements. 1 = rename. >7 = missing intermediate node. Terminal = only adaptation point pseudocode → real. "Trivial / obvious / clear enough" not decision words; tables decide.
+Composite → 2–7 child statements. 1 = rename. >7 = missing intermediate node. Terminal = where refinement stops: adapt to real, or call approved node. Reused node's body appears once in `Program ### Procedures`; call sites point at it. "Trivial / obvious / clear enough" not decision words; tables decide.
 
 ## Durable Artifacts
 
@@ -164,7 +165,7 @@ Never: batch questions; ask what code answers; ask without a `?`; propose childr
 
 ### 3. Propose ONE refinement
 
-Parent Statement → Refinement body: pseudocode ≤ 12 lines, 2–7 child statements each tagged `-- D-NNN`, control structure (sequence / choice / loop) lives here, `{ assertion }` line wherever composition leans on a condition. Notation in [design-ledger.md](references/design-ledger.md). No language keyword, library, concrete type — representation, storage, framework → deepest node needing them.
+Parent Statement → Refinement body: pseudocode ≤ 12 lines, 2–7 child statements each tagged `-- D-NNN`, control structure (sequence / choice / loop) lives here, `{ assertion }` line wherever composition leans on a condition. Notation in [design-ledger.md](references/design-ledger.md). No language keyword, library, concrete type — representation, storage, framework → deepest node needing them. Child already exists as approved node → call it (`-- ↗ D-NNN`), Statement + Contract verbatim; contract doesn't fit → reopen it or new node, never a tweaked copy.
 
 Composition argument (data flow / failures / cleanup / invariants / progress, ≤ 2 lines each) = proof obligation: body preserves parent `{Pre} S {Post}`. Checklist: Refinement Obligation. Fails → revise body or reopen ancestor.
 
@@ -248,6 +249,8 @@ Context entry, ancestor, ADR, or dependency changes:
 | Pick storage / framework now | Deepest node needing it |
 | Write body in Scala / DBOS API, clearer | Composite = pseudocode. Real thing at terminal only |
 | Evidence in separate doc | Under the node's `## Evidence`, nowhere else |
+| Copy D-050 body, tweak one line | Call `↗ D-050` or reopen it. No forks |
+| Reuse draft / stale node | Only `approved` reusable |
 | Update `Program` later | Same edit as approval. Out of sync = fix Program |
 | Append node to `DESIGN.md` | One node = one file from first write |
 | Tests pass → verified | Evidence per Contract clause |

@@ -27,7 +27,7 @@ Pseudocode above terminal. Target only inside terminal `Realization`.
 - `x ← expr` assign · `→ value` return · `name(args)` abstract call
 - `if cond: … else: …` · `loop until cond: …` · `for each x in S: …`
 - `{ assertion }` = condition holding at that point. One wherever composition argument leans on it
-- `-- D-NNN` tags every child statement · `(frontier)` unrefined · `(draft, k ?)` · `(stale)` · `✓ <target>: <identifier>` realized
+- `-- D-NNN` tags every child statement · `(frontier)` unrefined · `(draft, k ?)` · `(stale)` · `✓ <target>: <identifier>` realized · `↗ D-NNN` call to approved node defined elsewhere
 - `?slug` unknown, draft only
 - abstract data only: `set`, `seq`, `map`, `record{…}`. Concrete types, library / framework / service names → terminal `Realization`
 - realized line in `Program` may be replaced by the real line; pseudo and real mix there
@@ -35,7 +35,7 @@ Pseudocode above terminal. Target only inside terminal `Realization`.
 ## Atomic File Rules
 
 - **One node = one abstract statement = one file.** Contract, body, why body composes, evidence body holds. Nothing about grandchildren.
-- **Self-describing header.** `Kind`, ID, `Index` link, three status axes, `Parent`, `Depends on` — all links.
+- **Self-describing header.** `Kind`, ID, `Index` link, three status axes, `Parents`, `Depends on` — all links.
 - **Link, never repeat.** Contract references context entries by link. Never restate definitions.
 - **One line per clause.** Clause needs a paragraph → hides a term or fact → extract to `context/`, link.
 - **Refinement body ≤ 12 lines.** 2–7 child statements + control + assertions. Longer → intermediate node.
@@ -61,25 +61,37 @@ Root: D-000 · Active frontier: D-022, D-030, D-040
 
 ## Nodes
 
-| ID | Statement | Parent | Design | Realization | Verification | File |
+| ID | Statement | Parents | Design | Realization | Verification | File |
 | --- | --- | --- | --- | --- | --- | --- |
 | D-000 | run_agent(id, objective) → outcome | — | approved | not-started | unverified | [nodes/D-000-<slug>.md](nodes/D-000-<slug>.md) |
 | D-010 | claim_run(id) → run | D-000 | approved | implemented | verified | [nodes/D-010-<slug>.md](nodes/D-010-<slug>.md) |
 | D-023 | decide(reply) → step | D-020 | draft (2 ?) | not-started | unverified | [nodes/D-023-<slug>.md](nodes/D-023-<slug>.md) |
+| D-050 | record(run, event) → run | D-010, D-030 | approved | implemented | verified | [nodes/D-050-<slug>.md](nodes/D-050-<slug>.md) |
 
 ## Program
 
 ```pseudo
 run_agent(id, objective):                              -- D-000
-  run ← claim_run(id)                                  -- D-010 ✓ dbos: Workflow.start + postgres: UNIQUE(run_id)
-  { run.state = Active ∧ run.id = id }
+  run ← claim_run(id)                                  -- D-010
+    { no run with id exists ∨ same objective }
+    run ← record(empty_run(id), Started)               -- ↗ D-050
   loop until terminal(run):
     step ← next_step(run)                              -- D-020
       msgs ← journal_to_prompt(run)                    -- D-021 (frontier)
       reply ← call_model(msgs)                         -- D-022 (frontier)
       → decide(reply)                                  -- D-023 (draft, 2 ?)
-    run ← apply(run, step)                             -- D-030 (frontier)
+    run ← apply(run, step)                             -- D-030
+      run ← record(run, step.event)                    -- ↗ D-050
   → outcome(run)                                       -- D-040 (frontier)
+```
+
+### Procedures
+
+```pseudo
+record(run, event):                                    -- D-050 (used by D-010, D-030)
+  journal ← run.journal ++ [event]                     -- D-051 ✓ dbos: Transaction + postgres: INSERT journal
+  { journal append-only ∧ event.seq = |journal| }
+  → run with journal                                   -- D-052 ✓ scala: Run.copy
 ```
 ```
 
@@ -96,16 +108,20 @@ Stable IDs (`D-NNN`) from first node. ID = statement; never renumber.
 - Approval → substitute body under its statement line, same edit.
 - Realization → tag `✓ <target>: <identifier>`, or replace line with real line.
 - Stale node → tag `(stale)`; body stays.
+- One parent → body inline under its statement. Two or more parents → body once under `### Procedures` with `(used by …)`, every call site `-- ↗ D-NNN`. Second parent approved → move body out, same edit. Big system stays one readable block.
 - Test: every `-- D-NNN` in Program ↔ row in Nodes; every approved body appears verbatim (modulo indent) in Program. Mismatch → fix Program, never node.
 
 ## Node Kinds
 
 | Kind | Test | Fields |
 |---|---|---|
-| Terminal | Statement = ONE real thing, named `<target>: <identifier>` in `Realization` | Header + Statement + Effect + Contract + Realization + Evidence |
+| Terminal — real | Statement = ONE real thing, named `<target>: <identifier>` in `Realization` | Header + Statement + Effect + Contract + Realization + Evidence |
+| Terminal — reuse | Statement = call to existing node with `Design: approved`, Statement + Contract used verbatim | no new file; parent body line `-- ↗ D-NNN`; add parent to that node's `Parents` |
 | Composite | else | all fields below, body in pseudocode |
 
-Composite fan-out 2–7. 1 → rename. >7 → intermediate node. Terminal = only adaptation point pseudocode → real.
+Composite fan-out 2–7. 1 → rename. >7 → intermediate node. Terminal = only place refinement stops: adapt to real, or call approved node.
+
+Reuse rules: target must be `approved` (draft / stale → not reusable); call matches its Statement signature; parent's composition argument uses its Contract only, never its body; contract doesn't fit → reopen that node via Propagate (all parents stale) or create a new node — never copy body with a tweak.
 
 ## Node — `nodes/D-020-<slug>.md`
 
@@ -114,7 +130,7 @@ Composite fan-out 2–7. 1 → rename. >7 → intermediate node. Terminal = only
 
 Kind: node · Index: [../DESIGN.md](../DESIGN.md)
 Design: draft (<k> ?) | approved | stale | superseded · Realization: not-started | partial | implemented · Verification: unverified | partial | verified
-Parent: [D-000](D-000-<slug>.md)
+Parents: [D-000](D-000-<slug>.md)
 Depends on: [CTX-F03](../context/facts.md#ctx-f03-<slug>), [D-010](D-010-<slug>.md), [ADR-0003](../../../adr/0003-<slug>.md)
 Approved: YYYY-MM-DD by <user>
 
@@ -213,7 +229,7 @@ Evidence = why an obligation is currently believed to hold. Lives in the node it
 
 ## Reuse as Composition
 
-Approved node = fn w/ contract. Parents rely on Statement + Contract; never reopen internals.
+Approved node = fn w/ contract. Parents rely on Statement + Contract; never reopen internals. Any later node may call it as a reuse terminal (see Node Kinds); each new caller appended to `Parents` + index row, and its body moves to `### Procedures` in `Program` on the second caller.
 
 Reopen only when one changes: context entry it links; parent contract; invariant / budget; applicable ADR; child contract; evidence needed for verification.
 
