@@ -49,6 +49,8 @@ Exists test: target resolvable today — docs page, API signature, file path, SQ
 
 Adaptation = one line per Contract clause, `<clause> → <concrete construct>`: query text, API call with arguments, type / constraint, config key. Contract verb restated ("query one snapshot in order") ≠ adaptation. No construct nameable → not terminal.
 
+An ADR's `Constrains:` list makes it a dependency of each node it names: the link appears under `Depends on` with no verb.
+
 `reopen` snapshots the body, composition, decisions and deferred it invalidates into the node view's `## Superseded refinement` section, so the replaced refinement stays readable while the node is redrafted.
 
 Pseudocode above terminal. Target only in a terminal's `target` or a collapsed leaf's `-- ⇒` body lines. A collapsed leaf's node view derives its own Realization line (`Collapsed leaf. Targets: …`) from those tags — no verb, no prose.

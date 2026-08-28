@@ -128,6 +128,8 @@ run("reopen", "D-020", "depends on Job Key now")
 run("approve", "D-020")
 t = run("entry", "scenario", "Retry after crash", "", "--given", "a job committed step 1", "--when", "the worker restarts", "--then", "step 1 is not repeated", "--settles", "Job Key boundary")
 assert "CTX-S01" in t
+run("change", "CTX-F01", "--rename", "Postgres unique index rejects duplicates", "--reason", "heading was ambiguous", "--minor")
+assert "Postgres unique index rejects duplicates" in (d / "CONTEXT.md").read_text()
 run("meta", "scope", "One job from request to durable outcome.")
 run("meta", "nongoals", "scheduling", "multi-tenant quotas")
 run("ambiguity", "job identity", "key vs row id", "D-030")

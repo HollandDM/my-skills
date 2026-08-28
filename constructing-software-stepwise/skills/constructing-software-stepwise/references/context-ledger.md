@@ -25,7 +25,7 @@ Entries change in place (meaning sharpens, facts go stale) → `change` appends 
 | `nongoals` | — | list | `meta <dir> nongoals "a" "b" …` |
 | `ambiguities` | claim | `claim`, `conflict`, `resolves_at D-NNN` | `ambiguity <dir> "claim" "conflict" D-NNN` · `ambiguity <dir> "claim" --drop` |
 
-`change <dir> <ref> [--definition D] [--status confirmed|stale] --reason R` — sharpen an entry or stale a fact. `Used by` is derived from node `depends` (which `answer` sets and prose mentions extend) and scenario `settles`.
+`change <dir> <ref> [--definition D] [--rename "New heading"] [--status confirmed|stale] --reason R` — sharpen an entry, retitle it (`--rename` moves a term's name and every reference to it; a fact / scenario keeps its CTX id), or stale a fact. `Used by` is derived from node `depends` (which `answer` sets and prose mentions extend) and scenario `settles`.
 
 The entry's key is its name everywhere: `answer D-020 run-identity "Run Key"`, `set D-020 pre "Run Key supplied by caller"`, `--not "Model Turn"`, `--settles "Run Key boundary"`. Views render the links.
 

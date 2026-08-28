@@ -25,7 +25,7 @@ Every verb ends with render + lint; exit 1 and `error <where>: <msg>` lines when
   evidence  <dir> D-NNN --kind K --ref R --result pass|fail [--note N]
   entry     <dir> term|fact|scenario "Heading" "definition" [--source S] [--avoid a,b] [--not T] [--example E]
                                                       [--given G --when W --then T --excludes X --settles T]
-  change    <dir> <ref> [--definition D] [--status confirmed|stale] --reason R     sharpen or stale an entry
+  change    <dir> <ref> [--definition D] [--rename "New Heading"] [--status confirmed|stale] --reason R   sharpen, rename or stale an entry
   meta      <dir> title|scope "text" | nongoals "a" "b" ...
   ambiguity <dir> "claim" "conflict" D-NNN | ambiguity <dir> "claim" --drop
   adr       <dir> new "Title" --constrains D-NNN[,D-MMM] | adr <dir> accept ADR-NNNN | adr <dir> supersede ADR-OLD ADR-NEW
@@ -696,7 +696,13 @@ def report(led: Ledger, head: str = "") -> int:
 
 def derive_depends(led: Ledger) -> None:
     """A term / CTX id / ADR id named in a node's prose is a dependency; record it so `Used by` and staleness follow."""
-    adr_ids = {a["id"] for a in led.adrs()}
+    adrs = led.adrs()
+    adr_ids = {a["id"] for a in adrs}
+    for adr in adrs:
+        for nid in adr["constrains"]:
+            n = led.nodes.get(nid)
+            if n is not None and adr["id"] not in n.setdefault("depends", []):
+                n["depends"].append(adr["id"])
     for n in led.nodes.values():
         text = " ".join([n.get("gloss", ""), n.get("effect", ""), *n.get("contract", {}).values()])
         deps = n.setdefault("depends", [])
@@ -1018,6 +1024,21 @@ def v_change(led: Ledger, a) -> int:
         if f != "facts":
             return fail("--status applies to facts only")
         e["status"] = a.status
+    if a.rename:
+        head = a.rename.strip()
+        store = led.data[f]
+        if f == "terms":  # terms are keyed by their name; facts and scenarios by their CTX id
+            if head in store:
+                return fail(f"{head!r} already exists")
+            store[head] = store.pop(key)
+            for n in led.nodes.values():
+                n["depends"] = [head if x == key else x for x in n.get("depends", [])]
+            for x in led.data.get("ambiguities", []):
+                if x["claim"] == key:
+                    x["claim"] = head
+            key = head
+        else:
+            e["name"] = head
     if a.minor:
         return finish(led, f"{f}/{key} reworded (minor, no invalidation)")
     e.setdefault("changed", []).append({"at": now(), "reason": a.reason})
@@ -1151,7 +1172,7 @@ def main(argv: list[str]) -> int:
     add("entry", ("kind", {"choices": list(ENTRY_FILE)}), "heading", "definition",
         source={"default": ""}, avoid={"default": ""}, not_={"default": ""}, example={"default": ""},
         given={"default": ""}, when={"default": ""}, then={"default": ""}, excludes={"default": ""}, settles={"default": ""})
-    add("change", "ref", definition={"default": ""}, status={"default": "", "choices": ["", "confirmed", "stale"]}, reason={"required": True}, minor={"action": "store_true"})
+    add("change", "ref", definition={"default": ""}, rename={"default": ""}, status={"default": "", "choices": ["", "confirmed", "stale"]}, reason={"required": True}, minor={"action": "store_true"})
     add("meta", "field", ("value", {"nargs": "+"}))
     add("ambiguity", "claim", ("conflict", {"nargs": "?"}), ("resolves_at", {"nargs": "?"}), drop={"action": "store_true"})
     add("adr", ("action", {"choices": ["new", "accept", "supersede"]}), ("title", {"nargs": "?"}), ("new_adr", {"nargs": "?"}), constrains={"default": ""})

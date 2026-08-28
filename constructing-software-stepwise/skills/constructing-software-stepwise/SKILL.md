@@ -86,7 +86,7 @@ Rules:
 | propose→persist | `terminal <dir> D-NNN "<target>: <identifier>"` · `set <dir> D-NNN adaptation "clause → construct" …` | leaf; Exists test enforced |
 | persist | `approve <dir> D-NNN` | refuses on `?`, empty prose, no body/target, missing composition, untagged call, pending ADR; drops ambiguity rows resolving at this node; prints next frontier id |
 | change | `reopen <dir> D-NNN "reason"` · `stale <dir> D-NNN "reason"` · `supersede <dir> D-OLD D-NEW "reason"` | status + history; `reopen` files the body it replaces under `## Superseded refinement` |
-| change | `change <dir> <name\|CTX-id> [--definition …] [--status stale] --reason "…" [--minor]` | entry changed; approved dependents fail lint until `stale` / re-`approve` |
+| change | `change <dir> <name\|CTX-id> [--definition …] [--rename "New heading"] [--status stale] --reason "…" [--minor]` | entry changed; approved dependents fail lint until `stale` / re-`approve` |
 | decision | `adr <dir> new "Title" --constrains D-NNN[,D-MMM]` · `adr <dir> accept ADR-NNNN` | stub (nodes → `draft (ADR pending)`); accept unblocks |
 | implement | `set <dir> D-NNN realization implemented` · `evidence <dir> D-NNN --kind K --ref R --result pass\|fail` | pass → `verified` |
 | audit | `sync <dir>` · `check <dir>` | re-render after an ADR paragraph edit; lint only |
