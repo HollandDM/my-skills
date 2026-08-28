@@ -416,6 +416,13 @@ def render_node(led: Ledger, nid: str) -> str:
     for f, title, items in (("composition", "Composition argument", n.get("composition", [])), ("decisions", "Decisions", n.get("decisions", [])), ("deferred", "Deferred", deferred)):
         if items:
             L += ["", f"## {title}", "", *[f"- {b}" for b in items]]
+    if s := n.get("superseded"):
+        L += ["", f"## Superseded refinement", "", f"Replaced {s['date']}" + (f" — {s['reason']}" if s.get("reason") else "")]
+        if s.get("body"):
+            L += ["", "```pseudo", *body_text(s["body"]), "```"]
+        for f, title in (("composition", "Composition argument"), ("decisions", "Decisions"), ("deferred", "Deferred")):
+            if s.get(f):
+                L += ["", f"Superseded {title.lower()}:", *[f"- {b}" for b in s[f]]]
     collapsed = not n.get("target") and led.is_collapsed(n)
     if n.get("target") or n.get("adaptation") or collapsed:
         L += ["", "## Realization", ""]
@@ -920,6 +927,10 @@ def flip(led: Ledger, nid: str, design: str, event: str, reason: str, **extra) -
 
 
 def v_reopen(led: Ledger, a) -> int:
+    n = led.nodes.get(a.id)
+    if n and n.get("body"):  # keep the refinement being replaced as a record
+        n["superseded"] = {"date": today(), "reason": a.reason,
+                           **{f: n.get(f) for f in ("body", "composition", "decisions", "deferred") if n.get(f)}}
     return flip(led, a.id, "draft", "reopened", a.reason)
 
 

@@ -97,6 +97,7 @@ assert design.count("D-010 ⇒ postgres") == 2 and "↗" not in design, design  
 # reopen / body-changed guard / re-approve
 run("body", "D-020", stdin="x", ok=False)
 run("reopen", "D-020", "user wants a pause step")
+assert "## Superseded refinement" in (d / "nodes" / "D-020.md").read_text() and "↗ D-010" in (d / "nodes" / "D-020.md").read_text()
 run("body", "D-020", stdin="advance(job):\n  step <- pick_step(job)   -- D-021\n  wait_for(step)   -- D-022\n")
 t = run("approve", "D-020")
 assert "approved D-020" in t
