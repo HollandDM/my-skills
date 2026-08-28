@@ -56,6 +56,16 @@
         "name": "HollandDM"
       },
       "keywords": ["implementation", "subagent", "codex", "opencode", "claude", "sdd", "plan-execution"]
+    },
+    {
+      "name": "constructing-software-stepwise",
+      "source": "./constructing-software-stepwise",
+      "description": "Stepwise refinement for hard designs: one node at a time, contract-preserving decomposition, ADR-gated decisions, evidence-backed verification across CONTEXT/DESIGN/EVIDENCE/ADR ledgers",
+      "version": "2328397",
+      "author": {
+        "name": "HollandDM"
+      },
+      "keywords": ["design", "stepwise-refinement", "architecture", "adr", "correctness", "specification"]
     }
   ]
 }

@@ -1,5 +1,5 @@
 {
   "name": "constructing-software-stepwise",
   "description": "Stepwise refinement for hard designs: one node at a time, contract-preserving decomposition, ADR-gated decisions, evidence-backed verification",
-  "version": "0.0.0"
+  "version": "2328397"
 }
