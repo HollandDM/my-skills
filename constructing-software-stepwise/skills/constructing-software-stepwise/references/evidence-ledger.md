@@ -14,16 +14,25 @@ docs/design/<topic>/
   evidence/EV-D120-01-<slug>.md        one record
 ```
 
-Record file + `EVIDENCE.md` row written in same edit. Create index on first obligation w/ evidence. Never record command not run or proof not established.
+## Atomic File Rules
+
+- **One record = one (node, obligation, method).** Same test covering two clauses → two records, same `Artifact`.
+- **Self-describing header.** `Kind`, ID, `Index` link, node link, `Status`, `Recorded`.
+- **Link, never repeat.** Quote obligation clause by link + short label; don't paste node contract.
+- **Size cap.** ≤ 30 lines.
+- Record file + `EVIDENCE.md` row written in same edit. Create index on first obligation w/ evidence.
+- Never record command not run or proof not established.
 
 ## Index — `EVIDENCE.md`
 
 ```markdown
 # <Design name> — Evidence
 
-| ID | Node | Obligation (short) | Method | Status | Recorded | File |
+Kind: index · Design: [./DESIGN.md](./DESIGN.md)
+
+| ID | Node | Obligation | Method | Status | Recorded | File |
 | --- | --- | --- | --- | --- | --- | --- |
-| EV-D120-01 | D-120 | <clause> | property-test | passed | YYYY-MM-DD | [evidence/EV-D120-01-<slug>.md](evidence/EV-D120-01-<slug>.md) |
+| EV-D120-01 | D-120 | Post: <label> | property-test | passed | YYYY-MM-DD | [evidence/EV-D120-01-<slug>.md](evidence/EV-D120-01-<slug>.md) |
 ```
 
 Row mirrors record header. Status change in file → same edit updates row.
@@ -33,19 +42,19 @@ Row mirrors record header. Status change in file → same edit updates row.
 ```markdown
 # EV-D120-01 — <Short evidence name>
 
-Design node: D-120 → [../nodes/D-120-<slug>.md](../nodes/D-120-<slug>.md)
-Obligation: <exact contract clause, invariant, ADR constraint, or budget checked>
+Kind: evidence · Index: [../EVIDENCE.md](../EVIDENCE.md) · Node: [D-120](../nodes/D-120-<slug>.md)
+Status: passed | failed | partial | stale · Recorded: YYYY-MM-DD
+
+Obligation: <Contract clause label, e.g. "Post: at-least-once tool effect">
 Method: type-check | example | property-test | integration-test | static-analysis | proof | model-check | benchmark | fault-injection | observation
 Artifact: <test name, code path, model, report, or command>
-Environment: <relevant versions, configuration, hardware, dataset, or assumptions>
-Status: passed | failed | partial | stale
+Environment: <versions, config, hardware, dataset, assumptions>
 Observed: <actual result>
 Expected: <required result>
-Limitations: <what this evidence does not establish>
-Recorded: YYYY-MM-DD
+Limitations: <what this does NOT establish>
 ```
 
-One record per (node, method, aspect). Node's `Realization → Evidence` links back here.
+Node's `Realization → Evidence` links back here.
 
 ## Method Selection — cheapest covering risk
 
@@ -63,7 +72,7 @@ Never promote evidence kind. Examples ≠ proof. Local proof ≠ environmental a
 
 ## Verification Rule — `verified` iff ALL
 
-- every clause under node's Contract (pre / post / failure / invariants / budgets) has current evidence
+- every clause under node's Contract (Pre / Post / Failure / Invariant / Budget) has current evidence
 - all records `passed`
 - `Limitations` don't exclude claimed operating conditions
 - applicable ADR invariants have impl evidence
@@ -73,6 +82,6 @@ Else `unverified` or `partial` + name missing obligation.
 
 ## Staleness
 
-Mark `stale` (file + index row) on change to: contract / vocab tested; ancestor or child composition; applicable ADR; impl code / config; dependency versions; anything listed in `Environment`.
+Mark `stale` (file + index row) on change to: contract / vocab tested; ancestor or child composition; applicable ADR; impl code / config; dependency versions; anything in `Environment`.
 
 Stale ≠ false. Old result no longer justifies current claim. Keep record; add fresh; restore `verified` only after coverage current.

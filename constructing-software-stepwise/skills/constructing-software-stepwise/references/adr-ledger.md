@@ -1,112 +1,91 @@
 # ADR Ledger Format
 
-ADR = durable history of consequential choice. Backstop for refinement tree: future designs satisfy it or explicitly supersede.
+ADR = durable record that a consequential choice was made, and why. Backstop for refinement tree: future designs satisfy it or explicitly supersede.
 
 Not: explanation, meeting note, claim that impl is correct.
 
 ## Eligibility — ALL three
 
-1. **Hard to reverse:** later change costs migration, compat, data, ops, security, or org effort.
-2. **Surprising w/o context:** future engineer could reasonably remove / bypass; reason not visible in code.
-3. **Real trade-off:** viable alternatives existed; choice accepted specific disadvantages.
+1. **Hard to reverse** — cost of changing mind later is meaningful.
+2. **Surprising w/o context** — future reader looks at code and wonders "why on earth did they do it this way?"
+3. **Real trade-off** — genuine alternatives existed; picked one for specific reasons.
 
-Typical: persistent data formats, ownership boundaries, public protocols, consistency models, irreversible migrations, trust boundaries, durability semantics, cross-system IDs.
+Easy to reverse → skip, you'll just reverse it. Not surprising → nobody wonders. No alternative → nothing beyond "did the obvious thing".
 
-Skip: reversible impl details, no-alternative choices, temporary experiments, decisions fixed by external binding standard.
+Typical: persistent data formats, ownership boundaries, public protocols, consistency models, irreversible migrations, trust boundaries, durability semantics, cross-system IDs, deliberate deviation from obvious path, constraint invisible in code.
+
+## Atomic File Rules
+
+- **One decision per file.** Two decisions → two ADRs, cross-linked.
+- **Paragraph first.** Title + 1–3 sentences (context, decision, why) = complete ADR. Sections only when they add value.
+- **Self-describing header.** `Kind`, ID, `Status`, `Date`, `Constrains` node links.
+- **Link, never repeat.** Reference context items + nodes by link.
+- **Size cap.** ≤ 40 lines.
 
 ## Authority + Lifecycle
 
 Agent recommends. User approves accept / supersede.
 
-Repo status convention if present. Else:
-
-- `proposed` — written, not yet binding
-- `accepted` — binding on future refinements
-- `superseded` — not binding; links replacement
-- `deprecated` — kept for history while transition removes applicability
+Status: `proposed` → `accepted` → `superseded by ADR-NNNN` | `deprecated`. Repo convention wins if present.
 
 Track implementation separately. Accepted may be unimplemented.
 
-Never delete / rewrite accepted ADR to erase changed decision. Typo / wording fix OK if meaning identical. Decision change → new ADR; old → `superseded`.
+Never delete / rewrite accepted ADR to erase changed decision. Typo / wording fix OK if meaning identical. Decision change → new ADR; old → superseded, both linked.
 
-## File Format
+## File — `docs/adr/NNNN-<slug>.md`
 
-Repo numbering / location if established. Else `docs/adr/NNNN-<slug>.md`. One ADR per file; never bundle several decisions in one ADR:
+Repo numbering / location if established. Else scan `docs/adr/` for highest number, increment.
 
 ```markdown
----
-id: ADR-0003
-title: <Decision title>
-status: proposed | accepted | superseded | deprecated
-date: YYYY-MM-DD
-deciders: <people or role>
-design_nodes: [D-120, D-121]
-supersedes: []
-superseded_by: null
-implementation: pending | partial | complete | unknown
----
+# ADR-0003 — <Short title of the decision>
 
-# ADR-0003 — <Decision title>
+Kind: adr · Status: proposed | accepted | superseded by ADR-NNNN | deprecated · Date: YYYY-MM-DD
+Constrains: [D-120](../design/<topic>/nodes/D-120-<slug>.md), [D-121](../design/<topic>/nodes/D-121-<slug>.md)
+Supersedes: — · Superseded by: —
 
-## Context
-
-<The forces, constraints, and problem that made a decision necessary. Link relevant CONTEXT.md entries and design nodes.>
-
-## Decision
-
-<The chosen rule stated precisely enough to constrain future design.>
+<1–3 sentences: what's the context, what did we decide, and why.>
 
 ## Invariants imposed
 
-- <Property every affected refinement must preserve>
+- <one line: property every constrained refinement must preserve>
+```
 
-## Alternatives considered
+Optional sections — add only when they carry information the paragraph can't:
 
-### <Alternative>
+```markdown
+## Considered options
 
-- Advantages: <what it offered>
-- Rejected because: <why it lost under the accepted constraints>
+- <option> — rejected: <one line>
 
 ## Consequences
 
-- Benefits: <what becomes easier or guaranteed>
-- Costs: <what becomes harder, slower, more expensive, or less flexible>
-- Migration/compatibility: <effects on existing data, APIs, operations, or users>
+- <one line: benefit / cost / migration effect>
 
-## Supporting evidence
+## Revisit when
 
-- <Measurements, incidents, experiments, regulations, code constraints, or design analysis that informed the decision>
-
-## Revisit conditions
-
-- <Concrete condition that would justify reopening the decision>
-
-## History
-
-- YYYY-MM-DD — proposed
-- YYYY-MM-DD — accepted by <authority>
+- <concrete condition that reopens this>
 ```
 
-`Supporting evidence` here = why decision rational. Impl satisfies it → `EVIDENCE.md`.
+`Invariants imposed` stays mandatory: Conflict Protocol checks against it.
 
 ## Conflict Protocol
 
-Before approving node: read its applicable accepted ADRs. Candidate conflicts →
+Before approving node: read ADRs it links. Candidate conflicts →
 
-1. name exact candidate behavior + ADR constraint in conflict
+1. name exact candidate behavior + ADR invariant in conflict
 2. stop refinement of that branch
 3. show user two legitimate paths:
    - preserve ADR, revise candidate; or
    - supersede ADR, accept migration / compat / risk / invalidation work
 4. resolve factual uncertainty first (investigate), then ask
 5. explicit user approval
-6. superseding → create + accept replacement ADR, link both directions, mark dependent nodes + evidence stale
+6. superseding → new ADR accepted, both linked, dependent nodes + evidence marked stale
 7. resume from new valid frontier
 
 Unawareness ≠ permission. No adapter / exception preserving wording while defeating invariant.
 
 ## Applicability
 
-Link ADR → affected node IDs + invariants. Global ADR constrains many branches; scoped ADR states boundary so unrelated work doesn't inherit.
+`Constrains` lists node IDs. Global ADR → `Constrains: all nodes under D-000`. Scoped ADR states boundary so unrelated work doesn't inherit.
 
-Repo distinguishes planned vs in-force architecture → preserve. Never present proposed as implemented reality.
+Never present `proposed` as implemented reality.
