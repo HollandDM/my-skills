@@ -93,8 +93,8 @@
     {
       "name": "constructing-software-stepwise",
       "source": "./constructing-software-stepwise",
-      "description": "Stepwise refinement for hard designs: one node per approval cycle, one-question-at-a-time interview, contract-preserving decomposition, ADR-gated decisions, evidence-backed verification; one file per node and ADR, context and evidence grouped behind central CONTEXT.md and EVIDENCE.md indexes",
-      "version": "7163efa",
+      "description": "Stepwise refinement for hard designs: one node per approval cycle, one-question-at-a-time interview, contract-preserving decomposition, ADR-gated decisions, evidence-backed verification; Dijkstra-style pseudocode refined until terminal nodes adapt to the real thing (language, framework, platform, service), DESIGN.md holding the assembled program; one file per node (contract, refinement, evidence) and per ADR, context grouped behind a central CONTEXT.md",
+      "version": "74924c0",
       "author": {
         "name": "HollandDM"
       },
