@@ -26,7 +26,7 @@ Views exist for humans and PR review. The agent reads them (or `show D-NNN`) and
 |---|---|---|
 | `statement` | `new` (from parent body line, or root statement) | `x <- f(a, b)` · `-> f(a)` · `f(a)`. ID = statement; never renumber |
 | `gloss`, `effect` | `set D-NNN gloss\|effect "…"` | one line; 1–2 sentences |
-| `contract` | `set D-NNN pre\|post\|failure\|invariant\|<any lowercase label> "…"` | ≤ 6 clauses, one line each, labels free (`budget`, `determinism`, `boundary`, `cancellation`, `progress`); unknowns `?slug` |
+| `contract` | `set D-NNN pre\|post\|failure\|invariant\|<any lowercase label> "…"` | ≤ 6 clauses, 1–2 explicit lines each — checkable on its own, never a fragment; labels free (`budget`, `determinism`, `boundary`, `cancellation`, `progress`); unknowns `?slug` |
 | `depends` | `answer`; `set D-NNN depends "Name" …` (append); also derived from any term / `CTX-…` / `ADR-…` named in gloss, effect, contract | dependencies for `Used by` and staleness |
 | `body` | `body D-NNN` (stdin / `--file`) | pseudocode lines → `{indent, code, child \| reuse \| target \| note}`; refused on an approved node |
 | `composition`, `decisions`, `deferred`, `adaptation` | `set D-NNN <field> "b1" "b2" …` | bullet lists, replaced whole |
@@ -113,7 +113,10 @@ Approved: 2026-08-28 by user
 ## Effect
 …
 ## Contract
-- Pre: … · - Post: … · - Failure: … · - Invariant: …
+- Pre: …
+- Post: …
+- Failure: …
+- Invariant: …
 ## Refinement
 ```pseudo
 next_step(run):
@@ -131,6 +134,8 @@ next_step(run):
 Walkthrough: `set D-NNN walkthrough "…"` — at most 3 plain lines saying what the function does, rendered above the pseudocode. Every tagged pseudocode line carries one line of explanation, so a reader knows what each line does before its node exists; an existing child's or reused node's own gloss takes over once it does. `approve` refuses a body missing either.
 
 Composition argument: five bullets — data flow, failures, cleanup, invariants, progress (≤ 2 lines each). Not applicable → `n/a: <reason>`. Never omit. `approve` refuses a composite without composition.
+
+Clause style: 1–2 explicit lines, self-contained. Say which thing, under which condition, and what holds afterwards — `Post: exactly one row per Job Key survives, whatever the caller retried`, not `Post: row exists`. Six clear clauses do not fit → the node says too much, split it. Never trade clarity for length.
 
 Draft state: gloss / effect / clause may carry `?slug`; `?` count = interview length; > 6 → statement says too much, shrink. `approve` refuses any `?`.
 

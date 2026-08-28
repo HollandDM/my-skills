@@ -18,7 +18,7 @@ Small refinement → small contract → small vocabulary. Many questions = scope
 | Rule | Observable test |
 |---|---|
 | One refinement per approval | Turn proposes children for exactly one node |
-| Draft before ask | Node exists (`new`), gloss + effect + contract ≤ 6 clauses set, unknowns `?slug`, before first question |
+| Draft before ask | Node exists (`new`), gloss + effect + contract ≤ 6 clauses (1–2 explicit lines each) set, unknowns `?slug`, before first question |
 | Interview bounded | Every question names the `?` it clears. No `?` → no question → `ambiguity … D-NNN` row for the child that owns it |
 | Scope leak gauge | `?` > 6 at draft → shrink effect, push detail to children, redraft. Questions per node ≤ initial `?` count |
 | Interview before proposal | No children while draft has any `?` or open user-owned decision |
@@ -204,31 +204,51 @@ Composition argument (data flow / failures / cleanup / invariants / progress, �
 
 Then STOP. Show block. Nothing else that turn.
 
-```markdown
-## Proposal — D-NNN — <statement>
-Contract: Pre <…> · Post <…> · Failure <…> · Invariant <…>
-What it does: <≤ 3 lines, plain prose>
-Refinement:
-    <statement>:
-      x <- child_a(…)              -- D-a: <one line>
-      { assertion }
-      loop until cond:
-        child_b(x)                 -- D-b: <one line>
-      -> child_c(x)                -- D-c: <one line>
-Composition:
-- Data flow: <≤2 lines>
-- Failures: <≤2 lines>
-- Cleanup: <≤2 lines | n/a: reason>
-- Invariants: <≤2 lines>
-- Progress: <≤2 lines | n/a: reason>
-Decisions: <one line each>
-Deferred: <ambiguity rows for children of D-NNN → D-x>
-ADRs: <checked, none conflict | conflict → protocol>
+~~~markdown
+## Proposal — D-NNN — `<statement>`
+
+**What it does**
+<≤ 3 lines, plain prose>
+
+**Contract**
+- Pre: <…>
+- Post: <…>
+- Failure: <…>
+- Invariant: <…>
+
+**Refinement**
+```pseudo
+<statement>:
+  x <- child_a(…)                  -- D-a: <one line>
+  { assertion }
+  loop until cond:
+    child_b(x)                     -- D-b: <one line>
+  -> child_c(x)                    -- D-c: <one line>
+```
+
+**Composition argument**
+- Data flow: <≤ 2 lines>
+- Failures: <≤ 2 lines>
+- Cleanup: <≤ 2 lines | n/a: reason>
+- Invariants: <≤ 2 lines>
+- Progress: <≤ 2 lines | n/a: reason>
+
+**Decisions**
+- <one line each>
+
+**Deferred**
+- <claim> — <conflict> → D-x
+
+**ADRs**
+- <checked, none conflict | conflict → protocol>
+
 **Approve D-NNN as above?**
 1. Accept — persist it as proposed
 2. Make terminal — expand every line of it down to real constructs, no child nodes left
 3. Changes — say what to change
-```
+~~~
+
+One clause per line, one bullet per item — never `Pre … · Post … · Failure …` strung across one line, in the Proposal or anywhere else. Each clause is 1–2 full lines, written so it can be checked without the rest of the design: name the thing, the condition on it, and what holds. `Post: exactly one row per Job Key survives, whatever the caller retried` beats `Post: row exists`. Clarity outranks brevity in a contract — never compress a clause into a fragment to save a line; split the node if six clear clauses do not fit.
 
 End every Proposal with those three options, in that order, worded as they stand. Ask them the way the host lets you ask a multiple-choice question (Claude Code: `AskUserQuestion`; otherwise plain text); the user may always answer something else.
 
