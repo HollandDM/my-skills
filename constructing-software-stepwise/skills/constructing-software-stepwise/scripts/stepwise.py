@@ -151,7 +151,7 @@ def target_ok(target: str) -> str:
 def join_continuations(raw: list[str]) -> list[str]:
     out, buf, depth = [], "", 0
     for ln in raw:
-        buf = ln if depth <= 0 else buf.rstrip() + ("" if ln.strip().startswith(")") else " ") + ln.strip()
+        buf = ln if depth <= 0 else buf.rstrip() + ("" if ln.strip().startswith(")") or buf.rstrip().endswith("(") else " ") + ln.strip()
         depth += ln.count("(") - ln.count(")")
         if depth <= 0:
             out.append(buf)
@@ -602,6 +602,9 @@ def check(led: Ledger) -> None:
                 E(f"{where}: body changed since approval; `reopen` then `approve` again")
             if n.get("adr_pending"):
                 E(f"{where}: approved while {n['adr_pending']} is pending; `adr accept` first")
+        for ad in n.get("adaptation", []):
+            if "→" not in ad and "->" not in ad:
+                E(f"{where}: adaptation {ad!r} must read '<clause> → <concrete construct>' (query text, API call + args, type); behaviour prose is not adaptation")
         if n.get("target"):
             if (why := target_ok(n["target"])):
                 E(f"{where}: {why}")
