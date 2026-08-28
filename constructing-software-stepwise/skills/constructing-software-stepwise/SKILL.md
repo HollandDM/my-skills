@@ -7,7 +7,7 @@ description: Use when designing or implementing systems with interacting compone
 
 Stepwise refinement (Dijkstra EWD249/EWD340, Wirth CACM 1971): minute steps, decide as little as possible per step, proof grows with program, representation deferred, back up to any ancestor when needed. Spec not given here → interview builds it, per node.
 
-Cycle, this order: (1) pick ONE node, draft its abstract statement + contract ≤ 6 clauses, unknowns `?slug` → (2) one question per `?`, this node only → (3) propose ONE refinement: pseudocode body + composition argument → (4) user approves / denies → (5) persist node + substitute body into `DESIGN.md ## Program` → next node.
+Cycle, this order: (1) pick ONE node, draft its abstract statement + contract ≤ 6 clauses, unknowns `?slug` → (2) one question per `?`, this node only → (3) propose ONE refinement: pseudocode body + composition argument → (4) user approves / denies → (5) persist node + substitute body into `DESIGN.md ## Program` → pick next node, same turn. Turn ends only at a question or a Proposal block; loop runs until frontier empty or user says stop.
 
 Design is pseudocode until a node is terminal; only there adapt to the real thing — language construct, framework API, platform primitive, service, infra, existing repo fn — written `<target>: <identifier>`. `DESIGN.md ## Program` = whole design, every approved body substituted in place, pseudo + realized lines mixed. Evidence lives inside the node it verifies.
 
@@ -23,6 +23,8 @@ Small refinement → small contract → small vocabulary. Many questions = scope
 | Scope leak gauge | `?` > 6 at draft → shrink Effect, push detail to children, redraft. Questions per node ≤ initial `?` count |
 | Interview before proposal | No children while draft has any `?` or open user-owned decision |
 | One question per turn | Exactly one question to user. Then wait |
+| Turn ends only at WAIT | Two stops: after a question, after a Proposal block (plus ADR STOP). Answer → clear `?` → next `?` or Proposal, same turn. Approval → persist → pick next node → draft → question or Proposal, same turn. Never end a turn on a summary |
+| Run to empty frontier | Default depth = whole tree: every leaf terminal or collapsed. Stop earlier only when user says stop or names a bound (`design only`, `to D-0xx`) |
 | Approval explicit | Yes to shown Proposal block. Agreement to prose ≠ approval → show block, ask |
 | Step small | Refinement body ≤ 12 pseudocode lines; each composition bullet ≤ 2 lines. Longer → insert intermediate node |
 | Pseudocode until terminal | Language keyword, library name, or concrete type in composite node = premature representation → move to child |
@@ -95,7 +97,7 @@ digraph refine {
     "WAIT for approval" [shape=ellipse];
     "Approved?" [shape=diamond];
     "Node file -> approved; DESIGN.md row; substitute body into Program" [shape=box];
-    "Frontier empty at requested depth?" [shape=diamond];
+    "Frontier empty, or user said stop?" [shape=diamond];
     "Done" [shape=doublecircle];
 
     "Pick one composite node at frontier" -> "Draft node file: Effect + Contract, unknowns as ?slug";
@@ -124,9 +126,9 @@ digraph refine {
     "WAIT for approval" -> "Approved?";
     "Approved?" -> "Propose pseudocode body (2-7 child statements) + 5-bullet composition" [label="no: revise"];
     "Approved?" -> "Node file -> approved; DESIGN.md row; substitute body into Program" [label="yes"];
-    "Node file -> approved; DESIGN.md row; substitute body into Program" -> "Frontier empty at requested depth?";
-    "Frontier empty at requested depth?" -> "Done" [label="yes"];
-    "Frontier empty at requested depth?" -> "Pick one composite node at frontier" [label="no"];
+    "Node file -> approved; DESIGN.md row; substitute body into Program" -> "Frontier empty, or user said stop?";
+    "Frontier empty, or user said stop?" -> "Done" [label="yes"];
+    "Frontier empty, or user said stop?" -> "Pick one composite node at frontier" [label="no: same turn"];
 }
 ```
 
@@ -204,7 +206,7 @@ ADRs: <checked, none conflict | conflict → protocol>
 
 ### 4. Approve + persist
 
-User owns semantic / risk / compat / hard-to-reverse choices. Approval = explicit yes to block. Then node file → `Design: approved`, fill Refinement / Composition / Decisions / Deferred, + `DESIGN.md` row, + substitute body under its statement line in `## Program` (children tagged `(frontier)`), same turn.
+User owns semantic / risk / compat / hard-to-reverse choices. Approval = explicit yes to block. Then node file → `Design: approved`, fill Refinement / Composition / Decisions / Deferred, + `DESIGN.md` row, + substitute body under its statement line in `## Program` (children tagged `(frontier)`), same turn. Then, still same turn: pick next frontier node (§1), draft, and either ask its first question or show its Proposal. No recap, no "next I will", no pause for permission — approval of one node is the instruction to continue.
 
 Approved node = composed fn: descendants use Statement + Contract, never re-derive. Reopen only on changed context entry, invariant, dependency, ADR, evidence.
 
@@ -214,7 +216,7 @@ Only if ALL: hard to reverse + surprising w/o context + real trade-off. Offer �
 
 Before Proposal: check linked ADRs. Conflict → STOP branch, Conflict Protocol in [adr-ledger.md](references/adr-ledger.md). Never bypass, weaken, delete, rewrite ADR.
 
-### 6. Implement + verify to requested depth
+### 6. Implement + verify
 
 Design-only → stop at approved frontier. Implementation → refine until every leaf terminal, then adapt: terminal `Realization` names the real thing (`Target: <target>: <identifier>`, `Adaptation` lines pseudo construct → real construct), `Program` line tagged `⇒ <target>: <identifier>` at approval, `✓ <target>: <identifier>` once verified; may become the real line.
 
@@ -251,7 +253,9 @@ Context entry, ancestor, ADR, or dependency changes:
 | Root needs full vocabulary | Root ≤ 6 coarse clauses. Detail = children |
 | Ask first, draft later | Draft first. No draft = no bound |
 | Context clear, skip to proposal | Zero `?`, not feeling |
-| Design next node too | One node per approval |
+| Two bodies in one Proposal block | One body per approval. Next node gets its own block |
+| Node approved → summarize, wait for "continue" | Approval = continue. Persist, pick next, draft, ask or propose — same turn |
+| "Requested depth" = this node | Default = whole tree. Only user's explicit stop or bound shortens it |
 | Agreement to prose = approval | Yes to Proposal block only |
 | Skip composition bullets | Five bullets ≤ 2 lines. Can't → step too big |
 | Composition needs paragraph | Insert intermediate node |
@@ -273,4 +277,4 @@ Context entry, ancestor, ADR, or dependency changes:
 
 ## Completion
 
-Done at requested depth when: frontier approved; every statement has contract; each parent justified by ≤ 12-line body + ≤ 2-line-bullet composition; `Program` reads top-down with every line approved, frontier-tagged, or realized; ADRs satisfied or superseded; another engineer / agent continues from files alone.
+Depth = whole tree unless user bounds it. Done when: frontier empty (every leaf terminal or collapsed); every statement has contract; each parent justified by ≤ 12-line body + ≤ 2-line-bullet composition; `Program` reads top-down with every line approved, frontier-tagged, or realized; ADRs satisfied or superseded; another engineer / agent continues from files alone.
