@@ -29,6 +29,7 @@ Every verb ends with render + lint; exit 1 and `error <where>: <msg>` lines when
   meta      <dir> title|scope "text" | nongoals "a" "b" ...
   ambiguity <dir> "claim" "conflict" D-NNN | ambiguity <dir> "claim" --drop
   adr       <dir> new "Title" --constrains D-NNN[,D-MMM] | adr <dir> accept ADR-NNNN | adr <dir> supersede ADR-OLD ADR-NEW
+                                                      adr <dir> constrains ADR-NNNN --constrains D-NNN[,D-MMM]   rewrite the constrained set
   sync      <dir>                                     render + lint (after hand-editing an ADR paragraph)
   check     <dir>                                     lint only, no writes
 
@@ -1113,6 +1114,19 @@ def v_adr(led: Ledger, a) -> int:
         for nid in freed:
             del led.nodes[nid]["adr_pending"]
         return finish(led, f"{adr['id']} accepted; unblocked {', '.join(freed) or 'nothing'}")
+    if a.action == "constrains":
+        adr = next((x for x in led.adrs() if x["id"] == a.title), None)
+        if not adr:
+            return fail(f"{a.title!r}: no such ADR")
+        ids = [w.strip() for w in (a.constrains or "").split(",") if is_node_id(w.strip())]
+        if not ids:
+            return fail('adr <dir> constrains ADR-NNNN --constrains D-NNN[,D-MMM]')
+        missing = [x for x in ids if not led.resolves(x)]
+        if missing:
+            return fail(f"{', '.join(missing)}: not a node or frontier id")
+        set_header(adr["lines"], "Constrains", ", ".join(ids))
+        adr["path"].write_text("\n".join(adr["lines"]) + "\n", encoding="utf-8")
+        return finish(led, f"{adr['id']} constrains {', '.join(ids)}")
     if a.action == "supersede":
         by_id = {x["id"]: x for x in led.adrs()}
         old, new = by_id.get(a.title), by_id.get(a.new_adr or "")
@@ -1124,7 +1138,7 @@ def v_adr(led: Ledger, a) -> int:
         old["path"].write_text("\n".join(old["lines"]) + "\n", encoding="utf-8")
         new["path"].write_text("\n".join(new["lines"]) + "\n", encoding="utf-8")
         return finish(led, f"{old['id']} superseded by {new['id']}")
-    return fail("adr <dir> new ... | adr <dir> accept ADR-NNNN | adr <dir> supersede ADR-OLD ADR-NEW")
+    return fail("adr <dir> new ... | accept ADR-NNNN | supersede ADR-OLD ADR-NEW | constrains ADR-NNNN --constrains D-NNN")
 
 
 def v_sync(led: Ledger, a) -> int:
@@ -1175,7 +1189,7 @@ def main(argv: list[str]) -> int:
     add("change", "ref", definition={"default": ""}, rename={"default": ""}, status={"default": "", "choices": ["", "confirmed", "stale"]}, reason={"required": True}, minor={"action": "store_true"})
     add("meta", "field", ("value", {"nargs": "+"}))
     add("ambiguity", "claim", ("conflict", {"nargs": "?"}), ("resolves_at", {"nargs": "?"}), drop={"action": "store_true"})
-    add("adr", ("action", {"choices": ["new", "accept", "supersede"]}), ("title", {"nargs": "?"}), ("new_adr", {"nargs": "?"}), constrains={"default": ""})
+    add("adr", ("action", {"choices": ["new", "accept", "supersede", "constrains"]}), ("title", {"nargs": "?"}), ("new_adr", {"nargs": "?"}), constrains={"default": ""})
     a = ap.parse_args(argv[1:])
     d = Path(a.dir).resolve()
     for key in ("id", "new_id"):

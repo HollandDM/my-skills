@@ -142,6 +142,8 @@ assert "Status: accepted" in next((root / "adr").glob("0001-*.md")).read_text()
 run("approve", "D-010")
 run("adr", "new", "Ledger rows are append-only", "--constrains", "D-021")
 run("adr", "supersede", "ADR-0001", "ADR-0002")
+run("adr", "constrains", "ADR-0002", "--constrains", "D-021,D-000")
+assert "Constrains: D-021, D-000" in next((root / "adr").glob("0002-*.md")).read_text()
 a1 = next((root / "adr").glob("0001-*.md")).read_text()
 a2 = next((root / "adr").glob("0002-*.md")).read_text()
 assert "Status: superseded" in a1 and "Superseded by: ADR-0002" in a1, a1

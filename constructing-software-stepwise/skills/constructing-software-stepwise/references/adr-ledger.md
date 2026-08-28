@@ -21,7 +21,7 @@ Typical: persistent data formats, ownership boundaries, public protocols, consis
 - **Self-describing header.** `Kind`, ID, `Status`, `Date`, `Constrains` node ids — written by `stepwise.py adr new "<title>" --constrains D-NNN[,D-MMM]`.
 - **Name, never repeat.** Reference context entries + nodes by name / id. Never restate a definition.
 - **Size cap.** ≤ 40 lines (lint).
-- **Only the paragraph + sections are hand-written.** Header + status belong to the tool: `adr new` (proposed; constrained nodes drop to `draft (ADR pending)`), `adr accept ADR-NNNN` (accepted; nodes unblocked). `adr supersede ADR-OLD ADR-NEW` (old → superseded + `Superseded by`, new gets `Supersedes`). Run `sync` after editing the paragraph.
+- **Only the paragraph + sections are hand-written.** Header + status belong to the tool: `adr new` (proposed; constrained nodes drop to `draft (ADR pending)`), `adr accept ADR-NNNN` (accepted; nodes unblocked). `adr supersede ADR-OLD ADR-NEW` (old → superseded + `Superseded by`, new gets `Supersedes`), `adr constrains ADR-NNNN --constrains D-NNN[,D-MMM]` (rewrite the constrained set as the tree moves under it). Run `sync` after editing the paragraph.
 
 ## Authority + Lifecycle
 

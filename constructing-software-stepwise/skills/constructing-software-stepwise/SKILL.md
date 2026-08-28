@@ -60,7 +60,7 @@ docs/adr/NNNN-<slug>.md   one decision = one file; stub + status by the tool, pa
 |---|---|---|---|---|
 | Meaning | `terms` / `facts` / `scenarios` entries | edited in place; dated `changed` list | `entry`, `change`, `meta`, `ambiguity` | [context-ledger.md](references/context-ledger.md) |
 | Design + evidence | node record; evidence list | status by verb only; history keeps reasons | `new`, `set`, `body`, `answer`, `terminal`, `approve`, `reopen`, `stale`, `supersede`, `evidence` | [design-ledger.md](references/design-ledger.md) |
-| Decision | ADR markdown | supersede, never rewrite | `adr new`, `adr accept`, `adr supersede` | [adr-ledger.md](references/adr-ledger.md) |
+| Decision | ADR markdown | supersede, never rewrite | `adr new`, `adr accept`, `adr supersede`, `adr constrains` | [adr-ledger.md](references/adr-ledger.md) |
 
 Rules:
 - One claim per record. Two citable statements → two entries.
