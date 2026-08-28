@@ -13,6 +13,10 @@ Design is pseudocode until a node is terminal; only there adapt to the real thin
 
 Small refinement → small contract → small vocabulary. Many questions = scope leaking from children.
 
+## Voice — compressed here, explicit there
+
+This file is compressed on purpose. Nothing it writes is. Every artifact — gloss, effect, contract clause, walkthrough, per-line explanation, composition bullet, decision, adaptation, entry definition, ADR paragraph, question, Proposal block — is written for someone who arrives a year from now with no context: complete sentences, subject named, precise and self-explanatory, jargon only where an entry defines it. Never mirror the telegraphic style of these instructions in a ledger, a view, an ADR, or a question. Length caps (≤ 6 clauses, ≤ 12 body lines, ≤ 3 walkthrough lines, ≤ 2-line bullets) bound how much is said, never how clearly: too much to say clearly inside a cap means the node is too big — split it, never compress the prose.
+
 ## Pacing — hard rules
 
 | Rule | Observable test |
@@ -61,12 +65,6 @@ docs/adr/NNNN-<slug>.md   one decision = one file; stub + status by the tool, pa
 | Meaning | `terms` / `facts` / `scenarios` entries | edited in place; dated `changed` list | `entry`, `change`, `meta`, `ambiguity` | [context-ledger.md](references/context-ledger.md) |
 | Design + evidence | node record; evidence list | status by verb only; history keeps reasons | `new`, `set`, `body`, `answer`, `terminal`, `approve`, `reopen`, `stale`, `supersede`, `evidence` | [design-ledger.md](references/design-ledger.md) |
 | Decision | ADR markdown | supersede, never rewrite | `adr new`, `adr accept`, `adr supersede`, `adr constrains` | [adr-ledger.md](references/adr-ledger.md) |
-
-Voice — chat vs artifacts. Chat may be terse. Everything the verbs persist — gloss, effect, contract clause, walkthrough, body line explanation, composition bullet, decision, entry definition, ADR paragraph — is written for an engineer who was not in this session and has only the file:
-- Full sentences, exact nouns. Name the thing every time; no `it`, `this`, `the above`, no pronoun whose referent lives in the chat.
-- Self-contained: readable without the session, the parent node, or the question that produced it. Refer to other records by name (`Run Key`, `CTX-F04`, `D-060`) so the view links them.
-- Precise over short. Never drop articles, conjunctions, or a qualifier to save a line; state the condition, the scope, and what holds. Length caps (≤ 3 walkthrough lines, ≤ 2 bullet lines, 1–2 clause lines) bound the thought, not the grammar — thought too big for the cap → split the node, never compress the prose.
-- No `obviously`, `simply`, `trivially`, `just`, `should be fine`, `TBD`. An unknown is a `?slug`, an `ambiguity` row, or a `deferred` bullet, never a vague phrase.
 
 Rules:
 - One claim per record. Two citable statements → two entries.
@@ -164,15 +162,15 @@ digraph refine {
 
 Read `DESIGN.md`, `show` the active node, its depends, linked ADRs, code, tests, evidence. `frontier` → pick ONE composite node.
 
-`new <dir> D-NNN` (root: `new <dir> D-000 "outcome <- run_agent(identity, objective)"`). Then `set` gloss (one line) + effect (1–2 sentences) + contract (≤ 6 clauses, 1–2 explicit lines each — Voice rules apply). Term / decision without entry on disk → `?slug` inside the clause. Draft = scope fence; interview fills only its holes. Root example, 4 `?`:
+`new <dir> D-NNN` (root: `new <dir> D-000 "outcome <- run_agent(identity, objective)"`). Then `set` gloss (one line) + effect (1–2 sentences) + contract (≤ 6 clauses, 1–2 explicit lines each — a clause a reader can check without the rest of the design). Term / decision without entry on disk → `?slug` inside the clause. Draft = scope fence; interview fills only its holes. Root example, 4 `?`:
 
 ```bash
-set D-000 gloss "one Agent Run carries one objective to exactly one terminal outcome, across process restarts"
-set D-000 effect "One Agent Run ends in exactly one terminal outcome for its objective, and a restart of the process resumes that run rather than starting a second one."
-set D-000 pre "The caller supplies a ?run-identity that names this run, and an objective that is complete before the run starts."
-set D-000 post "Exactly one ?verified-result or one typed failure is recorded for the run, and it is recorded once no matter how many times the caller retries."
-set D-000 failure "Every way the run can end badly is reported through one of the ?failure-channels; no failure escapes as an unhandled exception."
-set D-000 invariant "No ?tool-effect is applied twice, including across a restart that replays the run."
+set D-000 gloss "one Agent Run to exactly one terminal outcome, restart-safe"
+set D-000 effect "One Agent Run ends in exactly one terminal outcome and survives process restart."
+set D-000 pre "The caller supplies a ?run-identity and an objective; neither is derived here."
+set D-000 post "The run ends holding exactly one ?verified-result or one typed failure, recorded once."
+set D-000 failure "Every failure leaves the run through one of the ?failure-channels, never as a partial success."
+set D-000 invariant "No ?tool-effect is duplicated when the process restarts mid-run."
 ```
 
 Journal shape, budgets, tool ordering, cancellation → children's `?`. `?` > 6 → shrink effect, redraft.
@@ -345,9 +343,8 @@ Context entry, ancestor, ADR, or dependency changes:
 | ADR doesn't apply | Conflict Protocol decides |
 | Reopening ancestor = failure | Normal |
 | Ask user a fact in code | Explore |
-| Caveman / chat voice inside a record | Artifacts are full sentences for a reader with no session context |
-| Clause reads `Post: row exists` | Say which row, under which condition, what holds after retries |
-| Shorten a clause or bullet to fit the cap | Caps bound the thought. Split the node instead |
+| Write the ledger the way this file is written | Skill prose is compressed; artifacts are complete sentences that stand alone |
+| Clause trimmed to a fragment to fit a cap | Caps bound content, not clarity. Say it fully or split the node |
 
 ## Completion
 

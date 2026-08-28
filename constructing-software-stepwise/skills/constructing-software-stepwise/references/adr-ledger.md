@@ -1,5 +1,7 @@
 # ADR Ledger Format
 
+_Every field below is written in complete, self-explanatory sentences for a reader with no context — see Voice in SKILL.md. Caps bound how much is said, never how clearly._
+
 ADR = durable record that a consequential choice was made, and why. Backstop for refinement tree: future designs satisfy it or explicitly supersede.
 
 Not: explanation, meeting note, claim that impl is correct.
@@ -17,7 +19,6 @@ Typical: persistent data formats, ownership boundaries, public protocols, consis
 ## Atomic File Rules
 
 - **One decision per file.** Two decisions → two ADRs, cross-linked.
-- **Written for a stranger.** Full sentences, exact nouns, no session context assumed (SKILL.md → Voice).
 - **Paragraph first.** Title + 1–3 sentences (context, decision, why) = complete ADR. Sections only when they add value.
 - **Self-describing header.** `Kind`, ID, `Status`, `Date`, `Constrains` node ids — written by `stepwise.py adr new "<title>" --constrains D-NNN[,D-MMM]`.
 - **Name, never repeat.** Reference context entries + nodes by name / id. Never restate a definition.

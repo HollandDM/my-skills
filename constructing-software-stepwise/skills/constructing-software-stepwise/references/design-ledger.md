@@ -1,5 +1,7 @@
 # Design Ledger Format
 
+_Every field below is written in complete, self-explanatory sentences for a reader with no context — see Voice in SKILL.md. Caps bound how much is said, never how clearly._
+
 Design = approved refinement tree, serialized as pseudocode, with each node's evidence beside its contract. Answers **how accepted abstract statements compose to satisfy parent contracts, and why each is believed to hold**. Dijkstra: program text refined in place — abstract statement → body of smaller statements — until each maps onto one real thing.
 
 Not: interview transcript, impl diary, backlog, component inventory.

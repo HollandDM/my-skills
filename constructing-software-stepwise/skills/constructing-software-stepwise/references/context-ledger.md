@@ -1,5 +1,7 @@
 # Context Ledger Format
 
+_Every field below is written in complete, self-explanatory sentences for a reader with no context — see Voice in SKILL.md. Caps bound how much is said, never how clearly._
+
 Context = shared meaning. Answers **what we mean, what world design must fit**. Glossary + facts + scenarios. Nothing else — not spec, not scratch pad, not impl decisions.
 
 ## Layout — typed entries in the ledger, one generated view
@@ -11,8 +13,6 @@ docs/design/<topic>/
   ledger.json     terms · facts · scenarios · scope · nongoals · ambiguities — written ONLY by `stepwise.py`
   CONTEXT.md      generated view: scope, three tables, open ambiguities, non-goals, then every entry in full
 ```
-
-Every definition is a full sentence naming the thing itself, readable by someone who was not in the session (SKILL.md → Voice).
 
 Entries change in place (meaning sharpens, facts go stale) → `change` appends a dated reason and lint names every approved dependent.
 
