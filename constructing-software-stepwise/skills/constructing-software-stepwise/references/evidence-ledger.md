@@ -4,23 +4,26 @@ Evidence = why obligation currently believed to hold. Answers **what checked, ag
 
 Approval → `nodes/`. Rationale → ADR. Evidence alone grants `verified`.
 
-## Layout — one record per file
+## Layout — index, one file per node
 
 Existing verification / test-plan convention if present. Else:
 
 ```text
 docs/design/<topic>/
-  EVIDENCE.md                          index only: record table
-  evidence/EV-D120-01-<slug>.md        one record
+  EVIDENCE.md              index only: record table
+  evidence/D-120.md        every record for node D-120, one `##` section each
 ```
 
-## Atomic File Rules
+Records change status (passed → stale) → grouped per node, edited in place.
 
-- **One record = one (node, obligation, method).** Same test covering two clauses → two records, same `Artifact`.
-- **Self-describing header.** `Kind`, ID, `Index` link, node link, `Status`, `Recorded`.
+## Entry Rules
+
+- **One record = one (node, obligation, method).** Same test covering two clauses → two sections, same `Artifact`.
+- **Heading = anchor.** `## EV-D120-01 <name>` → `evidence/D-120.md#ev-d120-01-<slug>`. No punctuation inside heading.
+- **Self-describing section.** First line after heading: `Status`, `Recorded`.
 - **Link, never repeat.** Quote obligation clause by link + short label; don't paste node contract.
-- **Size cap.** ≤ 30 lines.
-- Record file + `EVIDENCE.md` row written in same edit. Create index on first obligation w/ evidence.
+- **Size cap.** Section ≤ 15 lines.
+- Section + `EVIDENCE.md` row written in same edit. Create index + node file on first obligation w/ evidence.
 - Never record command not run or proof not established.
 
 ## Index — `EVIDENCE.md`
@@ -32,17 +35,20 @@ Kind: index · Design: [./DESIGN.md](./DESIGN.md)
 
 | ID | Node | Obligation | Method | Status | Recorded | File |
 | --- | --- | --- | --- | --- | --- | --- |
-| EV-D120-01 | D-120 | Post: <label> | property-test | passed | YYYY-MM-DD | [evidence/EV-D120-01-<slug>.md](evidence/EV-D120-01-<slug>.md) |
+| EV-D120-01 | D-120 | Post: <label> | property-test | passed | YYYY-MM-DD | [D-120.md#ev-d120-01](evidence/D-120.md#ev-d120-01-<slug>) |
 ```
 
-Row mirrors record header. Status change in file → same edit updates row.
+Row mirrors section header. Status change in section → same edit updates row.
 
-## Record — `evidence/EV-D120-01-<slug>.md`
+## Records — `evidence/D-120.md`
 
 ```markdown
-# EV-D120-01 — <Short evidence name>
+# D-120 — Evidence
 
 Kind: evidence · Index: [../EVIDENCE.md](../EVIDENCE.md) · Node: [D-120](../nodes/D-120-<slug>.md)
+
+## EV-D120-01 <Short evidence name>
+
 Status: passed | failed | partial | stale · Recorded: YYYY-MM-DD
 
 Obligation: <Contract clause label, e.g. "Post: at-least-once tool effect">
@@ -82,6 +88,6 @@ Else `unverified` or `partial` + name missing obligation.
 
 ## Staleness
 
-Mark `stale` (file + index row) on change to: contract / vocab tested; ancestor or child composition; applicable ADR; impl code / config; dependency versions; anything in `Environment`.
+Mark `stale` (section + index row) on change to: contract / vocab tested; ancestor or child composition; applicable ADR; impl code / config; dependency versions; anything in `Environment`.
 
 Stale ≠ false. Old result no longer justifies current claim. Keep record; add fresh; restore `verified` only after coverage current.

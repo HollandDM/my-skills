@@ -2,28 +2,32 @@
 
 Context = shared meaning. Answers **what we mean, what world design must fit**. Glossary + facts + scenarios. Nothing else — not spec, not scratch pad, not impl decisions.
 
-## Layout — one item per file
+## Layout — central index, one file per kind
 
 Repo glossary/context convention if exists. Else scoped to design:
 
 ```text
 docs/design/<topic>/
-  CONTEXT.md                            index only
-  context/terms/<slug>.md               one canonical term
-  context/facts/CTX-F01-<slug>.md       one confirmed fact / constraint
-  context/scenarios/CTX-S01-<slug>.md   one scenario
+  CONTEXT.md            central index: scope, tables, open ambiguities, non-goals
+  context/terms.md      every term, one `##` section each
+  context/facts.md      every fact, one `##` section each
+  context/scenarios.md  every scenario, one `##` section each
 ```
 
-## Atomic File Rules
+Context entries get edited in place (meaning sharpens, facts go stale) → grouped files. Nodes + ADRs append-only → one file each (see design / adr ledgers).
 
-- **One claim per file.** Two statements each citable alone → two files. Test: sentence joins independent claims with "and" / ";" → split.
-- **Self-describing header.** First lines: `Kind`, ID, `Index` link, `Status`, `Confirmed` date. Reader understands file w/o opening another.
-- **Link, never repeat.** Reference other items by relative link. Copying another file's content = duplicate truth.
+## Entry Rules
+
+- **One claim per section.** `##` heading = canonical term or `ID name`. Sentence joins two citable claims with "and" / ";" → two sections.
+- **Heading = anchor.** `## Agent Run` → `terms.md#agent-run`. `## CTX-F01 Required runtime` → `facts.md#ctx-f01-required-runtime`. No punctuation inside heading; anchor stays predictable.
+- **Self-describing section.** First line after heading: `Confirmed: YYYY-MM-DD · Source: <…>` (+ `Status:` for facts). Reader understands section alone.
+- **Link, never repeat.** Other entries + nodes by relative link. Copying = duplicate truth.
 - **Tight.** Definition 1–2 sentences. What it IS, not what it does.
 - **Opinionated.** One canonical term. Rejected synonyms under `Avoid:`. Confusable neighbours under `Not:` w/ link.
-- **Size cap.** Term / fact / scenario file ≤ 30 lines. Over → you packed two items. Split.
+- **Size cap.** Section ≤ 10 lines. Over → two claims. Split.
 - **Project-specific only.** General programming concepts (timeout, retry, error type) not terms — even when used heavily.
-- Item file + `CONTEXT.md` row written in same edit. Create index on first item. Never batch at end.
+- **Order.** Terms alphabetical. Facts / scenarios by ID, append at end.
+- Section + `CONTEXT.md` row written in same edit. Create index + kind file on first entry. Never batch at end.
 
 Term → project-wide glossary only when used across multiple designs / bounded contexts. Local stays local.
 
@@ -41,21 +45,21 @@ Design: [./DESIGN.md](./DESIGN.md) · Evidence: [./EVIDENCE.md](./EVIDENCE.md)
 
 ## Vocabulary
 
-| Term | Is | Avoid | File |
+| Term | Is | Avoid | Entry |
 | --- | --- | --- | --- |
-| Job Key | Caller-chosen idempotency key naming one Job | run id, correlation id | [context/terms/job-key.md](context/terms/job-key.md) |
+| Job Key | Caller-chosen idempotency key naming one Job | run id, correlation id | [terms.md#job-key](context/terms.md#job-key) |
 
 ## Facts and constraints
 
-| ID | Fact (one line) | Used by | File |
-| --- | --- | --- | --- |
-| CTX-F01 | <one line> | D-000, D-020 | [context/facts/CTX-F01-<slug>.md](context/facts/CTX-F01-<slug>.md) |
+| ID | Fact (one line) | Status | Used by | Entry |
+| --- | --- | --- | --- | --- |
+| CTX-F01 | <one line> | confirmed | D-000, D-020 | [facts.md#ctx-f01](context/facts.md#ctx-f01-<slug>) |
 
 ## Scenarios
 
-| ID | Scenario | Settles | File |
+| ID | Scenario | Settles | Entry |
 | --- | --- | --- | --- |
-| CTX-S01 | <name> | <term / boundary it fixes> | [context/scenarios/CTX-S01-<slug>.md](context/scenarios/CTX-S01-<slug>.md) |
+| CTX-S01 | <name> | <term / boundary it fixes> | [scenarios.md#ctx-s01](context/scenarios.md#ctx-s01-<slug>) |
 
 ## Open ambiguities
 
@@ -69,53 +73,60 @@ Design: [./DESIGN.md](./DESIGN.md) · Evidence: [./EVIDENCE.md](./EVIDENCE.md)
 - <Meaning or behavior outside this design's scope>
 ```
 
-Index rows mirror item headers. Never hold item bodies.
+Index rows mirror section headers. Never hold bodies.
 
-## Term — `context/terms/<slug>.md`
+## Terms — `context/terms.md`
 
 ```markdown
-# <Canonical term>
+# <Design area> — Terms
 
-Kind: term · Index: [../../CONTEXT.md](../../CONTEXT.md)
+Kind: terms · Index: [../CONTEXT.md](../CONTEXT.md)
+
+## Job Key
+
 Confirmed: YYYY-MM-DD · Source: <user | code path | document>
 
 <One or two sentences. What it IS, not what it does.>
 
 Avoid: <alias>, <alias>
-Not: <confusable neighbour> → [<slug>.md](<slug>.md)
+Not: <neighbour> → [#<anchor>](#<anchor>)
 Example: <one boundary-revealing example>
-Used by: [D-020](../../nodes/D-020-<slug>.md), [CTX-S01](../scenarios/CTX-S01-<slug>.md)
+Used by: [D-020](../nodes/D-020-<slug>.md), [CTX-S01](scenarios.md#ctx-s01-<slug>)
 ```
 
-## Fact — `context/facts/CTX-F01-<slug>.md`
+## Facts — `context/facts.md`
 
 ```markdown
-# CTX-F01 — <short name>
+# <Design area> — Facts
 
-Kind: fact · Status: confirmed | stale · Index: [../../CONTEXT.md](../../CONTEXT.md)
-Source: <code path | document | experiment | user decision>
-Confirmed: YYYY-MM-DD
+Kind: facts · Index: [../CONTEXT.md](../CONTEXT.md)
+
+## CTX-F01 <short name>
+
+Status: confirmed | stale · Confirmed: YYYY-MM-DD · Source: <code path | document | experiment | user decision>
 
 <ONE fact or constraint. One or two sentences.>
 
-Used by: [D-000](../../nodes/D-000-<slug>.md), [D-020](../../nodes/D-020-<slug>.md)
+Used by: [D-000](../nodes/D-000-<slug>.md), [D-020](../nodes/D-020-<slug>.md)
 ```
 
-## Scenario — `context/scenarios/CTX-S01-<slug>.md`
+## Scenarios — `context/scenarios.md`
 
 ```markdown
-# CTX-S01 — <scenario name>
+# <Design area> — Scenarios
 
-Kind: scenario · Index: [../../CONTEXT.md](../../CONTEXT.md)
-Settles: [<term>](../terms/<slug>.md) boundary
-Confirmed: YYYY-MM-DD
+Kind: scenarios · Index: [../CONTEXT.md](../CONTEXT.md)
+
+## CTX-S01 <scenario name>
+
+Confirmed: YYYY-MM-DD · Settles: [<term>](terms.md#<anchor>) boundary
 
 Given <starting context>.
 When <event or action>.
 Then <observable meaning or boundary>.
 Excludes: <nearby interpretation this rules out>
 
-Used by: [D-040](../../nodes/D-040-<slug>.md)
+Used by: [D-040](../nodes/D-040-<slug>.md)
 ```
 
 ## Not Here
@@ -139,17 +150,17 @@ Agent inference alone → not eligible. No confident prose from guesses.
 
 User vs code disagree → surface conflict: "Your code cancels entire Orders, but you just said partial cancellation is possible — which is right?" Record resolution. Never both as true.
 
-User term conflicts w/ existing term file → call out immediately: "Glossary defines 'cancellation' as X, you seem to mean Y — which?"
+User term conflicts w/ existing entry → call out immediately: "Glossary defines 'cancellation' as X, you seem to mean Y — which?"
 
 Vague / overloaded term → propose canonical: "'account' — Customer or User? Different things."
 
-Ambiguous boundary → scenario forcing it. Resolve iff active node's draft Contract carries a `?` for it; else row in `Open ambiguities`, `Resolves at: child of D-NNN`, and node's `Deferred` at approval. Item files exist only for resolved `?` — one per question asked, no more.
+Ambiguous boundary → scenario forcing it. Resolve iff active node's draft Contract carries a `?` for it; else row in `Open ambiguities`, `Resolves at: child of D-NNN`, and node's `Deferred` at approval. Entries exist only for resolved `?` — one per question asked, no more.
 
 ## Change + Invalidation
 
-Terms / facts = dependencies of design nodes. Item changes →
+Terms / facts = dependencies of design nodes. Entry changes →
 
-1. update item file (meaning changed → date + one-line reason; typo / wording: no note)
+1. edit section in place (meaning changed → `Changed: YYYY-MM-DD — <reason>` line; typo / wording: no note)
 2. update its index row
 3. follow `Used by` links → mark those nodes + their evidence stale
 4. review before resuming

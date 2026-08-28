@@ -72,7 +72,7 @@ Composite fan-out 2–7. 1 → rename, not refinement. >7 → add intermediate n
 Kind: node · Index: [../DESIGN.md](../DESIGN.md)
 Design: draft (<k> ?) | approved | stale | superseded · Realization: not-started | partial | implemented · Verification: unverified | partial | verified
 Parent: [D-100](D-100-<slug>.md)
-Depends on: [CTX-F03](../context/facts/CTX-F03-<slug>.md), [D-090](D-090-<slug>.md), [ADR-0003](../../../adr/0003-<slug>.md)
+Depends on: [CTX-F03](../context/facts.md#ctx-f03-<slug>), [D-090](D-090-<slug>.md), [ADR-0003](../../../adr/0003-<slug>.md)
 Approved: YYYY-MM-DD by <user>
 
 ## Effect
@@ -86,7 +86,7 @@ Approved: YYYY-MM-DD by <user>
 - Failure: <one line: errors, cancellation, retries, partial progress, recovery>
 - Invariant: <one line>
 - Budget: <one line: latency / memory / cost / security / reliability>
-- Vocabulary: [<term>](../context/terms/<slug>.md), [CTX-S01](../context/scenarios/CTX-S01-<slug>.md)
+- Vocabulary: [<term>](../context/terms.md#<anchor>), [CTX-S01](../context/scenarios.md#ctx-s01-<slug>)
 
 ## Refines into
 
@@ -112,7 +112,7 @@ Approved: YYYY-MM-DD by <user>
 ## Realization
 
 - Code: <paths or identifiers>
-- Evidence: [EV-D120-01](../evidence/EV-D120-01-<slug>.md)
+- Evidence: [EV-D120-01](../evidence/D-120.md#ev-d120-01-<slug>)
 ```
 
 Composition argument: five fixed bullets, each present. Not applicable → `n/a: <reason>`. Never omit silently.

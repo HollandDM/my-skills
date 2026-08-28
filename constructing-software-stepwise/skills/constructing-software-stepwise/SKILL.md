@@ -5,67 +5,66 @@ description: Use when designing or implementing systems with interacting compone
 
 # Constructing Software Stepwise
 
-Dijkstra: *"compose the program in minute steps, deciding each time as little as possible"* (EWD249); *"let correctness proof and program grow hand in hand"* (EWD340). Wirth: *"defer those decisions which concern details of representation as long as possible"*; *"revoke earlier decisions, and back up, if necessary even to the top"* (CACM 1971).
+Stepwise refinement (Dijkstra EWD249/EWD340, Wirth CACM 1971): minute steps, decide as little as possible per step, proof grows with program, representation deferred, back up to any ancestor when needed. Spec not given here → interview builds it, per node.
 
-Cycle, in this order: (1) pick ONE node, draft its contract small enough — ≤ 6 clauses, unknowns as `?` — (2) ask user one question per `?`, only around this node, (3) propose ONE refinement w/ composition argument (= proof obligation), (4) user approves or denies, (5) persist, next node. One node per cycle. Never two.
+Cycle, this order: (1) pick ONE node, draft contract ≤ 6 clauses, unknowns `?slug` → (2) one question per `?`, this node only → (3) propose ONE refinement + composition argument → (4) user approves / denies → (5) persist → next node.
 
-Classic method assumes spec given. Here spec not given — interview builds it, one `?` at a time, per node. Small refinement → small contract → small vocabulary. Many questions = scope leaking from children into this node.
+Small refinement → small contract → small vocabulary. Many questions = scope leaking from children.
 
 ## Pacing — hard rules
 
 | Rule | Observable test |
 |---|---|
-| One refinement per approval | Turn proposes children for exactly one node. Children for second node same turn = violation |
-| Draft before ask | Node file exists w/ `Design: draft`, Effect, Contract ≤ 6 clauses, unknowns marked `?slug`, before first question |
-| Interview bounded | Every question names the `?` it resolves. No `?` → don't ask → `Open ambiguities` row, `Resolves at: child of D-NNN` |
-| Scope leak gauge | `?` count > 6 at draft → Effect too wide → shrink Effect, push detail to children, redraft. Question count per node ≤ initial `?` count |
-| Interview before proposal | No children proposed while draft Contract has any `?`, or any user-owned decision the draft names open |
-| One question per turn | Message has exactly one question aimed at user. Then wait |
-| Approval explicit | User says yes to shown Proposal block. "Sounds good" to prose summary ≠ approval → show block, ask |
-| Step small | Each composition bullet ≤ 2 lines. Longer → step too big → insert intermediate node |
-| Back up freely | Obligation fails → revise children or reopen ancestor. Reopening ≠ failure |
+| One refinement per approval | Turn proposes children for exactly one node |
+| Draft before ask | Node file exists, `Design: draft`, Effect, Contract ≤ 6 clauses, unknowns `?slug`, before first question |
+| Interview bounded | Every question names the `?` it clears. No `?` → no question → `Open ambiguities` row, `Resolves at: child of D-NNN` |
+| Scope leak gauge | `?` > 6 at draft → shrink Effect, push detail to children, redraft. Questions per node ≤ initial `?` count |
+| Interview before proposal | No children while draft has any `?` or open user-owned decision |
+| One question per turn | Exactly one question to user. Then wait |
+| Approval explicit | Yes to shown Proposal block. Agreement to prose ≠ approval → show block, ask |
+| Step small | Each composition bullet ≤ 2 lines. Longer → insert intermediate node |
+| Back up freely | Obligation fails → revise children or reopen ancestor |
 
-## Node Kinds — observable, no judgment hatch
+## Node Kinds
 
 | Kind | Test | Record |
 |---|---|---|
-| **Terminal** | Effect = ONE existing fn, lib call, platform feature, or repo pattern, nameable in `Realization` | Effect + Realization only |
-| **Composite** | Anything else | Every field in [design-ledger.md](references/design-ledger.md) |
+| Terminal | Effect = ONE existing fn / lib call / platform feature / repo pattern, named in `Realization` | Effect + Realization |
+| Composite | else | every field in [design-ledger.md](references/design-ledger.md) |
 
-Fan-out: composite → 2–7 children. 1 child = rename. >7 = missing intermediate node.
+Composite → 2–7 children. 1 = rename. >7 = missing intermediate node. "Trivial / obvious / clear enough" not decision words; tables decide.
 
-"Material", "trivial", "substantial", "obvious", "clear enough" = not decision words. Tables decide.
+## Durable Artifacts
 
-## Durable Artifacts — one item per file
-
-Four dimensions. Repo convention wins; else:
+Repo convention wins; else:
 
 ```text
 docs/design/<topic>/
-  CONTEXT.md                            index only: scope, non-goals, item tables
-  context/terms/<slug>.md               one term
-  context/facts/CTX-F01-<slug>.md       one fact
-  context/scenarios/CTX-S01-<slug>.md   one scenario
-  DESIGN.md                             index only: root, frontier, ADRs, node table
-  nodes/D-000-<slug>.md                 one node = one refinement step
-  EVIDENCE.md                           index only: record table
-  evidence/EV-D000-01-<slug>.md         one record
-docs/adr/NNNN-<slug>.md                 one decision
+  CONTEXT.md              index: scope, non-goals, term/fact/scenario tables, open ambiguities
+  context/terms.md        every term, one ## section
+  context/facts.md        every fact, one ## section
+  context/scenarios.md    every scenario, one ## section
+  DESIGN.md               index: root, frontier, ADRs, node table
+  nodes/D-000-<slug>.md   one node = one refinement step = one file
+  EVIDENCE.md             index: record table
+  evidence/D-000.md       every record for D-000, one ## section
+docs/adr/NNNN-<slug>.md   one decision = one file
 ```
 
-| Dimension | Item | Index | Format |
-|---|---|---|---|
-| Meaning | `context/{terms,facts,scenarios}/…` | `CONTEXT.md` | [context-ledger.md](references/context-ledger.md) |
-| Design | `nodes/D-NNN-<slug>.md` | `DESIGN.md` | [design-ledger.md](references/design-ledger.md) |
-| Evidence | `evidence/EV-DNNN-NN-<slug>.md` | `EVIDENCE.md` | [evidence-ledger.md](references/evidence-ledger.md) |
-| Decision | `docs/adr/NNNN-<slug>.md` | — | [adr-ledger.md](references/adr-ledger.md) |
+| Dimension | Unit | Why | Index | Format |
+|---|---|---|---|---|
+| Meaning | `##` section, one file per kind | edited in place | `CONTEXT.md` | [context-ledger.md](references/context-ledger.md) |
+| Design | one file per node | append-only once approved | `DESIGN.md` | [design-ledger.md](references/design-ledger.md) |
+| Evidence | `##` section, one file per node | status flips | `EVIDENCE.md` | [evidence-ledger.md](references/evidence-ledger.md) |
+| Decision | one file per ADR | supersede, never rewrite | — | [adr-ledger.md](references/adr-ledger.md) |
 
-Atomic rules (detail per ledger):
-- One claim per file. Two independently citable statements → two files.
-- Self-describing header: `Kind`, ID, `Index` link, status, date. Readable alone.
-- Link, never repeat. Definitions 1–2 sentences: what it IS, not what it does. Canonical term + `Avoid:` aliases.
-- Size caps: term/fact/scenario/evidence ≤ 30 lines, ADR ≤ 40, node ≤ 80. Over → packed two items. Split.
-- Index holds status + link, never body. Item + row same edit. Create index on first item. No scaffolds.
+Rules:
+- One claim per unit. Two citable statements → two units.
+- `##` heading = anchor: `## CTX-F01 Required runtime` → `facts.md#ctx-f01-required-runtime`. Link anchors.
+- Unit first line: ID, status, date. Readable alone.
+- Link, never repeat. Definition 1–2 sentences, what it IS. Canonical term + `Avoid:` aliases.
+- Caps: context section ≤ 10 lines, evidence section ≤ 15, ADR ≤ 40, node ≤ 80. Over → split.
+- Index = status + link only. Unit + row same edit. Create index on first unit.
 
 ## Core Loop
 
@@ -77,10 +76,10 @@ digraph refine {
     "Shrink Effect; push detail to children" [shape=box];
     "Any ? left in draft?" [shape=diamond];
     "Answerable from code/docs/tools?" [shape=diamond];
-    "Explore; write fact file + row; clear ?" [shape=box];
+    "Explore; write fact entry + row; clear ?" [shape=box];
     "Ask ONE question naming its ?, w/ recommendation" [shape=box];
     "WAIT for answer" [shape=ellipse];
-    "Write term/fact/scenario file + row; clear ?" [shape=box];
+    "Write term/fact/scenario entry + row; clear ?" [shape=box];
     "Propose 2-7 children + 5-bullet composition" [shape=box];
     "Each bullet <= 2 lines and obligation holds?" [shape=diamond];
     "Insert intermediate node or reopen ancestor" [shape=box];
@@ -99,12 +98,12 @@ digraph refine {
     "Shrink Effect; push detail to children" -> "Draft node file: Effect + Contract, unknowns as ?slug";
     "More than 6 ? marks?" -> "Any ? left in draft?" [label="no"];
     "Any ? left in draft?" -> "Answerable from code/docs/tools?" [label="yes"];
-    "Answerable from code/docs/tools?" -> "Explore; write fact file + row; clear ?" [label="yes"];
-    "Explore; write fact file + row; clear ?" -> "Any ? left in draft?";
+    "Answerable from code/docs/tools?" -> "Explore; write fact entry + row; clear ?" [label="yes"];
+    "Explore; write fact entry + row; clear ?" -> "Any ? left in draft?";
     "Answerable from code/docs/tools?" -> "Ask ONE question naming its ?, w/ recommendation" [label="no"];
     "Ask ONE question naming its ?, w/ recommendation" -> "WAIT for answer";
-    "WAIT for answer" -> "Write term/fact/scenario file + row; clear ?";
-    "Write term/fact/scenario file + row; clear ?" -> "Any ? left in draft?";
+    "WAIT for answer" -> "Write term/fact/scenario entry + row; clear ?";
+    "Write term/fact/scenario entry + row; clear ?" -> "Any ? left in draft?";
     "Any ? left in draft?" -> "Propose 2-7 children + 5-bullet composition" [label="no"];
     "Propose 2-7 children + 5-bullet composition" -> "Each bullet <= 2 lines and obligation holds?";
     "Each bullet <= 2 lines and obligation holds?" -> "Insert intermediate node or reopen ancestor" [label="no"];
@@ -124,9 +123,9 @@ digraph refine {
 
 ### 1. Ground + draft
 
-Read `DESIGN.md` index, active node file, its `Depends on` items, linked ADRs, code, tests, evidence. Pick ONE composite node at frontier. Terminal? → record Effect + Realization, next node. Siblings / descendants wait.
+Read `DESIGN.md`, active node, its `Depends on`, linked ADRs, code, tests, evidence. Pick ONE composite node at frontier. Terminal → Effect + Realization, next node.
 
-Write `nodes/D-NNN-<slug>.md` now, `Design: draft`: Effect (1–2 sentences) + Contract (≤ 6 clauses, one line each). Every term or decision not yet on disk → `?slug` in place. Draft fixes this node's scope; interview only fills its holes. Small refinement → small contract → small vocabulary. Root example, 4 `?`:
+Write `nodes/D-NNN-<slug>.md`, `Design: draft`: Effect (1–2 sentences) + Contract (≤ 6 clauses, one line each). Term / decision without entry on disk → `?slug`. Draft = scope fence; interview fills only its holes. Root example, 4 `?`:
 
 ```markdown
 Effect: one Agent Run ends in exactly one terminal outcome and survives process restart.
@@ -136,25 +135,23 @@ Effect: one Agent Run ends in exactly one terminal outcome and survives process 
 - Invariant: no ?tool-effect duplicated across restart
 ```
 
-Journal shape, budgets, tool ordering, cancellation = children's `?`, not root's. `?` count > 6 → Effect says too much → shrink it, redraft.
+Journal shape, budgets, tool ordering, cancellation → children's `?`. `?` > 6 → shrink Effect, redraft.
 
 ### 2. Interview — one question per `?`
 
-Goal: zero `?` in draft Contract. Nothing else.
+Goal: zero `?` in draft.
 
-- Answerable from code / docs / tools / experiment → explore, never ask. Finding → fact file, clear `?`.
-- Else ONE question, shape below, naming the `?` it resolves. Wait for answer before anything else.
-- Every question carries recommended answer + one-line why.
-- Walk decision tree: `?` whose prerequisite `?` unresolved waits its turn.
-- Challenge, don't transcribe: term conflicts existing term file → *"Glossary defines 'cancellation' as X, you seem to mean Y — which?"*; vague / overloaded → propose canonical: *"'account' — Customer or User? Different things."*; relationship → invent scenario probing edge; user claim vs code → *"Code cancels entire Orders; you said partial possible — which is right?"*
-- Each answer → term / fact / scenario file + index row + `?` replaced by link, same turn.
-- Answer surfaces new term / question with no `?` in draft → NOT this node's. `Open ambiguities` row, `Resolves at: child of D-NNN`. Don't chase.
-- Answer shows draft clause wrong → fix clause (may add one `?`). Total `?` ever > 6 → back to §1, shrink Effect.
-- **Done iff:** zero `?` in draft; every user-owned decision draft names answered. Then stop asking.
+- Answerable from code / docs / tools / experiment → explore, never ask. Finding → fact entry, clear `?`.
+- Else ONE question, shape below, naming its `?`. Wait.
+- Each question carries recommended answer + one-line why.
+- `?` whose prerequisite `?` unresolved waits.
+- Challenge, don't transcribe: conflicts existing entry → "Glossary defines X as A; you mean B — which?"; vague → propose canonical; relationship → scenario probing edge; claim vs code → "Code does X; you said Y — which?"
+- Each answer → entry + index row + `?` → anchor link, same turn.
+- New term / question with no `?` → not this node. `Open ambiguities` row, `Resolves at: child of D-NNN`.
+- Draft clause wrong → fix (may add one `?`). Total `?` ever > 6 → §1, shrink Effect.
+- Done iff zero `?` and every user-owned decision draft names answered.
 
-Don't: batch questions; ask what code answers; ask anything without a `?`; propose children mid-interview.
-
-Question turn — this shape:
+Never: batch questions; ask what code answers; ask without a `?`; propose children mid-interview.
 
 ```markdown
 **Node:** D-NNN — <operation> · **Resolves:** ?<slug> in <clause> · **Left:** <k> of <n> ?
@@ -165,11 +162,11 @@ Question turn — this shape:
 
 ### 3. Propose ONE refinement
 
-State parent Effect + Contract. Propose 2–7 children + composition argument: data flow / failures / cleanup / invariants / progress, ≤ 2 lines each. Decide as little as possible: representation, storage, framework → deferred to deepest node that needs them.
+Parent Effect + Contract → 2–7 children + composition argument (data flow / failures / cleanup / invariants / progress, ≤ 2 lines each). Representation, storage, framework → deferred to deepest node needing them.
 
-Composition argument = proof obligation: children preserve parent `{Pre} S {Post}`. Checklist = Refinement Obligation ([design-ledger.md](references/design-ledger.md)). Fails → revise children or reopen ancestor. Never bury mismatch in impl detail.
+Composition = proof obligation: children preserve parent `{Pre} S {Post}`. Checklist: Refinement Obligation in [design-ledger.md](references/design-ledger.md). Fails → revise children or reopen ancestor.
 
-Then STOP. Show Proposal block. Ask approval. Nothing else in that turn.
+Then STOP. Show block. Nothing else that turn.
 
 ```markdown
 ## Proposal — D-NNN — <operation>
@@ -182,80 +179,71 @@ Composition:
 - Invariants: <≤2 lines>
 - Progress: <≤2 lines | n/a: reason>
 Decisions: <one line each>
-Deferred: <every Open ambiguities row pointing at children of D-NNN → D-x>
+Deferred: <Open ambiguities rows for children of D-NNN → D-x>
 ADRs: <checked, none conflict | conflict → protocol>
 **Approve D-NNN as above?** yes / change: …
 ```
 
 ### 4. Approve + persist
 
-Agent recommends. User owns semantic / risk / compat / hard-to-reverse choices. Approval = explicit yes to Proposal block. Then update `nodes/D-NNN-<slug>.md` → `Design: approved`, fill Refines into / Composition / Decisions / Deferred, + `DESIGN.md` row immediately. Record = contract AND why children compose. Component list or task plan ≠ refinement record.
+User owns semantic / risk / compat / hard-to-reverse choices. Approval = explicit yes to block. Then node file → `Design: approved`, fill Refines into / Composition / Decisions / Deferred, + `DESIGN.md` row, same turn.
 
-Approved node = composed fn: descendants use contract, never re-derive. Reopen only on changed context item, invariant, dependency, ADR, or evidence.
+Approved node = composed fn: descendants use contract, never re-derive. Reopen only on changed context entry, invariant, dependency, ADR, evidence.
 
 ### 5. ADR
 
-Create only if ALL: hard to reverse + surprising w/o context + real trade-off. Offer → user approves → binding. One decision per file.
+Only if ALL: hard to reverse + surprising w/o context + real trade-off. Offer → user approves → binding.
 
-Before Proposal: check linked ADRs. Conflict → STOP branch, Conflict Protocol ([adr-ledger.md](references/adr-ledger.md)). Never bypass, weaken, delete, rewrite ADR to fit design.
+Before Proposal: check linked ADRs. Conflict → STOP branch, Conflict Protocol in [adr-ledger.md](references/adr-ledger.md). Never bypass, weaken, delete, rewrite ADR.
 
 ### 6. Implement + verify to requested depth
 
-Design-only → stop at coherent approved frontier. Implementation → refine until every leaf terminal.
+Design-only → stop at approved frontier. Implementation → refine until every leaf terminal.
 
-Evidence: cheapest method covering obligation (types → examples → property → integration → static/proof → model-check → benchmark → fault-injection). Each record → own `evidence/` file + row; link from node's `Realization`.
+Evidence: cheapest method covering obligation (types → examples → property → integration → static/proof → model-check → benchmark → fault-injection). Record → `##` section in `evidence/D-NNN.md` + row; link from node `Realization`.
 
-Three independent states. Never infer one from another:
-
-- **approved** — semantic design accepted
-- **implemented** — code / config exists
-- **verified** — every Contract clause has current passing evidence
+States independent, never inferred from each other: `approved` (design accepted) · `implemented` (code exists) · `verified` (every Contract clause has current passing evidence).
 
 ### 7. Propagate change
 
-Context item, ancestor, ADR, or dependency changes:
+Context entry, ancestor, ADR, or dependency changes:
 
-1. record change in item's own file + row
-2. follow `Used by` / `Depends on` links to dependents
-3. mark nodes + their evidence stale — header AND row
+1. edit unit in place + row
+2. follow `Used by` / `Depends on` to dependents
+3. mark nodes + evidence stale — header AND row
 4. revisit only invalidated frontier, one node per cycle
 5. superseded ADR: keep, link replacement
-6. resume
-
-Stable nodes untouched.
 
 ## Discipline
 
-- Terminology just-in-time, at node needing precision.
-- Semantic ops, not components named after anticipated tech. Representation decided at deepest node needing it.
-- Program + data refined in parallel; data representation postponed until no realizable algorithm fits without it (Wirth).
-- Open decision stays explicit. Silence ≠ approval.
-- Thread authz, privacy, durability, ordering, idempotency through every affected node.
-- Stateful → transitions + invariants before distributing logic.
-- Concurrent / distributed → expose ownership, atomicity, retries, dupes, reordering, cancellation, partial failure.
-- Prototype discovers facts → fact files. Prototype ≠ spec.
-- Simple structures; long proof = warning, not achievement (Dijkstra).
+- Terminology at node needing it.
+- Semantic ops, not tech-named components. Representation at deepest node needing it; data representation postponed until no algorithm fits without it.
+- Open decision explicit. Silence ≠ approval.
+- Authz, privacy, durability, ordering, idempotency threaded through every affected node.
+- Stateful → transitions + invariants first. Concurrent / distributed → ownership, atomicity, retries, dupes, reordering, cancellation, partial failure exposed.
+- Prototype → fact entries. Prototype ≠ spec.
+- Long proof = warning.
 
 ## Red Flags — STOP
 
-| Thought | Reality |
+| Thought | Rule |
 |---|---|
-| "Three quick questions to save turns" | One. Wait. Next |
-| "One more question, it's related" | Which `?` does it clear? None → `Open ambiguities`, child's job. Question count = scope-leak gauge |
-| "Root needs whole vocabulary first" | Root contract ≤ 6 clauses, coarse terms. Journal / budget / ordering / cancel = children |
-| "Ask first, draft contract after" | Draft first. No draft = no bound = interview never ends |
-| "Context clear enough, skip to proposal" | Zero `?` in draft, not feeling. `?` left → ask |
-| "User will approve anyway, design D-030 too" | One node per approval. Stop after Proposal block |
-| "Sounds good = approved" | Show Proposal block, get yes to it |
-| "Composition obvious, skip bullets" | Five bullets, ≤2 lines each. Can't → step too big |
-| "Composition needs a paragraph" | Step too big. Insert intermediate node |
-| "Pick Postgres now, saves time later" | Representation → deepest node needing it |
-| "Append node to DESIGN.md, split later" | One node = one file from first write |
-| "Tests pass → verified" | Evidence record per Contract clause |
-| "ADR doesn't really apply" | Conflict Protocol decides |
-| "Reopening ancestor = failure" | Wirth: back up even to top. Normal |
-| Asking user fact that lives in code | Explore |
+| Several questions to save turns | One. Wait |
+| Related question, no `?` for it | `Open ambiguities`, child's job. Question count = leak gauge |
+| Root needs full vocabulary | Root ≤ 6 coarse clauses. Detail = children |
+| Ask first, draft later | Draft first. No draft = no bound |
+| Context clear, skip to proposal | Zero `?`, not feeling |
+| Design next node too | One node per approval |
+| Agreement to prose = approval | Yes to Proposal block only |
+| Skip composition bullets | Five bullets ≤ 2 lines. Can't → step too big |
+| Composition needs paragraph | Insert intermediate node |
+| Pick storage / framework now | Deepest node needing it |
+| Append node to `DESIGN.md` | One node = one file from first write |
+| Tests pass → verified | Evidence per Contract clause |
+| ADR doesn't apply | Conflict Protocol decides |
+| Reopening ancestor = failure | Normal |
+| Ask user a fact in code | Explore |
 
 ## Completion
 
-Requested depth done when: frontier approved; every exposed op has contract; each parent justified by ≤2-line-bullet composition; ADRs satisfied or explicitly superseded; another engineer / agent continues from files alone.
+Done at requested depth when: frontier approved; every exposed op has contract; each parent justified by ≤ 2-line-bullet composition; ADRs satisfied or superseded; another engineer / agent continues from files alone.
