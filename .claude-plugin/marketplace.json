@@ -15,7 +15,13 @@
       "author": {
         "name": "HollandDM"
       },
-      "keywords": ["code-review", "scala", "zio", "security", "stargazer"]
+      "keywords": [
+        "code-review",
+        "scala",
+        "zio",
+        "security",
+        "stargazer"
+      ]
     },
     {
       "name": "stargazer-subagent-dev",
@@ -25,7 +31,14 @@
       "author": {
         "name": "HollandDM"
       },
-      "keywords": ["implementation", "subagent", "scala", "zio", "stargazer", "plan-execution"]
+      "keywords": [
+        "implementation",
+        "subagent",
+        "scala",
+        "zio",
+        "stargazer",
+        "plan-execution"
+      ]
     },
     {
       "name": "stargazer-batch-dev",
@@ -35,7 +48,15 @@
       "author": {
         "name": "HollandDM"
       },
-      "keywords": ["implementation", "subagent", "scala", "zio", "stargazer", "plan-execution", "batch"]
+      "keywords": [
+        "implementation",
+        "subagent",
+        "scala",
+        "zio",
+        "stargazer",
+        "plan-execution",
+        "batch"
+      ]
     },
     {
       "name": "prove",
@@ -45,7 +66,11 @@
       "author": {
         "name": "HollandDM"
       },
-      "keywords": ["verification", "adversarial", "reasoning"]
+      "keywords": [
+        "verification",
+        "adversarial",
+        "reasoning"
+      ]
     },
     {
       "name": "mixed-agent-sdd",
@@ -55,17 +80,32 @@
       "author": {
         "name": "HollandDM"
       },
-      "keywords": ["implementation", "subagent", "codex", "opencode", "claude", "sdd", "plan-execution"]
+      "keywords": [
+        "implementation",
+        "subagent",
+        "codex",
+        "opencode",
+        "claude",
+        "sdd",
+        "plan-execution"
+      ]
     },
     {
       "name": "constructing-software-stepwise",
       "source": "./constructing-software-stepwise",
-      "description": "Stepwise refinement for hard designs: one node at a time, contract-preserving decomposition, ADR-gated decisions, evidence-backed verification across CONTEXT/DESIGN/EVIDENCE/ADR ledgers",
-      "version": "d8aa463",
+      "description": "Stepwise refinement for hard designs: one node per approval cycle, one-question-at-a-time interview, contract-preserving decomposition, ADR-gated decisions, evidence-backed verification in atomic one-item-per-file ledgers",
+      "version": "072eba8",
       "author": {
         "name": "HollandDM"
       },
-      "keywords": ["design", "stepwise-refinement", "architecture", "adr", "correctness", "specification"]
+      "keywords": [
+        "design",
+        "stepwise-refinement",
+        "architecture",
+        "adr",
+        "correctness",
+        "specification"
+      ]
     }
   ]
 }
