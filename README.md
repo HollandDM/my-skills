@@ -49,6 +49,10 @@ Batch-parallel plan execution for the Stargazer codebase. Lighter alternative to
 - Compile errors fed back to implementers — team lead never touches code
 - Reformat + batch-done commit after each clean compile
 
+### [constructing-software-stepwise](./constructing-software-stepwise/)
+
+Stepwise refinement for hard designs — interacting components, state machines, durable workflows, concurrency, correctness constraints. One abstract node at a time: establish only the shared meaning that node needs, decompose into 2–7 children whose composition provably preserves the parent contract, persist immediately. Four separated ledgers (`CONTEXT.md`, `DESIGN.md`, `EVIDENCE.md`, ADRs) with three independent node states (approved / implemented / verified), an ADR conflict protocol, and an observable terminal-node test so agents can neither skip rigor nor over-ceremony trivial work. Trigger explicitly.
+
 ### [mixed-agent-sdd](./mixed-agent-sdd/)
 
 Claude Code plugin for executing a complete implementation plan through one controller and a mixed Claude/Codex/OpenCode roster. It requires OpenCode CLI and the OpenAI Codex Claude plugin, balances implementers across backends, reviews and repairs complete batches, and hands final cross-vendor findings to a human.
@@ -63,4 +67,5 @@ Add the marketplace, then install individual plugins:
 /plugin install stargazer-batch-dev@HollandDM-Skills
 /plugin install prove@HollandDM-Skills
 /plugin install mixed-agent-sdd@HollandDM-Skills
+/plugin install constructing-software-stepwise@HollandDM-Skills
 ```
