@@ -28,7 +28,7 @@ Every verb ends with render + lint; exit 1 and `error <where>: <msg>` lines when
   change    <dir> <ref> [--definition D] [--status confirmed|stale] --reason R     sharpen or stale an entry
   meta      <dir> title|scope "text" | nongoals "a" "b" ...
   ambiguity <dir> "claim" "conflict" D-NNN | ambiguity <dir> "claim" --drop
-  adr       <dir> new "Title" --constrains D-NNN[,D-MMM] | adr <dir> accept ADR-NNNN
+  adr       <dir> new "Title" --constrains D-NNN[,D-MMM] | adr <dir> accept ADR-NNNN | adr <dir> supersede ADR-OLD ADR-NEW
   sync      <dir>                                     render + lint (after hand-editing an ADR paragraph)
   check     <dir>                                     lint only, no writes
 
@@ -345,6 +345,21 @@ def node_unknowns(n: dict) -> list[str]:
 
 
 # ----------------------------------------------------------------------------- ADR files (markdown, header only)
+
+
+def set_header(lines: list[str], field: str, value: str) -> None:
+    """Rewrite `field: …` in the ADR header block, adding the part if the line lacks it."""
+    for i, ln in enumerate(lines[:8]):
+        if ln.startswith("#") or ":" not in ln:
+            continue
+        parts = _header_parts(ln)
+        if any(x.startswith(f"{field}:") for x in parts):
+            lines[i] = " · ".join(f"{field}: {value}" if x.startswith(f"{field}:") else x for x in parts)
+            return
+    for i, ln in enumerate(lines[:8]):
+        if ln.startswith("Kind:"):
+            lines.insert(i + 1, f"{field}: {value}")
+            return
 
 
 def _header_parts(line: str) -> list[str]:
@@ -1071,17 +1086,24 @@ def v_adr(led: Ledger, a) -> int:
         if not adr:
             return fail(f"{a.title!r}: no such ADR")
         lines = adr["lines"]
-        for i, ln in enumerate(lines):
-            if "Status:" in ln and not ln.startswith("#"):
-                parts = _header_parts(ln)
-                lines[i] = " · ".join(f"Status: accepted" if p.startswith("Status:") else p for p in parts)
-                break
+        set_header(lines, "Status", "accepted")
         adr["path"].write_text("\n".join(lines) + "\n", encoding="utf-8")
         freed = [nid for nid, n in led.nodes.items() if n.get("adr_pending") == adr["id"]]
         for nid in freed:
             del led.nodes[nid]["adr_pending"]
         return finish(led, f"{adr['id']} accepted; unblocked {', '.join(freed) or 'nothing'}")
-    return fail("adr <dir> new ... | adr <dir> accept ADR-NNNN")
+    if a.action == "supersede":
+        by_id = {x["id"]: x for x in led.adrs()}
+        old, new = by_id.get(a.title), by_id.get(a.new_adr or "")
+        if not old or not new:
+            return fail("adr <dir> supersede ADR-OLD ADR-NEW (both must exist)")
+        set_header(old["lines"], "Status", "superseded")
+        set_header(old["lines"], "Superseded by", new["id"])
+        set_header(new["lines"], "Supersedes", old["id"])
+        old["path"].write_text("\n".join(old["lines"]) + "\n", encoding="utf-8")
+        new["path"].write_text("\n".join(new["lines"]) + "\n", encoding="utf-8")
+        return finish(led, f"{old['id']} superseded by {new['id']}")
+    return fail("adr <dir> new ... | adr <dir> accept ADR-NNNN | adr <dir> supersede ADR-OLD ADR-NEW")
 
 
 def v_sync(led: Ledger, a) -> int:
@@ -1132,7 +1154,7 @@ def main(argv: list[str]) -> int:
     add("change", "ref", definition={"default": ""}, status={"default": "", "choices": ["", "confirmed", "stale"]}, reason={"required": True}, minor={"action": "store_true"})
     add("meta", "field", ("value", {"nargs": "+"}))
     add("ambiguity", "claim", ("conflict", {"nargs": "?"}), ("resolves_at", {"nargs": "?"}), drop={"action": "store_true"})
-    add("adr", ("action", {"choices": ["new", "accept"]}), ("title", {"nargs": "?"}), constrains={"default": ""})
+    add("adr", ("action", {"choices": ["new", "accept", "supersede"]}), ("title", {"nargs": "?"}), ("new_adr", {"nargs": "?"}), constrains={"default": ""})
     a = ap.parse_args(argv[1:])
     d = Path(a.dir).resolve()
     for key in ("id", "new_id"):

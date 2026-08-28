@@ -136,8 +136,15 @@ assert "ADR-0001" in t
 t = run("approve", "D-010", ok=False)
 assert "ADR-0001 pending" in t
 run("adr", "accept", "ADR-0001")
-assert "Status: accepted" in next((root / "adr").glob("*.md")).read_text()
+assert "Status: accepted" in next((root / "adr").glob("0001-*.md")).read_text()
 run("approve", "D-010")
+run("adr", "new", "Ledger rows are append-only", "--constrains", "D-021")
+run("adr", "supersede", "ADR-0001", "ADR-0002")
+a1 = next((root / "adr").glob("0001-*.md")).read_text()
+a2 = next((root / "adr").glob("0002-*.md")).read_text()
+assert "Status: superseded" in a1 and "Superseded by: ADR-0002" in a1, a1
+assert "Supersedes: ADR-0001" in a2, a2
+run("adr", "accept", "ADR-0002")
 ctx = (d / "CONTEXT.md").read_text()
 assert "| job identity | key vs row id | D-030 |" in ctx and "- scheduling" in ctx and "CTX-F01" in ctx and "Given a job committed step 1" in ctx
 
@@ -159,7 +166,7 @@ run("new", "D-030")
 t = run("supersede", "D-030", "D-021", "folded into advance", ok=False)
 assert "constrains D-030 which is superseded by D-021" in t  # ADR must be re-pointed by hand
 assert "superseded by D-021" in (d / "DESIGN.md").read_text()
-adr = next((root / "adr").glob("*.md"))
+adr = next((root / "adr").glob("0001-*.md"))
 adr.write_text(adr.read_text().replace("D-010, D-030", "D-010, D-021"))
 run("sync")
 p = d / "nodes" / "D-000.md"

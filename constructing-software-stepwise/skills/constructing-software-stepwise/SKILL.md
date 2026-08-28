@@ -60,7 +60,7 @@ docs/adr/NNNN-<slug>.md   one decision = one file; stub + status by the tool, pa
 |---|---|---|---|---|
 | Meaning | `terms` / `facts` / `scenarios` entries | edited in place; dated `changed` list | `entry`, `change`, `meta`, `ambiguity` | [context-ledger.md](references/context-ledger.md) |
 | Design + evidence | node record; evidence list | status by verb only; history keeps reasons | `new`, `set`, `body`, `answer`, `terminal`, `approve`, `reopen`, `stale`, `supersede`, `evidence` | [design-ledger.md](references/design-ledger.md) |
-| Decision | ADR markdown | supersede, never rewrite | `adr new`, `adr accept` | [adr-ledger.md](references/adr-ledger.md) |
+| Decision | ADR markdown | supersede, never rewrite | `adr new`, `adr accept`, `adr supersede` | [adr-ledger.md](references/adr-ledger.md) |
 
 Rules:
 - One claim per record. Two citable statements → two entries.
@@ -245,7 +245,7 @@ Approved node = composed fn: descendants use Statement + Contract, never re-deri
 
 ### 5. ADR
 
-Only if ALL: hard to reverse + surprising w/o context + real trade-off. Offer → `adr new "Title" --constrains D-NNN` → write the paragraph + invariants in the stub → `sync` → user accepts → `adr accept ADR-NNNN`. Constrained nodes sit at `draft (ADR pending)` until then; `approve` refuses them.
+Only if ALL: hard to reverse + surprising w/o context + real trade-off. Offer → `adr new "Title" --constrains D-NNN` → write the paragraph + invariants in the stub → `sync` → user accepts → `adr accept ADR-NNNN`. Constrained nodes sit at `draft (ADR pending)` until then; `approve` refuses them. Decision changes → new ADR, then `adr supersede ADR-OLD ADR-NEW` links both headers.
 
 Before Proposal: check linked ADRs. Conflict → STOP branch, Conflict Protocol in [adr-ledger.md](references/adr-ledger.md). Never bypass, weaken, delete, rewrite ADR.
 

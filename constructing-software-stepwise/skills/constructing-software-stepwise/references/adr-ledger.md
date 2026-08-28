@@ -21,7 +21,7 @@ Typical: persistent data formats, ownership boundaries, public protocols, consis
 - **Self-describing header.** `Kind`, ID, `Status`, `Date`, `Constrains` node ids — written by `stepwise.py adr new "<title>" --constrains D-NNN[,D-MMM]`.
 - **Name, never repeat.** Reference context entries + nodes by name / id. Never restate a definition.
 - **Size cap.** ≤ 40 lines (lint).
-- **Only the paragraph + sections are hand-written.** Header + status belong to the tool: `adr new` (proposed; constrained nodes drop to `draft (ADR pending)`), `adr accept ADR-NNNN` (accepted; nodes unblocked). Run `sync` after editing the paragraph.
+- **Only the paragraph + sections are hand-written.** Header + status belong to the tool: `adr new` (proposed; constrained nodes drop to `draft (ADR pending)`), `adr accept ADR-NNNN` (accepted; nodes unblocked). `adr supersede ADR-OLD ADR-NEW` (old → superseded + `Superseded by`, new gets `Supersedes`). Run `sync` after editing the paragraph.
 
 ## Authority + Lifecycle
 
@@ -80,7 +80,7 @@ Before approving node: read ADRs it links. Candidate conflicts →
    - supersede ADR, accept migration / compat / risk / invalidation work
 4. resolve factual uncertainty first (investigate), then ask
 5. explicit user approval
-6. superseding → new ADR accepted, both linked, dependent nodes + evidence marked stale
+6. superseding → `adr new` + `adr accept` the replacement, then `adr supersede ADR-OLD ADR-NEW` links both; dependent nodes + evidence marked stale
 7. resume from new valid frontier
 
 Unawareness ≠ permission. No adapter / exception preserving wording while defeating invariant.
