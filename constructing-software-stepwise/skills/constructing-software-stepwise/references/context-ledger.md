@@ -16,22 +16,26 @@ docs/design/<topic>/
 
 Context entries get edited in place (meaning sharpens, facts go stale) → grouped files. Nodes + ADRs append-only → one file each (see design / adr ledgers).
 
+Agent writes: heading + definition (+ `Source:`, `Avoid:`, `Not:`, scenario Given / When / Then). `stepwise.py sync` writes: `Confirmed:` / `Status:` when missing, `Used by:` (from node `Depends on` + scenario `Settles`), links, and the three `CONTEXT.md` tables.
+
 ## Entry Rules
 
 - **One claim per section.** `##` heading = canonical term or `ID name`. Sentence joins two citable claims with "and" / ";" → two sections.
-- **Heading = anchor.** `## Agent Run` → `terms.md#agent-run`. `## CTX-F01 Required runtime` → `facts.md#ctx-f01-required-runtime`. No punctuation inside heading; anchor stays predictable.
+- **Heading = identity.** `## Agent Run`, `## CTX-F01 Required runtime`. Refer by that name anywhere (`Depends on: Agent Run, CTX-F01`); `sync` links. No punctuation inside heading.
 - **Self-describing section.** First line after heading: `Confirmed: YYYY-MM-DD · Source: <…>` (+ `Status:` for facts). Reader understands section alone.
-- **Link, never repeat.** Other entries + nodes by relative link. Copying = duplicate truth.
+- **Name, never repeat.** Other entries + nodes by bare name; never copy a definition.
 - **Tight.** Definition 1–2 sentences. What it IS, not what it does.
 - **Opinionated.** One canonical term. Rejected synonyms under `Avoid:`. Confusable neighbours under `Not:` w/ link.
 - **Size cap.** Section ≤ 10 lines. Over → two claims. Split.
 - **Project-specific only.** General programming concepts (timeout, retry, error type) not terms — even when used heavily.
 - **Order.** Terms alphabetical. Facts / scenarios by ID, append at end.
-- Section + `CONTEXT.md` row written in same edit. Create index + kind file on first entry. Never batch at end.
+- Section written → `sync`. Tables in `CONTEXT.md` and `Used by:` regenerate; never hand-edit them. On first entry create kind file + `CONTEXT.md` with Scope / Open ambiguities / Explicit non-goals, then `sync` adds the tables.
 
 Term → project-wide glossary only when used across multiple designs / bounded contexts. Local stays local.
 
 ## Index — `CONTEXT.md`
+
+Agent owns Scope, Open ambiguities, Explicit non-goals. Vocabulary / Facts and constraints / Scenarios tables are generated.
 
 ```markdown
 # <Design area> — Shared Context
@@ -73,7 +77,7 @@ Design: [./DESIGN.md](./DESIGN.md)
 - <Meaning or behavior outside this design's scope>
 ```
 
-Index rows mirror section headers. Never hold bodies.
+Tables mirror section headers; `sync` keeps them so. Never hold bodies.
 
 ## Terms — `context/terms.md`
 
@@ -89,9 +93,9 @@ Confirmed: YYYY-MM-DD · Source: <user | code path | document>
 <One or two sentences. What it IS, not what it does.>
 
 Avoid: <alias>, <alias>
-Not: <neighbour> → [#<anchor>](#<anchor>)
+Not: <neighbour term>
 Example: <one boundary-revealing example>
-Used by: [D-020](../nodes/D-020-<slug>.md), [CTX-S01](scenarios.md#ctx-s01-<slug>)
+Used by: (generated)
 ```
 
 ## Facts — `context/facts.md`
@@ -107,7 +111,7 @@ Status: confirmed | stale · Confirmed: YYYY-MM-DD · Source: <code path | docum
 
 <ONE fact or constraint. One or two sentences.>
 
-Used by: [D-000](../nodes/D-000-<slug>.md), [D-020](../nodes/D-020-<slug>.md)
+Used by: (generated)
 ```
 
 ## Scenarios — `context/scenarios.md`
@@ -119,14 +123,14 @@ Kind: scenarios · Index: [../CONTEXT.md](../CONTEXT.md)
 
 ## CTX-S01 <scenario name>
 
-Confirmed: YYYY-MM-DD · Settles: [<term>](terms.md#<anchor>) boundary
+Confirmed: YYYY-MM-DD · Settles: <term> boundary
 
 Given <starting context>.
 When <event or action>.
 Then <observable meaning or boundary>.
 Excludes: <nearby interpretation this rules out>
 
-Used by: [D-040](../nodes/D-040-<slug>.md)
+Used by: (generated)
 ```
 
 ## Not Here
@@ -161,7 +165,7 @@ Ambiguous boundary → scenario forcing it. Resolve iff active node's draft Cont
 Terms / facts = dependencies of design nodes. Entry changes →
 
 1. edit section in place (meaning changed → `Changed: YYYY-MM-DD — <reason>` line; typo / wording: no note)
-2. update its index row
+2. `sync`
 3. follow `Used by` links → mark those nodes + their evidence stale
 4. review before resuming
 
