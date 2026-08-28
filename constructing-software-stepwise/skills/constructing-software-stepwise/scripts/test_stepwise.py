@@ -198,6 +198,9 @@ run("set", "D-022", "gloss", "wait for the step to settle")
 run("reopen", "D-020", "wait_for folded into pick_step")
 t = run("body", "D-020", stdin="advance(job):\n  step <- pick_step(job)   -- ↗ D-021\n", ok=False)
 assert "lost every caller" in t and "D-022" in t, t
+run("set", "D-020", "depends", "D-022")  # a durable entry point started, not called, is nobody's orphan
+assert "lost every caller" not in run("check")
+run("set", "D-020", "depends", "-", ok=False)  # orphan error is back
 run("retire", "D-021", "still called", ok=False)
 run("retire", "D-022", "wait_for folded into pick_step")
 run("approve", "D-020")

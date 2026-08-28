@@ -324,7 +324,9 @@ class Ledger:
         return sorted(set(self.parents(nid)) | {m for m, v in self.nodes.items() if nid in v.get("depends", [])})
 
     def roots(self) -> list[str]:
-        return [nid for nid in self.nodes if not self.parents(nid)]
+        """Nothing calls it and nothing rests on it. A node reached only through `depends` — a durable entry point
+        another node starts rather than calls — is not a root and not an orphan."""
+        return [nid for nid in self.nodes if not self.dependents(nid)]
 
     def frontier(self) -> dict[str, tuple[str, str]]:
         out: dict[str, tuple[str, str]] = {}
@@ -901,6 +903,9 @@ def v_set(led: Ledger, a) -> int:
             return fail(f"{a.id}: walkthrough is {len(n[f])} lines > 3 — say what the function does, not how")
     elif f == "depends":
         deps = n.setdefault("depends", [])
+        if vals == ["-"]:  # a dependency named by mistake; derived ones come back on the next sync
+            deps.clear()
+            return finish(led, f"{a.id}.depends cleared")
         for v in vals:
             ref = led.canonical(v)
             if not led.resolves(ref):

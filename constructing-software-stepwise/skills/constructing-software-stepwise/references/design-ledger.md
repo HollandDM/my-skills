@@ -29,7 +29,7 @@ Views exist for humans and PR review. The agent reads them (or `show D-NNN`) and
 | `statement` | `new` (from parent body line, or root statement) | `x <- f(a, b)` · `-> f(a)` · `f(a)`. ID = statement; never renumber |
 | `gloss`, `effect` | `set D-NNN gloss\|effect "…"` | one line; 1–2 sentences |
 | `contract` | `set D-NNN pre\|post\|failure\|invariant\|<any lowercase label> "…"` | ≤ 6 clauses, 1–2 explicit lines each — checkable on its own, never a fragment; labels free (`budget`, `determinism`, `boundary`, `cancellation`, `progress`); unknowns `?slug` |
-| `depends` | `answer`; `set D-NNN depends "Name" …` (append); also derived from any term / `CTX-…` / `ADR-…` named in gloss, effect, contract | dependencies for `Used by` and staleness |
+| `depends` | `answer`; `set D-NNN depends "Name" …` (append), `set D-NNN depends -` (clear a wrong one); also derived from any term / `CTX-…` / `ADR-…` / `D-NNN` named in gloss, effect, contract | dependencies for `Used by` and staleness |
 | `body` | `body D-NNN` (stdin / `--file`) | pseudocode lines → `{indent, code, child \| reuse \| target \| note}`; refused on an approved node |
 | `composition`, `decisions`, `deferred`, `adaptation` | `set D-NNN <field> "b1" "b2" …` | bullet lists, replaced whole |
 | `target` | `terminal D-NNN "<target>: <identifier>"` | the real thing; Exists test enforced |
@@ -59,7 +59,7 @@ State is a machine, not a label: `new → draft → approved`, and out of `appro
 
 Staleness travels the link graph rather than being spotted by eye. The edges are: a body's `-- D-NNN` calls and `-- ↗ D-NNN` reuses, and every id in `depends` (node ids in a node's prose are derived into `depends` exactly like terms, CTX ids and ADR ids). What a dependent rests on is the upstream node's **contract** — its statement and clauses — so re-`approve` cascades only when that hash changed, transitively marking each approved dependent `stale` with `invalidated by D-NNN (contract changed <date>)`; a body-only revision cascades nothing. `supersede` and `retire` always cascade, since the contract the dependents named is gone. `check` then refuses an approved node depending on a stale / superseded / retired node, and a body still calling a superseded child.
 
-A body rewrite that drops a child leaves that child with no caller — lint says so. `retire D-NNN "reason"` records that the design dropped it; the node keeps its history and stops appearing on the frontier. Adding the call back to quiet the message writes a refinement nobody approved.
+A root is a node nothing calls **and** nothing depends on; a durable entry point another node starts rather than calls (`Depends on: D-060` from a terminal that hands it to the platform) is neither a root nor an orphan. A body rewrite that drops a child leaves that child with no caller and no dependent — lint says so. `retire D-NNN "reason"` records that the design dropped it; the node keeps its history and stops appearing on the frontier. Adding the call back to quiet the message writes a refinement nobody approved.
 
 `reopen` snapshots the body, composition, decisions and deferred it invalidates into the node view's `## Superseded refinement` section, so the replaced refinement stays readable while the node is redrafted.
 
