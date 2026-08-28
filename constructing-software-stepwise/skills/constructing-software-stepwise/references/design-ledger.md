@@ -24,9 +24,9 @@ docs/design/<topic>/
 - **Size cap.** Node file ≤ 80 lines. Over → mixed levels or hidden context. Split or extract.
 - Node file + `DESIGN.md` row written in same edit. Never append node content to `DESIGN.md` "for now".
 
-Write node file immediately after its user-owned decisions approved. Never reconstruct tree from memory at session end.
+Node file born at pick time as `Design: draft`: Effect + Contract (≤ 6 clauses), unknown term / decision written `?slug`. Interview replaces each `?` with link. Approval flips `draft` → `approved` and fills Refines into / Composition / Decisions / Deferred. Never reconstruct tree from memory at session end.
 
-Only approved design authoritative. Candidates live in conversation / scratch. Unapproved proposal never appears as accepted.
+Only `approved` authoritative. `draft` = scope fence for interview, nothing more. Candidate children live in Proposal block until approved. Unapproved proposal never appears as accepted.
 
 ## Index — `DESIGN.md`
 
@@ -46,6 +46,7 @@ Root: D-000 · Active frontier: D-120, D-240
 | --- | --- | --- | --- | --- | --- | --- |
 | D-000 | <root operation> | — | approved | not-started | unverified | [nodes/D-000-<slug>.md](nodes/D-000-<slug>.md) |
 | D-120 | <operation> | D-100 | approved | partial | unverified | [nodes/D-120-<slug>.md](nodes/D-120-<slug>.md) |
+| D-240 | <operation> | D-200 | draft (3 ?) | not-started | unverified | [nodes/D-240-<slug>.md](nodes/D-240-<slug>.md) |
 ```
 
 Row mirrors node header. Status change in file → same edit updates row.
@@ -69,7 +70,7 @@ Composite fan-out 2–7. 1 → rename, not refinement. >7 → add intermediate n
 # D-120 — <Semantic operation>
 
 Kind: node · Index: [../DESIGN.md](../DESIGN.md)
-Design: approved | stale | superseded · Realization: not-started | partial | implemented · Verification: unverified | partial | verified
+Design: draft (<k> ?) | approved | stale | superseded · Realization: not-started | partial | implemented · Verification: unverified | partial | verified
 Parent: [D-100](D-100-<slug>.md)
 Depends on: [CTX-F03](../context/facts/CTX-F03-<slug>.md), [D-090](D-090-<slug>.md), [ADR-0003](../../../adr/0003-<slug>.md)
 Approved: YYYY-MM-DD by <user>
@@ -116,11 +117,13 @@ Approved: YYYY-MM-DD by <user>
 
 Composition argument: five fixed bullets, each present. Not applicable → `n/a: <reason>`. Never omit silently.
 
+Draft state: Contract clause may read `- Post: ?verified-result or typed failure recorded once`. `?slug` = term / decision not yet on disk. Count of `?` = interview length. > 6 → Effect too wide, shrink. Sections below Contract absent until approval. `approved` file contains zero `?`.
+
 ## Approval Rule
 
 Agent derives + recommends. User approves anything changing product semantics, accepted risk, compatibility, cost commitment, hard-to-reverse architecture.
 
-Approval covers recorded contract + decomposition, not prose. Preserve user's exact negatives, ordering constraints, numeric limits, failure semantics verbatim. No weakening in summary.
+Approval covers recorded contract + decomposition, not prose. Preserve user's exact negatives, ordering constraints, numeric limits, failure semantics verbatim. No weakening in summary. Contract with any `?` left cannot be approved.
 
 ## Refinement Obligation — before `approved`
 

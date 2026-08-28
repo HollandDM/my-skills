@@ -7,16 +7,19 @@ description: Use when designing or implementing systems with interacting compone
 
 Dijkstra: *"compose the program in minute steps, deciding each time as little as possible"* (EWD249); *"let correctness proof and program grow hand in hand"* (EWD340). Wirth: *"defer those decisions which concern details of representation as long as possible"*; *"revoke earlier decisions, and back up, if necessary even to the top"* (CACM 1971).
 
-Cycle: one node → interview until its meaning shared → propose ONE refinement w/ composition argument (= proof obligation) → user approves → persist → next node. One node per cycle. Never two.
+Cycle, in this order: (1) pick ONE node, draft its contract small enough — ≤ 6 clauses, unknowns as `?` — (2) ask user one question per `?`, only around this node, (3) propose ONE refinement w/ composition argument (= proof obligation), (4) user approves or denies, (5) persist, next node. One node per cycle. Never two.
 
-Classic method assumes spec given. Here spec not given — interview builds it, one question at a time, per node.
+Classic method assumes spec given. Here spec not given — interview builds it, one `?` at a time, per node. Small refinement → small contract → small vocabulary. Many questions = scope leaking from children into this node.
 
 ## Pacing — hard rules
 
 | Rule | Observable test |
 |---|---|
 | One refinement per approval | Turn proposes children for exactly one node. Children for second node same turn = violation |
-| Interview before proposal | No children proposed while any Contract clause of active node lacks linked term/fact file, or any user-owned decision open |
+| Draft before ask | Node file exists w/ `Design: draft`, Effect, Contract ≤ 6 clauses, unknowns marked `?slug`, before first question |
+| Interview bounded | Every question names the `?` it resolves. No `?` → don't ask → `Open ambiguities` row, `Resolves at: child of D-NNN` |
+| Scope leak gauge | `?` count > 6 at draft → Effect too wide → shrink Effect, push detail to children, redraft. Question count per node ≤ initial `?` count |
+| Interview before proposal | No children proposed while draft Contract has any `?`, or any user-owned decision the draft names open |
 | One question per turn | Message has exactly one question aimed at user. Then wait |
 | Approval explicit | User says yes to shown Proposal block. "Sounds good" to prose summary ≠ approval → show block, ask |
 | Step small | Each composition bullet ≤ 2 lines. Longer → step too big → insert intermediate node |
@@ -69,12 +72,15 @@ Atomic rules (detail per ledger):
 ```dot
 digraph refine {
     "Pick one composite node at frontier" [shape=box];
-    "Contract clause lacks term/fact file, or user decision open?" [shape=diamond];
+    "Draft node file: Effect + Contract, unknowns as ?slug" [shape=box];
+    "More than 6 ? marks?" [shape=diamond];
+    "Shrink Effect; push detail to children" [shape=box];
+    "Any ? left in draft?" [shape=diamond];
     "Answerable from code/docs/tools?" [shape=diamond];
-    "Explore; write fact file + row" [shape=box];
-    "Ask ONE question w/ recommendation" [shape=box];
+    "Explore; write fact file + row; clear ?" [shape=box];
+    "Ask ONE question naming its ?, w/ recommendation" [shape=box];
     "WAIT for answer" [shape=ellipse];
-    "Write term/fact/scenario file + row" [shape=box];
+    "Write term/fact/scenario file + row; clear ?" [shape=box];
     "Propose 2-7 children + 5-bullet composition" [shape=box];
     "Each bullet <= 2 lines and obligation holds?" [shape=diamond];
     "Insert intermediate node or reopen ancestor" [shape=box];
@@ -83,19 +89,23 @@ digraph refine {
     "Show Proposal block; ask approval" [shape=box];
     "WAIT for approval" [shape=ellipse];
     "Approved?" [shape=diamond];
-    "Write nodes/D-NNN file + DESIGN.md row" [shape=box];
+    "Node file -> approved; DESIGN.md row" [shape=box];
     "Frontier empty at requested depth?" [shape=diamond];
     "Done" [shape=doublecircle];
 
-    "Pick one composite node at frontier" -> "Contract clause lacks term/fact file, or user decision open?";
-    "Contract clause lacks term/fact file, or user decision open?" -> "Answerable from code/docs/tools?" [label="yes"];
-    "Answerable from code/docs/tools?" -> "Explore; write fact file + row" [label="yes"];
-    "Explore; write fact file + row" -> "Contract clause lacks term/fact file, or user decision open?";
-    "Answerable from code/docs/tools?" -> "Ask ONE question w/ recommendation" [label="no"];
-    "Ask ONE question w/ recommendation" -> "WAIT for answer";
-    "WAIT for answer" -> "Write term/fact/scenario file + row";
-    "Write term/fact/scenario file + row" -> "Contract clause lacks term/fact file, or user decision open?";
-    "Contract clause lacks term/fact file, or user decision open?" -> "Propose 2-7 children + 5-bullet composition" [label="no"];
+    "Pick one composite node at frontier" -> "Draft node file: Effect + Contract, unknowns as ?slug";
+    "Draft node file: Effect + Contract, unknowns as ?slug" -> "More than 6 ? marks?";
+    "More than 6 ? marks?" -> "Shrink Effect; push detail to children" [label="yes"];
+    "Shrink Effect; push detail to children" -> "Draft node file: Effect + Contract, unknowns as ?slug";
+    "More than 6 ? marks?" -> "Any ? left in draft?" [label="no"];
+    "Any ? left in draft?" -> "Answerable from code/docs/tools?" [label="yes"];
+    "Answerable from code/docs/tools?" -> "Explore; write fact file + row; clear ?" [label="yes"];
+    "Explore; write fact file + row; clear ?" -> "Any ? left in draft?";
+    "Answerable from code/docs/tools?" -> "Ask ONE question naming its ?, w/ recommendation" [label="no"];
+    "Ask ONE question naming its ?, w/ recommendation" -> "WAIT for answer";
+    "WAIT for answer" -> "Write term/fact/scenario file + row; clear ?";
+    "Write term/fact/scenario file + row; clear ?" -> "Any ? left in draft?";
+    "Any ? left in draft?" -> "Propose 2-7 children + 5-bullet composition" [label="no"];
     "Propose 2-7 children + 5-bullet composition" -> "Each bullet <= 2 lines and obligation holds?";
     "Each bullet <= 2 lines and obligation holds?" -> "Insert intermediate node or reopen ancestor" [label="no"];
     "Insert intermediate node or reopen ancestor" -> "Propose 2-7 children + 5-bullet composition";
@@ -105,35 +115,49 @@ digraph refine {
     "Show Proposal block; ask approval" -> "WAIT for approval";
     "WAIT for approval" -> "Approved?";
     "Approved?" -> "Propose 2-7 children + 5-bullet composition" [label="no: revise"];
-    "Approved?" -> "Write nodes/D-NNN file + DESIGN.md row" [label="yes"];
-    "Write nodes/D-NNN file + DESIGN.md row" -> "Frontier empty at requested depth?";
+    "Approved?" -> "Node file -> approved; DESIGN.md row" [label="yes"];
+    "Node file -> approved; DESIGN.md row" -> "Frontier empty at requested depth?";
     "Frontier empty at requested depth?" -> "Done" [label="yes"];
     "Frontier empty at requested depth?" -> "Pick one composite node at frontier" [label="no"];
 }
 ```
 
-### 1. Ground
+### 1. Ground + draft
 
 Read `DESIGN.md` index, active node file, its `Depends on` items, linked ADRs, code, tests, evidence. Pick ONE composite node at frontier. Terminal? → record Effect + Realization, next node. Siblings / descendants wait.
 
-### 2. Interview — one question at a time
+Write `nodes/D-NNN-<slug>.md` now, `Design: draft`: Effect (1–2 sentences) + Contract (≤ 6 clauses, one line each). Every term or decision not yet on disk → `?slug` in place. Draft fixes this node's scope; interview only fills its holes. Small refinement → small contract → small vocabulary. Root example, 4 `?`:
 
-Goal: every clause active node's Contract will need has shared meaning, on disk.
+```markdown
+Effect: one Agent Run ends in exactly one terminal outcome and survives process restart.
+- Pre: caller supplies ?run-identity + objective
+- Post: ?verified-result or typed failure recorded once
+- Failure: ?failure-channels
+- Invariant: no ?tool-effect duplicated across restart
+```
 
-- Answerable from code / docs / tools / experiment → explore, never ask. Finding → fact file.
-- Else ONE question, shape below. Wait for answer before anything else.
+Journal shape, budgets, tool ordering, cancellation = children's `?`, not root's. `?` count > 6 → Effect says too much → shrink it, redraft.
+
+### 2. Interview — one question per `?`
+
+Goal: zero `?` in draft Contract. Nothing else.
+
+- Answerable from code / docs / tools / experiment → explore, never ask. Finding → fact file, clear `?`.
+- Else ONE question, shape below, naming the `?` it resolves. Wait for answer before anything else.
 - Every question carries recommended answer + one-line why.
-- Walk decision tree: question whose prerequisite unanswered waits its turn.
+- Walk decision tree: `?` whose prerequisite `?` unresolved waits its turn.
 - Challenge, don't transcribe: term conflicts existing term file → *"Glossary defines 'cancellation' as X, you seem to mean Y — which?"*; vague / overloaded → propose canonical: *"'account' — Customer or User? Different things."*; relationship → invent scenario probing edge; user claim vs code → *"Code cancels entire Orders; you said partial possible — which is right?"*
-- Each answer → term / fact / scenario file + index row, same turn.
-- **Done iff ALL:** every term node will name has file; every fact Contract relies on has file; every user-owned decision node needs answered; no `Open ambiguities` row names this node. Then stop asking.
+- Each answer → term / fact / scenario file + index row + `?` replaced by link, same turn.
+- Answer surfaces new term / question with no `?` in draft → NOT this node's. `Open ambiguities` row, `Resolves at: child of D-NNN`. Don't chase.
+- Answer shows draft clause wrong → fix clause (may add one `?`). Total `?` ever > 6 → back to §1, shrink Effect.
+- **Done iff:** zero `?` in draft; every user-owned decision draft names answered. Then stop asking.
 
-Don't: batch questions; ask what code answers; ask downstream nodes' questions; propose children mid-interview.
+Don't: batch questions; ask what code answers; ask anything without a `?`; propose children mid-interview.
 
 Question turn — this shape:
 
 ```markdown
-**Node:** D-NNN — <operation> · **Resolved:** <n> terms, <m> facts · **Open:** <k>
+**Node:** D-NNN — <operation> · **Resolves:** ?<slug> in <clause> · **Left:** <k> of <n> ?
 **Q:** <one question>
 **Recommend:** <answer> — <one-line why>
 **Else:** <alternative> — <trade-off, one line>
@@ -158,14 +182,14 @@ Composition:
 - Invariants: <≤2 lines>
 - Progress: <≤2 lines | n/a: reason>
 Decisions: <one line each>
-Deferred: <question → D-x>
+Deferred: <every Open ambiguities row pointing at children of D-NNN → D-x>
 ADRs: <checked, none conflict | conflict → protocol>
 **Approve D-NNN as above?** yes / change: …
 ```
 
 ### 4. Approve + persist
 
-Agent recommends. User owns semantic / risk / compat / hard-to-reverse choices. Approval = explicit yes to Proposal block. Then write `nodes/D-NNN-<slug>.md` + `DESIGN.md` row immediately. Record = contract AND why children compose. Component list or task plan ≠ refinement record.
+Agent recommends. User owns semantic / risk / compat / hard-to-reverse choices. Approval = explicit yes to Proposal block. Then update `nodes/D-NNN-<slug>.md` → `Design: approved`, fill Refines into / Composition / Decisions / Deferred, + `DESIGN.md` row immediately. Record = contract AND why children compose. Component list or task plan ≠ refinement record.
 
 Approved node = composed fn: descendants use contract, never re-derive. Reopen only on changed context item, invariant, dependency, ADR, or evidence.
 
@@ -217,7 +241,10 @@ Stable nodes untouched.
 | Thought | Reality |
 |---|---|
 | "Three quick questions to save turns" | One. Wait. Next |
-| "Context clear enough, skip to proposal" | Done-iff test, not feeling. Missing file → ask |
+| "One more question, it's related" | Which `?` does it clear? None → `Open ambiguities`, child's job. Question count = scope-leak gauge |
+| "Root needs whole vocabulary first" | Root contract ≤ 6 clauses, coarse terms. Journal / budget / ordering / cancel = children |
+| "Ask first, draft contract after" | Draft first. No draft = no bound = interview never ends |
+| "Context clear enough, skip to proposal" | Zero `?` in draft, not feeling. `?` left → ask |
 | "User will approve anyway, design D-030 too" | One node per approval. Stop after Proposal block |
 | "Sounds good = approved" | Show Proposal block, get yes to it |
 | "Composition obvious, skip bullets" | Five bullets, ≤2 lines each. Can't → step too big |

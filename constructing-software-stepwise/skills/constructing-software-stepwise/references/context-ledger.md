@@ -62,6 +62,7 @@ Design: [./DESIGN.md](./DESIGN.md) · Evidence: [./EVIDENCE.md](./EVIDENCE.md)
 | Term / claim | Conflict | Resolves at |
 | --- | --- | --- |
 | <term> | <reading A vs reading B> | D-040 |
+| <term> | <surfaced during D-000 interview, no `?` for it in D-000 draft> | child of D-000 |
 
 ## Explicit non-goals
 
@@ -142,7 +143,7 @@ User term conflicts w/ existing term file → call out immediately: "Glossary de
 
 Vague / overloaded term → propose canonical: "'account' — Customer or User? Different things."
 
-Ambiguous boundary → scenario forcing it. Resolve iff it changes active node's contract clause; else row in `Open ambiguities` + node's `Deferred boundaries`.
+Ambiguous boundary → scenario forcing it. Resolve iff active node's draft Contract carries a `?` for it; else row in `Open ambiguities`, `Resolves at: child of D-NNN`, and node's `Deferred` at approval. Item files exist only for resolved `?` — one per question asked, no more.
 
 ## Change + Invalidation
 
