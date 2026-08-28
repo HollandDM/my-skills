@@ -890,7 +890,10 @@ def v_approve(led: Ledger, a) -> int:
     n["approved_hash"] = body_hash(body)
     if re_approval:
         hist(n, "re-approved")
-    rc = finish(led, f"approved {a.id}")
+    ambs = led.data.get("ambiguities", [])
+    resolved = [x["claim"] for x in ambs if x["resolves_at"] == a.id]
+    ambs[:] = [x for x in ambs if x["resolves_at"] != a.id]
+    rc = finish(led, f"approved {a.id}" + (f"; resolved ambiguities dropped: {', '.join(resolved)}" if resolved else ""))
     fr = led.frontier()
     new = [it["child"] for it in body if it.get("child") in fr]
     if new:
