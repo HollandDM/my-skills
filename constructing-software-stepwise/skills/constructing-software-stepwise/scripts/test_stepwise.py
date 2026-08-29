@@ -32,10 +32,51 @@ def ledger():
 
 # root + prose + unknowns
 run("new", "D-000", "outcome <- run_job(key, spec)")
-run("set", "D-000", "gloss", "run one job to a durable outcome")
-run("set", "D-000", "effect", "Job runs once per ?job-key and ends in a durable outcome.")
-run("set", "D-000", "pre", "?job-key is caller-supplied")
-run("set", "D-000", "post", "outcome recorded once")
+before = ledger()
+t = run("set", "D-000", '{"gloss":', '"secret"}', ok=False)
+assert "one quoted argument" in t
+audit = (d / ".stepwise.log").read_text()
+assert "<json:gloss>" in audit and "secret" not in audit
+invalid_payloads = [
+    ('{"gloss": "unterminated}', "invalid JSON set payload"),
+    ("[]", "must be an object"),
+    ("{}", "payload is empty"),
+    ('{"gloss": 3}', "JSON field 'gloss' must be a string"),
+    ('{"unknown": "value"}', "unknown JSON field(s) unknown"),
+    (json.dumps({"contract": {f"clause{i}": "value" for i in range(7)}}), "7 clauses > 6"),
+    ('{"contract": {"not-valid": "value"}}', "must be one lowercase word"),
+    ('{"contract": {"pre": 3}}', "contract clause 'pre' must be a string"),
+    ('{"walkthrough": ["a", 3]}', "must be an array of strings"),
+    ('{"walkthrough": ["a", "b", "c", "d"]}', "4 lines > 3"),
+    ('{"realization": "done"}', "realization must be one of"),
+    ('{"verification": "done"}', "verification must be one of"),
+]
+for payload, message in invalid_payloads:
+    t = run("set", "D-000", payload, ok=False)
+    assert message in t and ledger() == before, (payload, t)
+t = run("set", "D-000", json.dumps({"gloss": "must not stick", "depends": ["Missing"]}), ok=False)
+assert "is not a term" in t and ledger() == before
+run("set", "D-000", json.dumps({
+    "gloss": "run one job to a durable outcome",
+    "effect": "Job runs once per ?job-key and ends in a durable outcome.",
+    "contract": {
+        "pre": "?job-key is caller-supplied",
+        "post": "outcome recorded once",
+    },
+}))
+run("set", "D-000", json.dumps({"contract": {
+    "pre": "?job-key is caller-supplied",
+    "post": "outcome recorded once",
+    "contract": "This temporary free-label clause proves nested labels do not collide with top-level fields.",
+}}))
+assert "contract" in ledger()["nodes"]["D-000"]["contract"]
+run("set", "D-000", json.dumps({"contract": {
+    "pre": "?job-key is caller-supplied",
+    "post": "outcome recorded once",
+}}))
+assert "contract" not in ledger()["nodes"]["D-000"]["contract"]
+audit = (d / ".stepwise.log").read_text()
+assert "<json:gloss,effect,contract>" in audit and "run one job to a durable outcome" not in audit
 assert "draft (1 ?)" in run("frontier")
 t = run("approve", "D-000", ok=False)
 assert "unresolved ?job-key" in t and "no refinement body" in t
@@ -62,11 +103,18 @@ assert "untagged call '-> finish(job)'" in t and "composition missing" in t and 
 run("body", "D-000", stdin=body.replace("-> finish(job)", "-> finish(job)                                  -- D-030: record the outcome"))
 t = run("set", "D-000", "walkthrough", "a", "b", "c", "d", ok=False)
 assert "4 lines > 3" in t
-run("set", "D-000", "walkthrough", "Establishes the job row, advances it until done, then records the outcome.")
-run("set", "D-000", "composition", "Data flow: key -> job -> outcome", "Failures: each child owns its retry")
-run("set", "D-000", "decisions", "one job per key")
+run("set", "D-000", json.dumps({
+    "walkthrough": ["Establishes the job row, advances it until done, then records the outcome."],
+    "composition": ["Data flow: key -> job -> outcome", "Failures: each child owns its retry"],
+    "decisions": ["one job per key"],
+}))
 t = run("approve", "D-000")
 assert "approved D-000" in t and "next: `new <dir> D-010`" in t
+before = ledger()
+t = run("set", "D-000", json.dumps({"contract": {"post": "a changed outcome"}}), ok=False)
+assert "is approved" in t and "`reopen D-000" in t and ledger() == before
+t = run("set", "D-000", "post", "a changed outcome", ok=False)
+assert "is approved" in t and ledger() == before
 fr = run("frontier")
 assert "D-010  frontier  establish_job(key, spec) -> job  (child of D-000)" in fr and "D-030" in fr
 assert "D-000  frontier" not in fr
@@ -118,6 +166,9 @@ run("stale", "D-000", "Job Key redefined", ok=False)
 run("stale", "D-010", "Job Key redefined")
 v10 = (d / "nodes" / "D-010.md").read_text()
 assert "Stale: " in v10 and "Job Key redefined" in v10 and "invalidated by Job Key (" in v10, v10
+before = ledger()
+t = run("set", "D-010", '{"contract":{"post":"changed while stale"}}', ok=False)
+assert "is stale" in t and "`reopen D-010" in t and ledger() == before
 run("check", ok=True)
 t = run("approve", "D-000", ok=False)
 assert "is stale" in t and "From stale: reopen, retire, supersede" in t, t
@@ -203,6 +254,11 @@ assert "lost every caller" not in run("check")
 run("set", "D-020", "depends", "-", ok=False)  # orphan error is back
 run("retire", "D-021", "still called", ok=False)
 run("retire", "D-022", "wait_for folded into pick_step")
+before = ledger()
+t = run("set", "D-022", "gloss", "rewrite retired history", ok=False)
+assert "is retired" in t and ledger() == before
+t = run("set", "D-022", '{"composition":["rewrite retired history"]}', ok=False)
+assert "is retired" in t and "`reopen D-022" in t and ledger() == before
 run("approve", "D-020")
 run("check")
 assert "retired" in (d / "nodes" / "D-022.md").read_text()
@@ -229,6 +285,9 @@ assert "constrains D-030 which is superseded by D-021" in t  # ADR must be re-po
 assert "now stale: D-000" in t, t  # the caller rests on a dead contract
 assert "invalidated by D-030 (superseded" in (d / "nodes" / "D-000.md").read_text()
 assert "superseded by D-021" in (d / "DESIGN.md").read_text()
+before = ledger()
+t = run("set", "D-030", '{"depends":["D-021"]}', ok=False)
+assert "historical content cannot be edited" in t and ledger() == before
 t = run("check", ok=False)
 assert "D-000: calls D-030 which is superseded by D-021" in t
 run("reopen", "D-000", "record the outcome through D-021", ok=False)

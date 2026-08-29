@@ -16,7 +16,7 @@ docs/design/<topic>/
   DESIGN.md            generated view: root, frontier, ADR list, node table, Program (whole pseudocode, bodies substituted)
   CONTEXT.md           generated view: scope, tables, ambiguities, non-goals, every entry
   nodes/D-NNN.md       generated view: one node, readable alone
-  .stepwise.log        every verb call (audit)
+  .stepwise.log        attempted write/state calls after ledger load; read-only orientation/check calls omitted; JSON sets record field names, not duplicated payload text
 docs/adr/NNNN-<slug>.md   hand-written paragraph; header + status owned by `adr new` / `adr accept`
 ```
 
@@ -27,19 +27,34 @@ Views exist for humans and PR review. The agent reads them (or `show D-NNN`) and
 | Field | Set by | Meaning |
 |---|---|---|
 | `statement` | `new` (from parent body line, or root statement) | `x <- f(a, b)` · `-> f(a)` · `f(a)`. ID = statement; never renumber |
-| `gloss`, `effect` | `set D-NNN gloss\|effect "…"` | one line; 1–2 sentences |
-| `contract` | `set D-NNN pre\|post\|failure\|invariant\|<any lowercase label> "…"` | ≤ 6 clauses, 1–2 explicit lines each — checkable on its own, never a fragment; labels free (`budget`, `determinism`, `boundary`, `cancellation`, `progress`); unknowns `?slug` |
-| `depends` | `answer`; `set D-NNN depends "Name" …` (append), `set D-NNN depends -` (clear a wrong one); also derived from any term / `CTX-…` / `ADR-…` / `D-NNN` named in gloss, effect, contract | dependencies for `Used by` and staleness |
+| `gloss`, `effect` | JSON `set` | one line; 1–2 sentences |
+| `contract` | JSON `set` as `{ "contract": { "<lowercase label>": "<clause>" } }` | ≤ 6 clauses, 1–2 explicit lines each — checkable on its own, never a fragment; labels free (`budget`, `determinism`, `boundary`, `cancellation`, `progress`); unknowns `?slug` |
+| `depends` | `answer`; JSON `set` array (replace), or granular `set D-NNN depends "Name" …` (append); also derived from any term / `CTX-…` / `ADR-…` / `D-NNN` named in gloss, effect, contract | dependencies for `Used by` and staleness |
 | `body` | `body D-NNN` (stdin / `--file`) | pseudocode lines → `{indent, code, child \| reuse \| target \| note}`; refused on an approved node |
-| `composition`, `decisions`, `deferred`, `adaptation` | `set D-NNN <field> "b1" "b2" …` | bullet lists, replaced whole |
+| `composition`, `decisions`, `deferred`, `adaptation` | JSON `set` arrays | bullet lists, replaced whole |
 | `target` | `terminal D-NNN "<target>: <identifier>"` | the real thing; Exists test enforced |
 | `design` | `approve` · `reopen` · `stale` · `supersede` · `adr new` (→ draft, `adr_pending`) · `adr accept` | `draft` · `approved` · `stale` · `superseded` (+ `superseded_by`) |
 | `approved`, `approved_at`, `approved_hash` | `approve` | who / when; body hash guards against silent edits |
-| `realization`, `verification` | `set D-NNN realization\|verification <v>` · `evidence` | `not-started \| partial \| implemented` · `unverified \| partial \| verified \| stale` |
+| `realization`, `verification` | JSON `set` · `evidence` | `not-started \| partial \| implemented` · `unverified \| partial \| verified \| stale` |
 | `evidence` | `evidence D-NNN --kind K --ref R --result pass\|fail [--note]` | one record per (obligation, method) |
 | `history` | every state verb | `{date, event, reason}` — reopen / stale / supersede / re-approve reasons live here, never in status text |
 
 Parents are derived: every node whose body tags `D-NNN` as `child` or `reuse`. Frontier is derived: child ids tagged in non-draft bodies with no node yet. Nothing structural is typed twice.
+
+### Atomic JSON set
+
+Use one `set <dir> D-NNN '<json object>'` whenever several node fields change. Allowed top-level fields are `gloss`, `effect`, `contract`, `walkthrough`, `composition`, `decisions`, `deferred`, `adaptation`, `depends`, `realization`, and `verification`. Only supplied top-level fields change; the nested `contract` object and every supplied array replace the whole existing field. Invalid JSON, unknown fields, wrong types, contract overflow, or unresolved dependencies leave the ledger unchanged. The granular `set <dir> D-NNN <field> <value...>` form is for one-field corrections and dependency append.
+
+```json
+{
+  "gloss": "one durable job run",
+  "effect": "The job reaches one durable terminal outcome.",
+  "contract": {
+    "pre": "The caller supplies a ?job-key.",
+    "post": "Exactly one outcome is recorded for Job Key."
+  }
+}
+```
 
 Status shown in views: `draft` · `draft (k ?)` · `draft (ADR pending ADR-NNNN)` · `approved` · `stale` · `superseded by D-MMM`. No other words exist.
 
@@ -94,10 +109,10 @@ Program tags are rendered from status: `(frontier)` · `(draft, k ?)` · `(draft
 
 | Kind | Test | Verbs |
 |---|---|---|
-| Terminal — real | Statement = ONE real thing that passes Exists test, or Contract already met by ONE such thing cited in a fact | `terminal`, `set adaptation`, `approve`; later `evidence` |
-| Leaf — collapsed | User rules node not worth child-by-child review; body still fully written to real lines | `body` with every statement `-- ⇒ <target>: <identifier> -- <one line>` (≤ 12 lines, no `-- D-NNN`), `set walkthrough`, `set composition`, `approve` |
+| Terminal — real | Statement = ONE real thing that passes Exists test, or Contract already met by ONE such thing cited in a fact | `terminal`, JSON `set` with `adaptation`, `approve`; later `evidence` |
+| Leaf — collapsed | User rules node not worth child-by-child review; body still fully written to real lines | `body` with every statement `-- ⇒ <target>: <identifier> -- <one line>` (≤ 12 lines, no `-- D-NNN`), JSON `set` with `walkthrough` + `composition`, `approve` |
 | Terminal — reuse | Statement = call to existing `approved` node, Statement + Contract used verbatim | no new node; parent body line `-- ↗ D-NNN` |
-| Composite | else | `body` (2–7 child statements), `set composition` (+ `decisions`, `deferred`), `approve` |
+| Composite | else | `body` (2–7 child statements), one JSON `set` with proposal metadata, `approve` |
 
 Composite fan-out 2–7. 1 → rename. >7 → intermediate node. Terminal = only place refinement stops: adapt to real, or call approved node.
 
@@ -141,7 +156,7 @@ next_step(run):
 ## History          (- date — event: reason)
 ```
 
-Walkthrough: `set D-NNN walkthrough "…"` — at most 3 plain lines saying what the function does, rendered above the pseudocode. Every tagged pseudocode line carries one line of explanation, so a reader knows what each line does before its node exists; an existing child's or reused node's own gloss takes over once it does. `approve` refuses a body missing either.
+Walkthrough: the JSON `set` field `walkthrough` is an array of at most 3 plain lines saying what the function does, rendered above the pseudocode. Every tagged pseudocode line carries one line of explanation, so a reader knows what each line does before its node exists; an existing child's or reused node's own gloss takes over once it does. `approve` refuses a body missing either.
 
 Composition argument: five bullets — data flow, failures, cleanup, invariants, progress (≤ 2 lines each). Not applicable → `n/a: <reason>`. Never omit. `approve` refuses a composite without composition.
 
@@ -153,7 +168,7 @@ Draft state: gloss / effect / clause may carry `?slug`; `?` count = interview le
 
 Agent derives + recommends. User approves anything changing product semantics, accepted risk, compatibility, cost commitment, hard-to-reverse architecture.
 
-Approval covers Statement + Contract + body, not prose. Preserve user's exact negatives, ordering constraints, numeric limits, failure semantics verbatim. Sequence after the user's yes: `body` (or `terminal`) → `set composition …` → `approve` — all same turn, then next node.
+Approval covers Statement + Contract + body, not prose. Preserve user's exact negatives, ordering constraints, numeric limits, failure semantics verbatim. Sequence after the user's yes: `body` (or `terminal`) → one JSON `set` for proposal metadata → `approve` — all same turn, then next node.
 
 Re-approval: `reopen D-NNN "reason"` → edit via verbs → `approve`. Status stays one word; the reason lives in `history`.
 

@@ -29,7 +29,7 @@ Entries change in place (meaning sharpens, facts go stale) → `change` appends 
 
 `change <dir> <ref> [--definition D] [--rename "New heading"] [--status confirmed|stale] --reason R` — sharpen an entry, retitle it (`--rename` moves a term's name and every reference to it; a fact / scenario keeps its CTX id), or stale a fact. `Used by` is derived from node `depends` (which `answer` sets and prose mentions extend) and scenario `settles`.
 
-The entry's key is its name everywhere: `answer D-020 run-identity "Run Key"`, `set D-020 pre "Run Key supplied by caller"`, `--not "Model Turn"`, `--settles "Run Key boundary"`. Views render the links.
+The entry's key is its name everywhere: `answer D-020 run-identity "Run Key"`, JSON contract clause `"pre": "Run Key supplied by caller"`, `--not "Model Turn"`, `--settles "Run Key boundary"`. Views render the links.
 
 ## Entry Rules
 
@@ -95,7 +95,7 @@ User term conflicts w/ existing entry → call out immediately: "Glossary define
 
 Vague / overloaded term → propose canonical: "'account' — Customer or User? Different things."
 
-Ambiguous boundary → scenario forcing it. Resolve iff active node's draft Contract carries a `?` for it; else `ambiguity <dir> "<claim>" "<conflict>" D-NNN` (the child that will own it) and `set D-NNN deferred …` at approval. Entries exist only for resolved `?` — one per question asked, no more.
+Ambiguous boundary → scenario forcing it. Resolve iff active node's draft Contract carries a `?` for it; else `ambiguity <dir> "<claim>" "<conflict>" D-NNN` (the child that will own it) and include `deferred` in the proposal metadata JSON at approval. Entries exist only for resolved `?` — one per question asked, no more.
 
 ## Change + Invalidation
 

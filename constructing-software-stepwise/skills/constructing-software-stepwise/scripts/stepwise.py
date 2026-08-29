@@ -10,7 +10,9 @@ Every verb ends with render + lint; exit 1 and `error <where>: <msg>` lines when
   frontier  <dir>                                     what to pick next
   show      <dir> D-NNN                               node view to stdout
   new       <dir> D-NNN ["stmt"]                      draft node (frontier id, or the root with its statement)
-  set       <dir> D-NNN gloss|effect "text"           one-line prose fields
+  set       <dir> D-NNN '{"gloss":"...","effect":"...","contract":{"pre":"..."}}'
+                                                       atomically replace the supplied node fields from one JSON object
+  set       <dir> D-NNN gloss|effect "text"           targeted single-field correction
   set       <dir> D-NNN pre|post|failure|invariant|<label> "clause"   contract clause, any lowercase label (<= 6 clauses; unknowns as ?slug)
   set       <dir> D-NNN walkthrough "l1" ["l2" "l3"]  <= 3 lines: what the function does (above the body)
   set       <dir> D-NNN composition|decisions|deferred|adaptation "b1" "b2" ...    bullet lists (replace)
@@ -54,6 +56,8 @@ CODE_COL = 58
 CONTRACT_KEYS = ("pre", "post", "failure", "cancellation", "invariant", "progress")
 TEXT_FIELDS = ("gloss", "effect")
 LIST_FIELDS = ("walkthrough", "composition", "decisions", "deferred", "adaptation")
+JSON_SET_FIELDS = TEXT_FIELDS + ("contract",) + LIST_FIELDS + ("depends", "realization", "verification")
+DESIGN_CONTENT_FIELDS = TEXT_FIELDS + ("contract",) + LIST_FIELDS + ("depends",)
 REALIZATION = ("not-started", "partial", "implemented")
 VERIFICATION = ("unverified", "partial", "verified", "stale")
 DESIGN = ("draft", "approved", "stale", "superseded", "retired")
@@ -882,7 +886,86 @@ def v_new(led: Ledger, a) -> int:
         return fail(f"statement {code!r} has no call `f(...)`")
     led.nodes[a.id] = {"statement": code, "gloss": "", "effect": "", "contract": {}, "depends": [],
                        "design": "draft", "realization": "not-started", "verification": "unverified", "approved": ""}
-    return finish(led, f"created {a.id} `{code}` (draft). Next: `set {a.id} gloss|effect|pre|post|failure|invariant ...` (unknowns as ?slug), then `answer`, `body`, `approve`.")
+    return finish(led, f"created {a.id} `{code}` (draft). Next: `set <dir> {a.id} '<json>'` with gloss, effect, and contract (unknowns as ?slug), then `answer`, `body`, `approve`.")
+
+
+def content_edit_error(nid: str, n: dict) -> str:
+    if n["design"] == "draft":
+        return ""
+    if TRANSITIONS.get((n["design"], "draft")) == "reopen":
+        return f"{nid} is {n['design']}; `reopen {nid} \"reason\"` before changing its gloss, effect, or contract"
+    state = f"superseded by {n.get('superseded_by', '?')}" if n["design"] == "superseded" else n["design"]
+    return f"{nid} is {state}; its historical content cannot be edited"
+
+
+def v_set_json(led: Ledger, nid: str, n: dict, raw: str) -> int:
+    try:
+        payload = json.loads(raw)
+    except json.JSONDecodeError as e:
+        return fail(f"{nid}: invalid JSON set payload at line {e.lineno}, column {e.colno}: {e.msg}")
+    if not isinstance(payload, dict):
+        return fail(f"{nid}: JSON set payload must be an object")
+    if not payload:
+        return fail(f"{nid}: JSON set payload is empty")
+    unknown = sorted(set(payload) - set(JSON_SET_FIELDS))
+    if unknown:
+        return fail(f"{nid}: unknown JSON field(s) {', '.join(unknown)}; fields: {', '.join(JSON_SET_FIELDS)}")
+
+    updates: dict[str, object] = {}
+    for f, value in payload.items():
+        if f in TEXT_FIELDS:
+            if not isinstance(value, str):
+                return fail(f"{nid}: JSON field {f!r} must be a string")
+            updates[f] = value.strip()
+        elif f == "contract":
+            if not isinstance(value, dict):
+                return fail(f"{nid}: JSON field 'contract' must be an object of lowercase label to clause")
+            if len(value) > 6:
+                return fail(f"{nid}: contract would have {len(value)} clauses > 6")
+            contract: dict[str, str] = {}
+            for label, clause in value.items():
+                if not label.isalpha() or not label.islower():
+                    return fail(f"{nid}: contract label {label!r} must be one lowercase word")
+                if not isinstance(clause, str):
+                    return fail(f"{nid}: contract clause {label!r} must be a string")
+                contract[label] = clause.strip()
+            updates[f] = contract
+        elif f in LIST_FIELDS:
+            if not isinstance(value, list) or any(not isinstance(item, str) for item in value):
+                return fail(f"{nid}: JSON field {f!r} must be an array of strings")
+            items = [item.strip() for item in value if item.strip()]
+            if f == "walkthrough" and len(items) > 3:
+                return fail(f"{nid}: walkthrough is {len(items)} lines > 3 — say what the function does, not how")
+            updates[f] = items
+        elif f == "depends":
+            if not isinstance(value, list) or any(not isinstance(item, str) for item in value):
+                return fail(f"{nid}: JSON field 'depends' must be an array of entry, node, or ADR names")
+            deps: list[str] = []
+            for item in value:
+                ref = led.canonical(item)
+                if not led.resolves(ref):
+                    return fail(f"{nid}: {item!r} is not a term / fact / scenario / node / ADR on disk — `entry` first")
+                if ref not in deps:
+                    deps.append(ref)
+            updates[f] = deps
+        elif f == "realization":
+            if not isinstance(value, str) or value not in REALIZATION:
+                return fail(f"{nid}: realization must be one of {REALIZATION}")
+            updates[f] = value
+        elif f == "verification":
+            if not isinstance(value, str) or value not in VERIFICATION:
+                return fail(f"{nid}: verification must be one of {VERIFICATION}")
+            updates[f] = value
+
+    semantic_changed = any(f in TEXT_FIELDS + ("contract",) and n.get(f) != value for f, value in updates.items())
+    historical_content_changed = n["design"] in ("superseded", "retired") and any(
+        f in DESIGN_CONTENT_FIELDS and n.get(f) != value for f, value in updates.items()
+    )
+    if (semantic_changed or historical_content_changed) and (why := content_edit_error(nid, n)):
+        return fail(why)
+    n.update(updates)
+    fields = ", ".join(payload)
+    return finish(led, f"{nid} set from JSON: {fields}" + (f"; open ?: {node_unknowns(n)}" if node_unknowns(n) else ""))
 
 
 def v_set(led: Ledger, a) -> int:
@@ -890,9 +973,20 @@ def v_set(led: Ledger, a) -> int:
     if n is None:
         return 1
     f, vals = a.field, a.value
+    if not vals and f.lstrip().startswith(("{", "[")):
+        return v_set_json(led, a.id, n, f)
+    if not vals:
+        return fail(f"{a.id}: field {f!r} needs a value; for several fields pass one quoted JSON object")
+    if f.lstrip().startswith(("{", "[")):
+        return fail(f"{a.id}: JSON set payload must be passed as one quoted argument")
+    contract_field = f in CONTRACT_KEYS or (f.isalpha() and f.islower() and f not in LIST_FIELDS + ("realization", "verification", "depends"))
+    if n["design"] in ("superseded", "retired") and (f in TEXT_FIELDS + LIST_FIELDS + ("depends",) or contract_field):
+        return fail(content_edit_error(a.id, n))
+    if (f in TEXT_FIELDS or contract_field) and (why := content_edit_error(a.id, n)):
+        return fail(why)
     if f in TEXT_FIELDS:
         n[f] = " ".join(vals).strip()
-    elif f in CONTRACT_KEYS or (f.isalpha() and f.islower() and f not in LIST_FIELDS + ("realization", "verification", "depends")):
+    elif contract_field:
         # any lowercase word is a contract clause label: pre, post, failure, invariant, budget, determinism, boundary, ...
         n.setdefault("contract", {})[f] = " ".join(vals).strip()
         if len(n["contract"]) > 6:
@@ -923,9 +1017,6 @@ def v_set(led: Ledger, a) -> int:
         n[f] = vals[0]
     else:
         return fail(f"unknown field {f!r}; fields: {TEXT_FIELDS + CONTRACT_KEYS + LIST_FIELDS + ('realization', 'verification')}")
-    if n["design"] == "approved" and f in TEXT_FIELDS + CONTRACT_KEYS:
-        n["design"] = "draft"
-        hist(n, "reopened", f"{f} edited after approval")
     return finish(led, f"{a.id}.{f} set" + (f"; open ?: {node_unknowns(n)}" if node_unknowns(n) else ""))
 
 
@@ -991,7 +1082,7 @@ def v_terminal(led: Ledger, a) -> int:
     if n.get("body") and not led.is_collapsed(n):
         return fail(f"{a.id} has child statements; a terminal has no body (drop it) — or collapse: tag every statement `-- ⇒ <target>: <identifier>`")
     n["target"] = t
-    return finish(led, f"{a.id} terminal ⇒ {t}. Add `set {a.id} adaptation \"<pseudo> → <real>\" ...` when shape changes, then `approve {a.id}`")
+    return finish(led, f"{a.id} terminal ⇒ {t}. Add `set <dir> {a.id} '{{\"adaptation\":[\"<clause> → <real>\"]}}'` when shape changes, then `approve {a.id}`")
 
 
 def v_approve(led: Ledger, a) -> int:
@@ -1341,8 +1432,16 @@ def v_check(led: Ledger, a) -> int:
 
 def log(d: Path, argv: list[str], rc: int) -> None:
     try:
+        args = argv[1:2] + argv[3:]
+        if len(args) >= 3 and args[0] == "set" and args[2].lstrip().startswith(("{", "[")):
+            try:
+                payload = json.loads(" ".join(args[2:]))
+                fields = ",".join(payload) if isinstance(payload, dict) else "non-object"
+            except json.JSONDecodeError:
+                fields = "invalid"
+            args = args[:2] + [f"<json:{fields}>"]
         with (d / LOG).open("a", encoding="utf-8") as f:
-            f.write(f"{_dt.datetime.now().isoformat(timespec='seconds')} exit={rc} {' '.join(argv[1:2] + argv[3:])}\n")
+            f.write(f"{_dt.datetime.now().isoformat(timespec='seconds')} exit={rc} {' '.join(args)}\n")
     except OSError:
         pass
 
@@ -1362,7 +1461,7 @@ def main(argv: list[str]) -> int:
 
     add("frontier"); add("sync"); add("check"); add("show", "id"); add("status", all={"action": "store_true"})
     add("new", "id", ("statement", {"nargs": "?"}))
-    add("set", "id", "field", ("value", {"nargs": "+"}))
+    add("set", "id", "field", ("value", {"nargs": "*"}))
     add("body", "id", file={"default": ""})
     add("answer", "id", "slug", "name")
     add("terminal", "id", "target")
@@ -1388,7 +1487,7 @@ def main(argv: list[str]) -> int:
         else:
             return fail(f"{d / LEDGER} missing; start with `new <dir> D-000 \"outcome <- f(x)\"` or `entry` / `meta`")
     rc = globals()[f"v_{a.cmd}"](led, a)
-    if a.cmd not in ("check", "show", "frontier"):
+    if a.cmd not in ("check", "show", "frontier", "status"):
         log(d, argv, rc)
     return rc
 
