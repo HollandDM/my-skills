@@ -5,7 +5,9 @@ Canonical data: <design-dir>/ledger.json (typed; this tool is the only writer).
 Generated views (never edit; regenerated on every verb): DESIGN.md, CONTEXT.md, nodes/D-NNN.md.
 ADRs stay markdown in docs/adr/ (repo convention); `adr new` stubs them, `adr accept` flips status.
 
-Every verb ends with render + lint; exit 1 and `error <where>: <msg>` lines when something must be fixed.
+Every mutation ends with render + lint. A valid mutation returns 0 even when it leaves repair work;
+`APPLIED-WITH-ERRORS` names that state. A rejected mutation returns 1 and leaves ledger/views unchanged. `check`
+returns 1 while any ledger error remains.
 
   frontier  <dir>                                     what to pick next
   show      <dir> D-NNN                               node view to stdout
@@ -21,12 +23,13 @@ Every verb ends with render + lint; exit 1 and `error <where>: <msg>` lines when
   body      <dir> D-NNN [--file F]                    refinement body from stdin/file (pseudocode, `-- D-NNN: <one line>` / `-- ↗ D-NNN -- <one line>` / `-- ⇒ target -- <one line>`; every tagged line says what it does)
   answer    <dir> D-NNN slug "Name"                   ?slug -> name in every clause; name added to depends
   terminal  <dir> D-NNN "<target>: <identifier>"      leaf: the real thing (Exists test enforced)
-  approve   <dir> D-NNN                               after the user says yes; refuses while anything is missing
+  proposal  <dir> D-NNN                               hash the exact statement + contract + refinement awaiting approval
+  approve   <dir> D-NNN --actor NAME --proposal-hash HASH   record explicit approval of that exact proposal
   reopen    <dir> D-NNN "reason"                      approved -> draft for revision (history keeps the reason)
   stale     <dir> D-NNN "reason"                      a change invalidated it; the entries that changed are recorded with it
   retire    <dir> D-NNN "reason"                      the design dropped it; nothing calls it any more
   supersede <dir> D-OLD D-NEW "reason"
-  evidence  <dir> D-NNN --kind K --ref R --result pass|fail [--note N]
+  evidence  <dir> D-NNN --kind K --ref R --result pass|fail --covers CLAUSE[,CLAUSE] [--resolves EV-N[,EV-N]] [--note N]
   entry     <dir> term|fact|scenario "Heading" "definition" [--source S] [--avoid a,b] [--not T] [--example E]
                                                       [--given G --when W --then T --excludes X --settles T]
   change    <dir> <ref> [--definition D] [--rename "New Heading"] [--status confirmed|stale] --reason R   sharpen, rename or stale an entry
@@ -36,6 +39,7 @@ Every verb ends with render + lint; exit 1 and `error <where>: <msg>` lines when
                                                       adr <dir> constrains ADR-NNNN --constrains D-NNN[,D-MMM]   rewrite the constrained set
   sync      <dir>                                     render + lint (after hand-editing an ADR paragraph)
   status    <dir> [--all]                             every node, its design state, and the one move that advances it
+  repair    <dir>                                     dependency-ordered draft/stale repair plan; ADR errors collapsed
   check     <dir>                                     lint only, no writes
 
 Stdlib only, no regex: the ledger is typed data, not text to be parsed.
@@ -60,7 +64,9 @@ JSON_SET_FIELDS = TEXT_FIELDS + ("contract",) + LIST_FIELDS + ("depends", "reali
 DESIGN_CONTENT_FIELDS = TEXT_FIELDS + ("contract",) + LIST_FIELDS + ("depends",)
 REALIZATION = ("not-started", "partial", "implemented")
 VERIFICATION = ("unverified", "partial", "verified", "stale")
+VERIFICATION_MODEL = 2
 DESIGN = ("draft", "approved", "stale", "superseded", "retired")
+_COMMAND_ERRORS: list[str] = []
 # design state machine: (from, to) -> verb that makes the move. Nothing else moves a node.
 TRANSITIONS = {
     ("draft", "approved"): "approve",
@@ -79,7 +85,7 @@ TRANSITIONS = {
 }
 # what a node in each state is waiting for; `status` prints it, the skill follows it
 NEXT_STEP = {
-    "draft": "finish the draft (`set`, `answer`, `body`/`terminal`, `set walkthrough`/`composition`) then `approve`",
+    "draft": "finish the draft, run `proposal`, get explicit approval, then `approve --actor … --proposal-hash …`",
     "approved": "nothing — refine its children, or `reopen` / `stale` / `supersede` / `retire` when something changes",
     "stale": "`reopen` and re-`approve` it, or `retire` / `supersede` it",
     "superseded": "nothing — the replacement carries the work",
@@ -271,9 +277,48 @@ def body_hash(items: list[dict]) -> str:
     return hashlib.sha1(json.dumps(items, sort_keys=True).encode()).hexdigest()[:12]
 
 
+def proposal_hash(n: dict) -> str:
+    fields = ("statement", "gloss", "effect", "contract", "body", "walkthrough", "composition",
+              "decisions", "deferred", "target", "adaptation")
+    proposal = {f: n.get(f) for f in fields if n.get(f)}
+    return hashlib.sha256(json.dumps(proposal, sort_keys=True, ensure_ascii=False).encode()).hexdigest()[:16]
+
+
 def contract_hash(n: dict) -> str:
     """What a caller depends on: the statement and the contract clauses. The body is the node's own business."""
     return hashlib.sha1(json.dumps([n.get("statement", ""), n.get("target", ""), n.get("contract", {})], sort_keys=True).encode()).hexdigest()[:12]
+
+
+def comma_values(values: list[str]) -> list[str]:
+    return list(dict.fromkeys(part.strip() for value in values for part in value.split(",") if part.strip()))
+
+
+def current_evidence(n: dict) -> list[tuple[str, dict]]:
+    approval = n.get("approved_at", "")
+    contract = n.get("contract_hash", contract_hash(n))
+    return [(f"EV-{i}", ev) for i, ev in enumerate(n.get("evidence", []), 1)
+            if ev.get("approved_at") == approval and ev.get("contract_hash") == contract]
+
+
+def verification_gaps(n: dict) -> tuple[list[str], list[str]]:
+    evidence = current_evidence(n)
+    resolved = {ref for _, ev in evidence if ev.get("result") == "pass" for ref in ev.get("resolves", [])}
+    failed = [eid for eid, ev in evidence if ev.get("result") == "fail" and eid not in resolved]
+    covered = {clause for _, ev in evidence if ev.get("result") == "pass" for clause in ev.get("covers", [])}
+    missing = [clause for clause in n.get("contract", {}) if clause not in covered]
+    return missing, failed
+
+
+def refresh_verification(n: dict) -> None:
+    missing, failed = verification_gaps(n)
+    if failed:
+        n["verification"] = "stale"
+    elif not missing and n.get("realization") == "implemented" and n.get("design") == "approved":
+        n["verification"] = "verified"
+    elif current_evidence(n):
+        n["verification"] = "partial"
+    elif n.get("verification") == "verified":
+        n["verification"] = "stale"
 
 
 def frontier_statement(code: str) -> str:
@@ -293,6 +338,7 @@ class Ledger:
         self.data: dict = json.loads(self.path.read_text(encoding="utf-8")) if self.path.exists() else {}
         self.errors: list[str] = []
         self.warnings: list[str] = []
+        self.applied = False
 
     # --- storage
     @classmethod
@@ -301,7 +347,6 @@ class Ledger:
         led = cls(d)
         led.data = {"schema": 1, "title": title, "scope": "", "nongoals": [], "ambiguities": [],
                     "nodes": {}, "terms": {}, "facts": {}, "scenarios": {}}
-        led.save()
         return led
 
     def save(self) -> None:
@@ -505,6 +550,7 @@ def render_node(led: Ledger, nid: str) -> str:
          f"Parents: {', '.join(link_ref(led, x, p) for x in led.parents(nid)) or '-'}",
          f"Depends on: {', '.join(link_ref(led, x, p) for x in n.get('depends', [])) or '-'}",
          f"Approved: {n.get('approved') or '-'}",
+         *([f"Proposal: {n['proposal_hash']}"] if n.get("proposal_hash") else []),
          *state_line(n), "",
          "## Statement", "", f"`{n['statement']}`" + (f" — {n['gloss']}" if n.get("gloss") else ""), "",
          "## Effect", "", n.get("effect") or "-", "",
@@ -545,7 +591,14 @@ def render_node(led: Ledger, nid: str) -> str:
     if n.get("evidence"):
         L += ["", "## Evidence", ""]
         for i, ev in enumerate(n["evidence"], 1):
-            L += [f"### EV-{i} {ev['kind']} — {ev['result']}", f"{ev['date']} · {ev['ref']}" + (f" · {ev['note']}" if ev.get("note") else "")]
+            detail = f"{ev['date']} · {ev['ref']}"
+            if ev.get("covers"):
+                detail += f" · Covers: {', '.join(ev['covers'])}"
+            if ev.get("resolves"):
+                detail += f" · Resolves: {', '.join(ev['resolves'])}"
+            if ev.get("note"):
+                detail += f" · {ev['note']}"
+            L += [f"### EV-{i} {ev['kind']} — {ev['result']}", detail]
     if n.get("history"):
         L += ["", "## History", "", *[f"- {h['date']} — {h['event']}" + (f": {h['reason']}" if h.get("reason") else "") for h in n["history"]]]
     return "\n".join(L) + "\n"
@@ -686,6 +739,7 @@ def check(led: Ledger) -> None:
     W = led.warnings.append
     nodes = led.nodes
     fr = led.frontier()
+    legacy_verified: list[str] = []
     live_roots = [r for r in led.roots() if nodes[r]["design"] not in ("retired", "superseded")]
     if nodes and len(live_roots) != 1:
         first = min(live_roots, default="")
@@ -703,6 +757,17 @@ def check(led: Ledger) -> None:
             E(f"{where}: realization {n['realization']!r} not in {REALIZATION}")
         if n["verification"] not in VERIFICATION:
             E(f"{where}: verification {n['verification']!r} not in {VERIFICATION}")
+        elif n["verification"] == "verified":
+            if n.get("verification_model", 1) < VERIFICATION_MODEL:
+                legacy_verified.append(nid)
+            else:
+                missing, failed = verification_gaps(n)
+                if n.get("realization") != "implemented":
+                    E(f"{where}: verified while realization is {n.get('realization')}; set realization implemented only after code exists")
+                if missing:
+                    E(f"{where}: verified without current passing evidence for clauses: {', '.join(missing)}")
+                if failed:
+                    E(f"{where}: verified with unresolved failed evidence: {', '.join(failed)}")
         if n["design"] == "superseded" and n.get("superseded_by") not in nodes and n.get("superseded_by") not in fr:
             E(f"{where}: superseded_by {n.get('superseded_by')!r} does not exist")
         if not fn_of(n["statement"]):
@@ -731,6 +796,8 @@ def check(led: Ledger) -> None:
                 E(f"{where}: approved composite lacks composition (`set {nid} composition ...`)")
             if n.get("approved_hash") and n["approved_hash"] != body_hash(body):
                 E(f"{where}: body changed since approval; `reopen` then `approve` again")
+            if n.get("proposal_hash") and n["proposal_hash"] != proposal_hash(n):
+                E(f"{where}: proposal changed since approval; `reopen` then approve the new proposal hash")
             if n.get("adr_pending"):
                 E(f"{where}: approved while {n['adr_pending']} is pending; `adr accept` first")
         for ad in n.get("adaptation", []):
@@ -768,6 +835,14 @@ def check(led: Ledger) -> None:
                 E(f"{a['path'].name}: constrains {rid} which does not exist")
         if "<1–3 sentences" in "\n".join(a["lines"]):
             W(f"{a['path'].name}: paragraph still a placeholder")
+    if legacy_verified:
+        W(f"ledger: legacy unscoped verification on {len(legacy_verified)} node(s): {', '.join(legacy_verified)}; new evidence must name contract clauses")
+    live = [n for n in nodes.values() if n["design"] not in ("retired", "superseded")]
+    prose = " ".join(" ".join([n.get("statement", ""), n.get("effect", ""), *n.get("contract", {}).values()]).lower() for n in live)
+    prose_words = set("".join(c if c.isalnum() else " " for c in prose).split())
+    stateful_words = {"state", "states", "retry", "retries", "resume", "resumes", "durable", "durability", "workflow", "workflows", "transition", "transitions", "concurrent", "concurrency"}
+    if live and not fr and all(n["design"] == "approved" for n in live) and not led.data.get("scenarios") and prose_words & stateful_words:
+        W("ledger: complete stateful design has no scenarios; add nominal, retry, and partial-failure scenarios")
     for amb in led.data.get("ambiguities", []):
         r = amb["resolves_at"]
         if r in nodes and nodes[r]["design"] == "approved":
@@ -788,15 +863,37 @@ def check(led: Ledger) -> None:
             E(f"{os.path.relpath(p, led.dir)}: generated view edited or stale; run sync (edit the ledger via the CLI, never the view)")
 
 
-def report(led: Ledger, head: str = "") -> int:
+def compact_errors(errors: list[str]) -> list[str]:
+    grouped: dict[str, list[str]] = {}
+    rest = []
+    for error in errors:
+        _, marker, tail = error.partition(": constrains ")
+        node = tail.split(" ", 1)[0] if marker else ""
+        if marker and is_node_id(node):
+            grouped.setdefault(node, []).append(error)
+        else:
+            rest.append(error)
+    for node, items in sorted(grouped.items()):
+        if len(items) == 1:
+            rest.extend(items)
+        else:
+            rest.append(f"{len(items)} ADRs are blocked by {node}; run `repair` for dependency order")
+    return rest
+
+
+def report(led: Ledger, head: str = "", applied: bool = False) -> int:
     if head:
         print(head)
     for w in led.warnings:
         print(f"warn  {w}")
-    for e in led.errors:
+    for e in compact_errors(led.errors):
         print(f"error {e}")
-    print(f"{'FAIL' if led.errors else 'ok'}  {led.dir.name}: {len(led.nodes)} nodes, {len(led.frontier())} frontier, {len(led.errors)} errors, {len(led.warnings)} warnings")
-    return 1 if led.errors else 0
+    for e in led.errors:
+        if e not in _COMMAND_ERRORS:
+            _COMMAND_ERRORS.append(e)
+    state = "APPLIED-WITH-ERRORS" if applied and led.errors else "FAIL" if led.errors else "ok"
+    print(f"{state}  {led.dir.name}: {len(led.nodes)} nodes, {len(led.frontier())} frontier, {len(led.errors)} errors, {len(led.warnings)} warnings")
+    return 0 if applied else 1 if led.errors else 0
 
 
 def derive_depends(led: Ledger) -> None:
@@ -826,13 +923,15 @@ def derive_depends(led: Ledger) -> None:
 
 def finish(led: Ledger, head: str = "") -> int:
     derive_depends(led)
+    led.applied = True
     led.save()
     write_views(led)
     check(led)
-    return report(led, head)
+    return report(led, head, applied=True)
 
 
 def fail(msg: str) -> int:
+    _COMMAND_ERRORS.append(msg)
     print(f"error {msg}", file=sys.stderr)
     return 1
 
@@ -885,15 +984,16 @@ def v_new(led: Ledger, a) -> int:
     if not fn_of(code):
         return fail(f"statement {code!r} has no call `f(...)`")
     led.nodes[a.id] = {"statement": code, "gloss": "", "effect": "", "contract": {}, "depends": [],
-                       "design": "draft", "realization": "not-started", "verification": "unverified", "approved": ""}
-    return finish(led, f"created {a.id} `{code}` (draft). Next: `set <dir> {a.id} '<json>'` with gloss, effect, and contract (unknowns as ?slug), then `answer`, `body`, `approve`.")
+                       "design": "draft", "realization": "not-started", "verification": "unverified",
+                       "verification_model": VERIFICATION_MODEL, "approved": ""}
+    return finish(led, f"created {a.id} `{code}` (draft). Next: JSON-set prose and contract, resolve each ?slug, stage body/target, then run `proposal {a.id}`.")
 
 
 def content_edit_error(nid: str, n: dict) -> str:
     if n["design"] == "draft":
         return ""
     if TRANSITIONS.get((n["design"], "draft")) == "reopen":
-        return f"{nid} is {n['design']}; `reopen {nid} \"reason\"` before changing its gloss, effect, or contract"
+        return f"{nid} is {n['design']}; `reopen {nid} \"reason\"` before changing approved proposal content"
     state = f"superseded by {n.get('superseded_by', '?')}" if n["design"] == "superseded" else n["design"]
     return f"{nid} is {state}; its historical content cannot be edited"
 
@@ -955,15 +1055,19 @@ def v_set_json(led: Ledger, nid: str, n: dict, raw: str) -> int:
         elif f == "verification":
             if not isinstance(value, str) or value not in VERIFICATION:
                 return fail(f"{nid}: verification must be one of {VERIFICATION}")
+            if value == "verified":
+                return fail("verification cannot be set directly to verified; add current passing evidence for every contract clause")
             updates[f] = value
 
-    semantic_changed = any(f in TEXT_FIELDS + ("contract",) and n.get(f) != value for f, value in updates.items())
+    proposal_changed = any(f in TEXT_FIELDS + ("contract",) + LIST_FIELDS and n.get(f) != value for f, value in updates.items())
     historical_content_changed = n["design"] in ("superseded", "retired") and any(
         f in DESIGN_CONTENT_FIELDS and n.get(f) != value for f, value in updates.items()
     )
-    if (semantic_changed or historical_content_changed) and (why := content_edit_error(nid, n)):
+    if (proposal_changed or historical_content_changed) and (why := content_edit_error(nid, n)):
         return fail(why)
     n.update(updates)
+    if "realization" in updates and n.get("verification_model", 1) >= VERIFICATION_MODEL:
+        refresh_verification(n)
     fields = ", ".join(payload)
     return finish(led, f"{nid} set from JSON: {fields}" + (f"; open ?: {node_unknowns(n)}" if node_unknowns(n) else ""))
 
@@ -982,7 +1086,7 @@ def v_set(led: Ledger, a) -> int:
     contract_field = f in CONTRACT_KEYS or (f.isalpha() and f.islower() and f not in LIST_FIELDS + ("realization", "verification", "depends"))
     if n["design"] in ("superseded", "retired") and (f in TEXT_FIELDS + LIST_FIELDS + ("depends",) or contract_field):
         return fail(content_edit_error(a.id, n))
-    if (f in TEXT_FIELDS or contract_field) and (why := content_edit_error(a.id, n)):
+    if (f in TEXT_FIELDS or f in LIST_FIELDS or contract_field) and (why := content_edit_error(a.id, n)):
         return fail(why)
     if f in TEXT_FIELDS:
         n[f] = " ".join(vals).strip()
@@ -1014,9 +1118,13 @@ def v_set(led: Ledger, a) -> int:
     elif f == "verification":
         if vals[0] not in VERIFICATION:
             return fail(f"verification must be one of {VERIFICATION}")
+        if vals[0] == "verified":
+            return fail("verification cannot be set directly to verified; add current passing evidence for every contract clause")
         n[f] = vals[0]
     else:
         return fail(f"unknown field {f!r}; fields: {TEXT_FIELDS + CONTRACT_KEYS + LIST_FIELDS + ('realization', 'verification')}")
+    if f == "realization" and n.get("verification_model", 1) >= VERIFICATION_MODEL:
+        refresh_verification(n)
     return finish(led, f"{a.id}.{f} set" + (f"; open ?: {node_unknowns(n)}" if node_unknowns(n) else ""))
 
 
@@ -1076,13 +1184,23 @@ def v_terminal(led: Ledger, a) -> int:
     n = need(led, a.id)
     if n is None:
         return 1
+    if n["design"] == "approved":
+        return fail(f"{a.id} is approved; `reopen {a.id} \"reason\"` first")
     t = a.target.strip().strip("`")
     if (why := target_ok(t)):
         return fail(why)
     if n.get("body") and not led.is_collapsed(n):
         return fail(f"{a.id} has child statements; a terminal has no body (drop it) — or collapse: tag every statement `-- ⇒ <target>: <identifier>`")
     n["target"] = t
-    return finish(led, f"{a.id} terminal ⇒ {t}. Add `set <dir> {a.id} '{{\"adaptation\":[\"<clause> → <real>\"]}}'` when shape changes, then `approve {a.id}`")
+    return finish(led, f"{a.id} terminal ⇒ {t}. JSON-set adaptation when shape changes, then run `proposal {a.id}` before approval.")
+
+
+def v_proposal(led: Ledger, a) -> int:
+    n = need(led, a.id)
+    if n is None:
+        return 1
+    print(f"proposal {a.id} {proposal_hash(n)}")
+    return 0
 
 
 def v_approve(led: Ledger, a) -> int:
@@ -1090,6 +1208,13 @@ def v_approve(led: Ledger, a) -> int:
     if n is None:
         return 1
     problems = []
+    expected_proposal = proposal_hash(n)
+    if not a.actor.strip():
+        problems.append("approval actor missing — pass `--actor <name>`")
+    if not a.proposal_hash.strip():
+        problems.append(f"proposal hash missing — run `proposal <dir> {a.id}` and pass `--proposal-hash {expected_proposal}`")
+    elif a.proposal_hash.strip() != expected_proposal:
+        problems.append(f"proposal hash {a.proposal_hash!r} does not match current proposal {expected_proposal}")
     if node_unknowns(n):
         problems.append(f"unresolved ?{', ?'.join(node_unknowns(n))} — `answer` each")
     for f in ("gloss", "effect"):
@@ -1113,11 +1238,22 @@ def v_approve(led: Ledger, a) -> int:
     for it in body:
         if stmt_kind(it["code"]) == "stmt" and not any(k in it for k in ("child", "reuse", "target")) and call_names(it["code"]):
             problems.append(f"untagged call {it['code']!r}")
+    stmts = [it for it in body if stmt_kind(it["code"]) == "stmt"]
+    if len(stmts) > 12:
+        problems.append(f"refinement has {len(stmts)} statements > 12")
+    for it in stmts:
+        cid = it.get("child")
+        reuse = it.get("reuse")
+        if cid in led.nodes and led.nodes[cid]["design"] == "superseded":
+            problems.append(f"calls {cid} which is {led.status(cid)}")
+        if reuse and (reuse not in led.nodes or led.nodes[reuse]["design"] != "approved"):
+            problems.append(f"reuse ↗ {reuse} but it is not an approved node")
     if n.get("target") and (why := target_ok(n["target"])):
         problems.append(why)
     if n.get("adr_pending"):
         problems.append(f"{n['adr_pending']} pending — `adr accept {n['adr_pending']}` after the user accepts it")
     if problems:
+        _COMMAND_ERRORS.extend(p for p in problems if p not in _COMMAND_ERRORS)
         print(f"refused {a.id}:", file=sys.stderr)
         for p in problems:
             print(f"  - {p}", file=sys.stderr)
@@ -1129,12 +1265,16 @@ def v_approve(led: Ledger, a) -> int:
     contract_changed = re_approval and n.get("contract_hash", contract_hash(n)) != contract_hash(n)
     n.pop("stale_by", None)
     n["design"] = "approved"
-    n["approved"] = f"{today()} by user"
+    n["approved"] = f"{today()} by {a.actor.strip()}"
+    n["approved_by"] = a.actor.strip()
+    n["proposal_hash"] = expected_proposal
     n["approved_at"] = now()
     n["approved_hash"] = body_hash(body)
     n["contract_hash"] = contract_hash(n)
     if re_approval:
         hist(n, "re-approved")
+    if n.get("verification_model", 1) >= VERIFICATION_MODEL:
+        refresh_verification(n)
     cascaded = cascade_stale(led, a.id, "contract changed") if contract_changed else []
     ambs = led.data.get("ambiguities", [])
     resolved = [x["claim"] for x in ambs if x["resolves_at"] == a.id]
@@ -1236,12 +1376,41 @@ def v_evidence(led: Ledger, a) -> int:
     n = need(led, a.id)
     if n is None:
         return 1
-    n.setdefault("evidence", []).append({"date": today(), "kind": a.kind, "ref": a.ref, "result": a.result, **({"note": a.note} if a.note else {})})
-    if a.result == "pass":
-        n["verification"] = "verified"
-        if n["realization"] == "not-started":
-            n["realization"] = "implemented"
-    return finish(led, f"{a.id} evidence EV-{len(n['evidence'])} {a.kind} {a.result}; verification {n['verification']}")
+    if n["design"] != "approved":
+        return fail(f"{a.id} is {led.status(a.id)}; evidence verifies an approved contract")
+    covers = [x.lower() for x in comma_values(a.covers)]
+    if not covers:
+        return fail("evidence must name at least one contract clause with `--covers <label>[,<label>]`")
+    unknown = [x for x in covers if x not in n.get("contract", {})]
+    if unknown:
+        return fail(f"evidence covers unknown clauses: {', '.join(unknown)}; contract has {', '.join(n.get('contract', {}))}")
+    resolves = comma_values(a.resolves)
+    if resolves and a.result != "pass":
+        return fail("only passing evidence can resolve failed evidence")
+    existing = n.get("evidence", [])
+    for ref in resolves:
+        if not ref.startswith("EV-") or not ref[3:].isdigit() or not 1 <= int(ref[3:]) <= len(existing):
+            return fail(f"{ref!r} is not an evidence id on {a.id}")
+        failed = existing[int(ref[3:]) - 1]
+        if failed.get("result") != "fail":
+            return fail(f"{ref} is {failed.get('result')}, not failed evidence")
+        if not set(failed.get("covers", [])) <= set(covers):
+            return fail(f"{ref} covers {', '.join(failed.get('covers', [])) or 'no clauses'}; resolving evidence must cover every failed obligation")
+    n["verification_model"] = VERIFICATION_MODEL
+    n.setdefault("evidence", []).append({
+        "date": today(), "at": now(), "kind": a.kind, "ref": a.ref, "result": a.result,
+        "covers": covers, "approved_at": n.get("approved_at", ""), "contract_hash": n.get("contract_hash", contract_hash(n)),
+        **({"resolves": resolves} if resolves else {}), **({"note": a.note} if a.note else {}),
+    })
+    refresh_verification(n)
+    missing, failed = verification_gaps(n)
+    detail = []
+    if missing:
+        detail.append(f"missing clauses: {', '.join(missing)}")
+    if failed:
+        detail.append(f"unresolved failures: {', '.join(failed)}")
+    return finish(led, f"{a.id} evidence EV-{len(n['evidence'])} {a.kind} {a.result}; verification {n['verification']}"
+                  + (f" ({'; '.join(detail)})" if detail else ""))
 
 
 def v_entry(led: Ledger, a) -> int:
@@ -1411,6 +1580,46 @@ def v_sync(led: Ledger, a) -> int:
     return finish(led)
 
 
+def v_repair(led: Ledger, a) -> int:
+    invalid_approved = {
+        nid for nid, n in led.nodes.items()
+        if n["design"] == "approved" and (
+            changed_deps(led, n)
+            or any(led.nodes.get(it.get("child") or it.get("reuse", ""), {}).get("design") in ("stale", "superseded", "retired") for it in n.get("body", []))
+        )
+    }
+    pending = {nid for nid, n in led.nodes.items() if n["design"] in ("draft", "stale")} | invalid_approved
+    if not pending:
+        print("repair empty — no draft or stale nodes")
+        return 0
+    deps = {}
+    for nid in pending:
+        n = led.nodes[nid]
+        called = {it.get("child") or it.get("reuse") for it in n.get("body", [])}
+        deps[nid] = ({x for x in n.get("depends", []) if is_node_id(x)} | called) & pending
+    order = []
+    left = set(pending)
+    while left:
+        ready = sorted(nid for nid in left if not (deps[nid] & left))
+        if not ready:
+            ready = [min(left)]
+        order.extend(ready)
+        left.difference_update(ready)
+    print("repair plan:")
+    for i, nid in enumerate(order, 1):
+        n = led.nodes[nid]
+        action = "`stale` for later, or `reopen` and re-approve against changed dependencies" if nid in invalid_approved else NEXT_STEP[n["design"]]
+        print(f"{i}. {nid} ({led.status(nid)}) — {action}")
+    constrained: dict[str, list[str]] = {}
+    for adr in led.adrs():
+        for nid in adr["constrains"]:
+            if nid in pending:
+                constrained.setdefault(nid, []).append(adr["id"])
+    for nid, adrs in sorted(constrained.items()):
+        print(f"ADRs blocked by {nid}: {len(adrs)} ({', '.join(adrs)})")
+    return 0
+
+
 def v_status(led: Ledger, a) -> int:
     for nid, n in led.nodes.items():
         state = n["design"]
@@ -1430,23 +1639,49 @@ def v_check(led: Ledger, a) -> int:
 # ----------------------------------------------------------------------------- main
 
 
-def log(d: Path, argv: list[str], rc: int) -> None:
+def file_hash(path: Path) -> str:
     try:
-        args = argv[1:2] + argv[3:]
-        if len(args) >= 3 and args[0] == "set" and args[2].lstrip().startswith(("{", "[")):
-            try:
-                payload = json.loads(" ".join(args[2:]))
-                fields = ",".join(payload) if isinstance(payload, dict) else "non-object"
-            except json.JSONDecodeError:
-                fields = "invalid"
-            args = args[:2] + [f"<json:{fields}>"]
+        return hashlib.sha256(path.read_bytes()).hexdigest()[:16]
+    except OSError:
+        return "-"
+
+
+def logged_args(argv: list[str]) -> list[str]:
+    args = argv[1:2] + argv[3:]
+    if len(args) >= 3 and args[0] == "set" and args[2].lstrip().startswith(("{", "[")):
+        try:
+            payload = json.loads(" ".join(args[2:]))
+            fields = ",".join(payload) if isinstance(payload, dict) else "non-object"
+        except json.JSONDecodeError:
+            fields = "invalid"
+        args = args[:2] + [f"<json:{fields}>"]
+    return args
+
+
+def log(d: Path, argv: list[str], rc: int, led: Ledger, before: str) -> None:
+    try:
+        after = file_hash(d / LEDGER)
+        nid = getattr(led, "command_node", "")
+        node = led.nodes.get(nid, {}) if nid else {}
+        details = [
+            f"result={'applied' if led.applied else 'rejected' if rc else 'read'}",
+            f"applied={'true' if led.applied else 'false'}",
+            f"ledger_errors={len(led.errors)}",
+            f"before={before}",
+            f"after={after}",
+        ]
+        if node.get("body"):
+            details.append(f"body={body_hash(node['body'])}")
+        if _COMMAND_ERRORS:
+            details.append("errors=" + json.dumps(_COMMAND_ERRORS, ensure_ascii=False, separators=(",", ":")))
         with (d / LOG).open("a", encoding="utf-8") as f:
-            f.write(f"{_dt.datetime.now().isoformat(timespec='seconds')} exit={rc} {' '.join(args)}\n")
+            f.write(f"{_dt.datetime.now().isoformat(timespec='seconds')} exit={rc} {' '.join(logged_args(argv))} | {' '.join(details)}\n")
     except OSError:
         pass
 
 
 def main(argv: list[str]) -> int:
+    _COMMAND_ERRORS.clear()
     ap = argparse.ArgumentParser(prog="stepwise.py", description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = ap.add_subparsers(dest="cmd", required=True)
 
@@ -1456,18 +1691,19 @@ def main(argv: list[str]) -> int:
         for p in pos:
             s.add_argument(p[0], **p[1]) if isinstance(p, tuple) else s.add_argument(p)
         for k, kw in flags.items():
-            s.add_argument("--" + k.rstrip("_"), dest=k, **kw)
+            s.add_argument("--" + k.rstrip("_").replace("_", "-"), dest=k, **kw)
         return s
 
-    add("frontier"); add("sync"); add("check"); add("show", "id"); add("status", all={"action": "store_true"})
+    add("frontier"); add("sync"); add("check"); add("repair"); add("show", "id"); add("proposal", "id"); add("status", all={"action": "store_true"})
     add("new", "id", ("statement", {"nargs": "?"}))
     add("set", "id", "field", ("value", {"nargs": "*"}))
     add("body", "id", file={"default": ""})
     add("answer", "id", "slug", "name")
     add("terminal", "id", "target")
-    add("approve", "id")
+    add("approve", "id", actor={"default": ""}, proposal_hash={"default": ""})
     add("reopen", "id", "reason"); add("stale", "id", "reason"); add("retire", "id", "reason"); add("supersede", "id", "new_id", "reason")
-    add("evidence", "id", kind={"required": True}, ref={"required": True}, result={"required": True, "choices": ["pass", "fail"]}, note={"default": ""})
+    add("evidence", "id", kind={"required": True}, ref={"required": True}, result={"required": True, "choices": ["pass", "fail"]},
+        covers={"action": "append", "default": []}, resolves={"action": "append", "default": []}, note={"default": ""})
     add("entry", ("kind", {"choices": list(ENTRY_FILE)}), "heading", "definition",
         source={"default": ""}, avoid={"default": ""}, not_={"default": ""}, example={"default": ""},
         given={"default": ""}, when={"default": ""}, then={"default": ""}, excludes={"default": ""}, settles={"default": ""})
@@ -1481,14 +1717,16 @@ def main(argv: list[str]) -> int:
         if getattr(a, key, None) is not None and not is_node_id(getattr(a, key)):
             return fail(f"{getattr(a, key)!r} is not a D-NNN id")
     led = Ledger(d)
+    before = file_hash(led.path)
     if not led.data:
         if a.cmd in ("new", "entry", "meta") :
             led = Ledger.create(d, d.name.replace("-", " ").title())
         else:
             return fail(f"{d / LEDGER} missing; start with `new <dir> D-000 \"outcome <- f(x)\"` or `entry` / `meta`")
+    led.command_node = getattr(a, "id", "")
     rc = globals()[f"v_{a.cmd}"](led, a)
-    if a.cmd not in ("check", "show", "frontier", "status"):
-        log(d, argv, rc)
+    if a.cmd not in ("check", "show", "frontier", "status", "proposal", "repair"):
+        log(d, argv, rc, led, before)
     return rc
 
 

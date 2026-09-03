@@ -16,7 +16,7 @@ docs/design/<topic>/
   DESIGN.md            generated view: root, frontier, ADR list, node table, Program (whole pseudocode, bodies substituted)
   CONTEXT.md           generated view: scope, tables, ambiguities, non-goals, every entry
   nodes/D-NNN.md       generated view: one node, readable alone
-  .stepwise.log        attempted write/state calls after ledger load; read-only orientation/check calls omitted; JSON sets record field names, not duplicated payload text
+  .stepwise.log        every mutation: command, applied flag, errors, before/after ledger hashes; JSON values redacted to field names
 docs/adr/NNNN-<slug>.md   hand-written paragraph; header + status owned by `adr new` / `adr accept`
 ```
 
@@ -34,9 +34,9 @@ Views exist for humans and PR review. The agent reads them (or `show D-NNN`) and
 | `composition`, `decisions`, `deferred`, `adaptation` | JSON `set` arrays | bullet lists, replaced whole |
 | `target` | `terminal D-NNN "<target>: <identifier>"` | the real thing; Exists test enforced |
 | `design` | `approve` · `reopen` · `stale` · `supersede` · `adr new` (→ draft, `adr_pending`) · `adr accept` | `draft` · `approved` · `stale` · `superseded` (+ `superseded_by`) |
-| `approved`, `approved_at`, `approved_hash` | `approve` | who / when; body hash guards against silent edits |
-| `realization`, `verification` | JSON `set` · `evidence` | `not-started \| partial \| implemented` · `unverified \| partial \| verified \| stale` |
-| `evidence` | `evidence D-NNN --kind K --ref R --result pass\|fail [--note]` | one record per (obligation, method) |
+| `approved`, `approved_by`, `approved_at`, `approved_hash`, `proposal_hash` | `approve --actor … --proposal-hash …` | who / when / exact accepted proposal; body hash guards against silent edits |
+| `realization`, `verification` | JSON `set` or granular `set D-NNN realization <v>` · clause-scoped `evidence` | `not-started \| partial \| implemented` · `unverified \| partial \| verified \| stale`; direct `set verification verified` is refused |
+| `evidence` | `evidence D-NNN --kind K --ref R --result pass\|fail --covers CLAUSE[,CLAUSE] [--resolves EV-N] [--note]` | current approval + contract hash, covered clauses, explicit resolution links |
 | `history` | every state verb | `{date, event, reason}` — reopen / stale / supersede / re-approve reasons live here, never in status text |
 
 Parents are derived: every node whose body tags `D-NNN` as `child` or `reuse`. Frontier is derived: child ids tagged in non-draft bodies with no node yet. Nothing structural is typed twice.
@@ -131,7 +131,8 @@ Kind: node · Index: [../DESIGN.md](../DESIGN.md)
 Design: approved · Realization: not-started · Verification: unverified
 Parents: [D-000](D-000.md)
 Depends on: [CTX-F03](../CONTEXT.md#ctx-f03-…), [Run Key](../CONTEXT.md#run-key), [ADR-0003](../../../adr/0003-….md)
-Approved: 2026-08-28 by user
+Approved: 2026-08-28 by user:owner
+Proposal: 34ad82b9305d0f4c
 
 ## Statement
 `step <- next_step(run)` — one model turn decided from run history
@@ -168,7 +169,7 @@ Draft state: gloss / effect / clause may carry `?slug`; `?` count = interview le
 
 Agent derives + recommends. User approves anything changing product semantics, accepted risk, compatibility, cost commitment, hard-to-reverse architecture.
 
-Approval covers Statement + Contract + body, not prose. Preserve user's exact negatives, ordering constraints, numeric limits, failure semantics verbatim. Sequence after the user's yes: `body` (or `terminal`) → one JSON `set` for proposal metadata → `approve` — all same turn, then next node.
+Approval covers every staged node field: Statement, gloss, effect, Contract, body/target, walkthrough, composition, decisions, deferred items, and adaptation. Preserve user's exact negatives, ordering constraints, numeric limits, and failure semantics verbatim. `proposal D-NNN` hashes that exact content. Show the hash in the Proposal block. After the user's yes, run `approve D-NNN --actor "<identity>" --proposal-hash <accepted hash>`. Any intervening edit changes the hash and forces a new Proposal.
 
 Re-approval: `reopen D-NNN "reason"` → edit via verbs → `approve`. Status stays one word; the reason lives in `history`.
 
@@ -189,11 +190,14 @@ Argument may be mathematical, operational, type-based, or evidence-backed. Examp
 
 Evidence = why an obligation is currently believed to hold. Lives in the node it verifies (`evidence D-NNN …`); never elsewhere.
 
-- One record = one (obligation, method). Same test covering two clauses → two records, same `--ref`.
+- Every record names covered Contract clauses with `--covers`. One artifact may cover several clauses, but each named clause is an explicit claim.
 - Never record a command not run or a proof not established.
 - Method ladder, cheapest covering risk: types → examples → property-test → integration-test → static-analysis / proof → model-check → benchmark → fault-injection → observation (explicit env + sampling limits). Never promote kind: examples ≠ proof, local proof ≠ env assumptions, benchmark ≠ prod guarantee.
-- `--result pass` sets `verification: verified` (and `realization: implemented` if not-started). Set `verification partial` explicitly when a clause still lacks a record.
-- `stale`: any state verb that leaves `approved` also drops `verified` → `stale`. Stale ≠ false; keep records, add fresh, `set verification verified` only when coverage is current.
+- Record implementation separately with `set D-NNN realization implemented`; evidence never infers code existence.
+- A pass produces `verified` only when evidence tied to the current approval covers every current clause and no current failed EV remains unresolved. Partial coverage produces `partial`.
+- A fail produces stale verification. A later passing record closes it only with `--resolves EV-N`, and that record must cover the same obligation. Failed records remain visible.
+- Reapproval starts a new evidence epoch through `approved_at`; earlier records remain history but cannot verify the new approval. Direct `set verification verified` is refused.
+- Legacy ledgers remain readable. `check` emits one warning for old unscoped verified records; new evidence uses the current model.
 
 ## Reuse as Composition
 
@@ -209,4 +213,10 @@ Three independent axes:
 - `realization` — real thing exists?
 - `verification` — current evidence covers obligations?
 
-Approved ≠ implemented. Implemented can violate design. Verified goes stale on dependency change (`change` → lint names every approved dependent).
+Approved ≠ implemented. Implemented can violate design. Verified means current clause coverage, not “some test passed,” and goes stale on failed evidence or dependency change.
+
+## Mutation Results and Repair
+
+Mutation commands save requested repair steps even when the whole ledger cannot yet be green. `APPLIED-WITH-ERRORS` exits 0 and logs `applied=true`, error text, body hash when present, and before/after ledger hashes. Continue with `repair`, which orders draft/stale nodes dependency-first and collapses ADR blockers by node. Finish with strict `check`; only `check` returns 1 for remaining ledger-wide errors.
+
+Exit 1 means command rejection and no ledger/view change. The audit line records `applied=false` and the rejection reason. Do not use exit 1 as a signal that an attempted repair partly succeeded.

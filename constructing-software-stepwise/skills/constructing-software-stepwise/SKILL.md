@@ -7,7 +7,7 @@ description: Use when designing or implementing systems with interacting compone
 
 Stepwise refinement (Dijkstra EWD249/EWD340, Wirth CACM 1971): minute steps, decide as little as possible per step, proof grows with program, representation deferred, back up to any ancestor when needed. Spec not given here → interview builds it, per node.
 
-Cycle, this order: (1) pick ONE node (`frontier`), `new` it, `set` one JSON object containing its abstract statement gloss + effect + contract ≤ 6 clauses, unknowns `?slug` → (2) one question per `?`, this node only; each answer → `entry` + `answer` → (3) propose ONE refinement: what the function does (≤ 3 lines) + pseudocode body, one line per tagged pseudocode line + composition argument → (4) user answers accept / make terminal / changes → (5) `body` (or `terminal`) + one JSON `set` for walkthrough / composition / decisions / adaptation + `approve` → pick next node, same turn. Turn ends only at a question or a Proposal block; loop runs until frontier empty or user says stop.
+Cycle, this order: (1) pick ONE node (`frontier`), `new` it, `set` one JSON object containing its abstract statement gloss + effect + contract ≤ 6 clauses, unknowns `?slug` → (2) one question per `?`, this node only; each answer → `entry` + `answer` → (3) draft ONE refinement: what the function does (≤ 3 lines) + pseudocode body, one line per tagged pseudocode line + composition argument → (4) stage it with `body` (or `terminal`) plus one JSON `set` for walkthrough / composition / decisions / adaptation, run `proposal`, and show the Proposal block with its hash → (5) user answers accept / make terminal / changes → (6) `approve --actor … --proposal-hash …` → pick next node, same turn. Turn ends only at a question or a Proposal block; loop runs until frontier empty or user says stop.
 
 Design is pseudocode until a node is terminal; only there adapt to the real thing — language construct, framework API, platform primitive, service, infra, existing repo fn — written `<target>: <identifier>`. `DESIGN.md ## Program` = whole design, every approved body substituted in place, pseudo + realized lines mixed — a view rendered from `ledger.json`. Evidence lives inside the node it verifies.
 
@@ -27,13 +27,13 @@ This file is compressed on purpose. Nothing it writes is. Every artifact — glo
 | Scope leak gauge | `?` > 6 at draft → shrink effect, push detail to children, redraft. Questions per node ≤ initial `?` count |
 | Interview before proposal | No children while draft has any `?` or open user-owned decision |
 | One question per turn | Exactly one question to user. Then wait |
-| Turn ends only at WAIT | Two stops: after a question, after a Proposal block (plus ADR STOP). Answer → `entry` + `answer` → next `?` or Proposal, same turn. Approval → persist → pick next node → draft → question or Proposal, same turn. Never end a turn on a summary |
+| Turn ends only at WAIT | Two stops: after a question, after a Proposal block (plus ADR STOP). Answer → `entry` + `answer` → next `?` or Proposal, same turn. Approval → record accepted hash → pick next node → draft → question or Proposal, same turn. Never end a turn on a summary |
 | Run to empty frontier | Default depth = whole tree: every leaf terminal or collapsed. Stop earlier only when user says stop or names a bound (`design only`, `to D-0xx`) |
-| Approval explicit | Yes to shown Proposal block. Agreement to prose ≠ approval → show block, ask |
+| Approval explicit | Yes to shown Proposal block. Agreement to prose ≠ approval. Stage exact proposal, run `proposal`, show its hash, then record that same hash plus approver identity |
 | Step small | Refinement body ≤ 12 pseudocode lines; each composition bullet ≤ 2 lines. Longer → insert intermediate node |
 | Pseudocode until terminal | Language keyword, library name, or concrete type in composite node = premature representation → move to child |
 | Terminal at platform | Contract already met by ONE real thing cited in a fact (idempotent start by key, resume from checkpoint, CAS, lock, retry, version pin) → terminal now, `adaptation` per clause. Never refine platform guarantee into pseudocode |
-| Write through the CLI | Every change to the ledger is one `stepwise.py` verb; grouped node fields use one JSON `set`, never one call per field. The only hand-written text is an ADR paragraph. A verb that exits 1 is fixed before the next question or Proposal. `ledger.json`, `DESIGN.md`, `CONTEXT.md`, `nodes/*.md` are never opened in an editor |
+| Write through the CLI | Every change to the ledger is one `stepwise.py` verb; grouped node fields use one JSON `set`, never one call per field. The only hand-written text is an ADR paragraph. Exit 1 means the verb was rejected and left ledger/views unchanged. `APPLIED-WITH-ERRORS` exits 0: the requested repair step was saved, and `repair` / `check` names what remains. `ledger.json`, `DESIGN.md`, `CONTEXT.md`, `nodes/*.md` are never opened in an editor |
 | Lint error = design conflict | Read what the error says is inconsistent and fix the design. Never write content whose only purpose is to make the message go away |
 | Back up freely | Obligation fails → revise children or `reopen` ancestor |
 
@@ -52,7 +52,7 @@ Every node is in exactly one design state. Only the listed verb moves it; the to
 | any live | `retire "reason"` | `retired` | design dropped it, nothing replaces it; refused while a body still calls it |
 | `retired` | `reopen "reason"` | `draft` | revived |
 
-`superseded` and `retired` are ends: nothing advances from them but a deliberate `reopen` of a retired node. Verification follows the same rule — evidence moves `unverified → verified`, and any move out of `approved` drops a `verified` node to `stale` evidence.
+`superseded` and `retired` are ends: nothing advances from them but a deliberate `reopen` of a retired node. Verification is separate: passing evidence names the clauses it covers, every current clause must be covered, every current failed record must be explicitly resolved, and realization must already be `implemented`. Any move out of `approved` drops a `verified` node to stale evidence.
 
 Staleness propagates along the link graph; you never hunt for what a change broke. A node's callers, the nodes that reuse it, and every node naming it under `Depends on` rest on its **contract**, so:
 
@@ -101,11 +101,11 @@ Rules:
 
 ## Tooling — `scripts/stepwise.py` (python 3, stdlib, no regex, any agent)
 
-`<dir>` = `docs/design/<topic>`. Script lives in this skill's `scripts/`; `python3 <skill>/scripts/stepwise.py <verb> <dir> …`. Every write verb renders the views and lints; exit 1 + `error …` lines mean fix with more verbs, never with an editor. `.stepwise.log` records attempted write/state commands after the ledger is loaded; read-only `frontier`, `show`, `status`, and `check` calls are omitted.
+`<dir>` = `docs/design/<topic>`. Script lives in this skill's `scripts/`; `python3 <skill>/scripts/stepwise.py <verb> <dir> …`. Every mutation renders and lints. Exit 1 means rejection with no ledger/view change. `APPLIED-WITH-ERRORS` exits 0 because the mutation succeeded but left repair work; run `repair`, continue its dependency order, then require `check` exit 0. `.stepwise.log` records write/state command result, applied flag, error text, and before/after ledger hashes while redacting JSON payload values; read-only calls are omitted.
 
 | Phase | Verb | Effect |
 |---|---|---|
-| orient | `frontier <dir>` · `status <dir>` · `show <dir> D-NNN` | what to pick; every node's state + its one legal next move; one node view |
+| orient | `frontier <dir>` · `status <dir>` · `repair <dir>` · `show <dir> D-NNN` | what to pick; every node's state; dependency-ordered repair plan with repeated ADR failures collapsed; one node view |
 | draft | `new <dir> D-NNN ["stmt"]` | node from frontier line (root: pass statement) |
 | draft | `set <dir> D-NNN '{"gloss":"…","effect":"…","contract":{"pre":"…","post":"…"}}'` | atomically replaces supplied node fields; contract ≤ 6 clauses with free lowercase labels (`budget`, `determinism`, `boundary` …); `?slug` allowed |
 | interview | `entry <dir> term\|fact\|scenario "Name" "definition" [--source --avoid --not --example \| --given --when --then --excludes --settles]` | context entry; ids allocated |
@@ -114,18 +114,18 @@ Rules:
 | propose→persist | `body <dir> D-NNN` (stdin heredoc or `--file`) | pseudocode body; tags `-- D-NNN` / `-- ↗ D-NNN` / `-- ⇒ target`; single-match calls auto-tagged |
 | propose→persist | `set <dir> D-NNN '{"walkthrough":["…"],"composition":["…"],"decisions":["…"]}'` | one atomic metadata write; walkthrough ≤ 3 lines and each supplied array replaces that whole field |
 | propose→persist | `terminal <dir> D-NNN "<target>: <identifier>"` · `set <dir> D-NNN '{"adaptation":["clause → construct"]}'` | leaf; Exists test enforced |
-| persist | `approve <dir> D-NNN` | refuses on `?`, empty prose, no body/target, missing walkthrough, a tagged body line that says nothing about what it does, missing composition, untagged call, pending ADR; drops ambiguity rows resolving at this node; prints next frontier id |
+| persist | `proposal <dir> D-NNN` · `approve <dir> D-NNN --actor <name> --proposal-hash <hash>` | hash exact staged proposal; approval refuses missing provenance, stale hash, `?`, incomplete refinement, or pending ADR; drops ambiguity rows resolving at this node; prints next frontier id |
 | change | `reopen <dir> D-NNN "reason"` · `stale <dir> D-NNN "reason"` · `retire <dir> D-NNN "reason"` · `supersede <dir> D-OLD D-NEW "reason"` | status + history; `stale` also records which entries changed after approval; `reopen` files the body it replaces under `## Superseded refinement` |
 | change | `change <dir> <name\|CTX-id> [--definition …] [--rename "New heading"] [--status stale] --reason "…" [--minor]` | entry changed; approved dependents fail lint until `stale` / re-`approve` |
 | decision | `adr <dir> new "Title" --constrains D-NNN[,D-MMM]` · `adr <dir> accept ADR-NNNN` | stub (nodes → `draft (ADR pending)`); accept unblocks |
-| implement | `set <dir> D-NNN '{"realization":"implemented"}'` · `evidence <dir> D-NNN --kind K --ref R --result pass\|fail` | pass → `verified` |
-| audit | `status <dir> [--all]` · `sync <dir>` · `check <dir>` | re-render after an ADR paragraph edit; lint only |
+| implement | `set <dir> D-NNN '{"realization":"implemented"}'` · `evidence <dir> D-NNN --kind K --ref R --result pass\|fail --covers <clause>[,<clause>] [--resolves EV-N]` | `verified` only when current passing evidence covers every clause, realization is implemented, and every current failure is explicitly resolved |
+| audit | `status <dir> [--all]` · `repair <dir>` · `sync <dir>` · `check <dir>` | inspect state; order repairs; re-render after an ADR paragraph edit; strict lint gate |
 
 Every error names a real inconsistency between two things you wrote. Resolve it in the design: `retire` a node the refinement dropped, `stale` / `reopen` what a changed entry invalidated, `supersede` what a replacement took over, restore a call you removed by mistake. Never invent a body line, a call, a clause, or a node to silence a message — a green `check` bought that way records a design nobody chose, and the next reader cannot tell. No verb fits → say so and ask; do not improvise.
 
 JSON `set` is the default whenever more than one node field changes. Allowed keys: `gloss`, `effect`, `contract`, `walkthrough`, `composition`, `decisions`, `deferred`, `adaptation`, `depends`, `realization`, `verification`. Only supplied top-level fields change; `contract` and every supplied array replace their whole current value. Invalid JSON, unknown keys, wrong value types, or unresolved dependencies write nothing. The granular `set <dir> D-NNN <field> <value...>` form remains for one-field corrections and appending a dependency without restating its existing list.
 
-Lint covers: one root; status vocabulary; caps; untagged calls; reuse of non-approved node; Target format + Exists test; approved with `?` / no body / no walkthrough / unglossed body line / no composition / body changed / pending ADR; dependency names that do not exist; entry changed after approval; ADR constrains stale or missing node; ambiguity at approved node; hand-edited view. Judgment (contract, body, composition, questions) stays with agent + user.
+Lint covers: one root; status vocabulary; caps; untagged calls; reuse of non-approved node; Target format + Exists test; approved with `?` / no body / no walkthrough / unglossed body line / no composition / body changed / pending ADR; approval provenance; current clause-scoped evidence; unresolved failed evidence; dependency names that do not exist; entry changed after approval; ADR constrains stale or missing node; ambiguity at approved node; hand-edited view. Complete stateful design with no scenarios warns. Judgment (contract, body, composition, questions) stays with agent + user.
 
 ## Core Loop
 
@@ -151,7 +151,8 @@ digraph refine {
     "Show Proposal block; ask approval" [shape=box];
     "WAIT for approval" [shape=ellipse];
     "Approved?" [shape=diamond];
-    "body or terminal; JSON set proposal metadata; approve; fix errors" [shape=box];
+    "stage body or terminal; JSON set proposal metadata; proposal hash" [shape=box];
+    "approve with actor + accepted hash; fix errors" [shape=box];
     "Frontier empty, or user said stop?" [shape=diamond];
     "Done" [shape=doublecircle];
 
@@ -176,12 +177,13 @@ digraph refine {
     "Insert intermediate node or reopen ancestor" -> "Propose pseudocode body (2-7 child statements) + 5-bullet composition";
     "Body <= 12 lines, bullets <= 2 lines, obligation holds?" -> "Conflicts accepted ADR?" [label="yes"];
     "Conflicts accepted ADR?" -> "STOP branch: user picks preserve ADR or supersede" [label="yes"];
-    "Conflicts accepted ADR?" -> "Show Proposal block; ask approval" [label="no"];
+    "Conflicts accepted ADR?" -> "stage body or terminal; JSON set proposal metadata; proposal hash" [label="no"];
+    "stage body or terminal; JSON set proposal metadata; proposal hash" -> "Show Proposal block; ask approval";
     "Show Proposal block; ask approval" -> "WAIT for approval";
     "WAIT for approval" -> "Approved?";
     "Approved?" -> "Propose pseudocode body (2-7 child statements) + 5-bullet composition" [label="no: revise"];
-    "Approved?" -> "body or terminal; JSON set proposal metadata; approve; fix errors" [label="yes"];
-    "body or terminal; JSON set proposal metadata; approve; fix errors" -> "Frontier empty, or user said stop?";
+    "Approved?" -> "approve with actor + accepted hash; fix errors" [label="yes"];
+    "approve with actor + accepted hash; fix errors" -> "Frontier empty, or user said stop?";
     "Frontier empty, or user said stop?" -> "Done" [label="yes"];
     "Frontier empty, or user said stop?" -> "frontier; pick one composite node" [label="no: same turn"];
 }
@@ -239,10 +241,14 @@ Say what the function does first: ≤ 3 lines, plain prose, above the body (`wal
 
 Composition argument (data flow / failures / cleanup / invariants / progress, ≤ 2 lines each) = proof obligation: body preserves parent `{Pre} S {Post}`. Checklist: Refinement Obligation. Fails → revise body or reopen ancestor.
 
+Stage the exact proposal in the draft with `body` or `terminal` plus one JSON `set` for walkthrough, composition, decisions, deferred items, and adaptation. Run `proposal <dir> D-NNN`; copy its hash into the Proposal block. Staging is not approval: the node remains draft, and any edit changes the hash.
+
 Then STOP. Show block. Nothing else that turn.
 
 ~~~markdown
 ## Proposal — D-NNN — `<statement>`
+
+**Proposal hash:** `<hash from proposal D-NNN>`
 
 **What it does**
 <≤ 3 lines, plain prose>
@@ -289,26 +295,17 @@ One clause per line, one bullet per item — never `Pre … · Post … · Failu
 
 End every Proposal with those three options, in that order, worded as they stand. Ask them the way the host lets you ask a multiple-choice question (Claude Code: `AskUserQuestion`; otherwise plain text); the user may always answer something else.
 
-**Make terminal** = the user rules this branch not worth child-by-child review. Do not persist the composite body as proposed: re-propose the same node as a collapsed leaf — every statement written down to a real construct and tagged `-- ⇒ <target>: <identifier> -- <one line>`, ≤ 12 lines, no `-- D-NNN` tags, no children. Statements whose target you cannot name, or a body that runs past 12 lines, mean the branch was worth digging: say so, show the shortest composite that works, and ask again. A child that is already an approved node stays a call (`-- ↗ D-NNN`).
+**Make terminal** = the user rules this branch not worth child-by-child review. Replace the staged composite body with a collapsed leaf, run `proposal` again, and show the new hash: every statement written down to a real construct and tagged `-- ⇒ <target>: <identifier> -- <one line>`, ≤ 12 lines, no `-- D-NNN` tags, no children. Statements whose target you cannot name, or a body that runs past 12 lines, mean the branch was worth digging: say so, show the shortest composite that works, and ask again. A child that is already an approved node stays a call (`-- ↗ D-NNN`).
 
 ### 4. Approve + persist
 
-User owns semantic / risk / compat / hard-to-reverse choices. Approval = Accept (or Make terminal on the re-proposed leaf); Changes → revise and propose again, same node. Then, verbatim from the block:
+User owns semantic / risk / compat / hard-to-reverse choices. Approval = Accept (or Make terminal on the re-proposed leaf). Changes → edit the staged draft, run `proposal` again, and show the new hash. On Accept, record the identity and exact accepted hash:
 
 ```bash
-body <dir> D-NNN <<'EOF'
-<the Refinement lines>
-EOF
-set <dir> D-NNN '{
-  "walkthrough": ["<the What it does lines>"],
-  "composition": ["Data flow: …", "Failures: …", "Cleanup: …", "Invariants: …", "Progress: …"],
-  "decisions": ["…"]
-}'
-ambiguity <dir> "<claim>" "<conflict>" D-child   # one per deferred question; node view derives its Deferred list from these
-approve <dir> D-NNN
+approve <dir> D-NNN --actor "<user identity, or user if host exposes none>" --proposal-hash <accepted hash>
 ```
 
-Terminal: `terminal <dir> D-NNN "<target>: <identifier>"`, `set <dir> D-NNN '{"adaptation":["<clause> → <construct>"]}'`, `approve`. Errors → fix with verbs, `approve` again. Same turn. Then, still same turn: `approve` prints the next frontier id → §1, draft, and either ask its first question or show its Proposal. No recap, no "next I will", no pause for permission — approval of one node is the instruction to continue.
+Terminal: stage `terminal <dir> D-NNN "<target>: <identifier>"` plus JSON `set` field `adaptation`, run `proposal`, show the hash, then approve that hash. A rejected approval exits 1 and leaves ledger/views unchanged. `APPLIED-WITH-ERRORS` from a valid repair mutation exits 0; follow `repair`, then require `check` exit 0. Same turn. Then `approve` prints the next frontier id → §1, draft, and either ask its first question or show its Proposal. No recap, no "next I will", no pause for permission — approval of one node is the instruction to continue.
 
 Approved node = composed fn: descendants use Statement + Contract, never re-derive. `reopen` only on changed context entry, invariant, dependency, ADR, evidence.
 
@@ -322,7 +319,7 @@ Before Proposal: check linked ADRs. Conflict → STOP branch, Conflict Protocol 
 
 Design-only → stop at approved frontier. Implementation → refine until every leaf terminal, then adapt: `terminal` names the real thing, JSON `set` field `adaptation` maps pseudo construct → real construct; Program shows `⇒ <target>` while unverified, `✓` once verified.
 
-Evidence: cheapest method covering obligation (types → examples → property → integration → static/proof → model-check → benchmark → fault-injection → observation). One `evidence D-NNN --kind <method> --ref <artifact> --result pass|fail [--note <limits>]` per (obligation, method). Rules in [design-ledger.md](references/design-ledger.md).
+Evidence: cheapest method covering obligation (types → examples → property → integration → static/proof → model-check → benchmark → fault-injection → observation). First record realization explicitly: `set D-NNN realization implemented`. Then add `evidence D-NNN --kind <method> --ref <artifact> --result pass|fail --covers <clause>[,<clause>] [--note <limits>]`. A later pass closes a failed record only with `--resolves EV-N` and must cover the same clause. Rules in [design-ledger.md](references/design-ledger.md).
 
 States independent, never inferred from each other: `approved` (design accepted) · `implemented` (`set … '{"realization":"implemented"}'`) · `verified` (every Contract clause has current passing evidence).
 
@@ -333,7 +330,7 @@ Design states mean different things and are not interchangeable: `stale` = still
 Context entry, ancestor, ADR, or dependency changes:
 
 1. `change <dir> <name> --definition "…" --reason "…"` (wording only → `--minor`)
-2. verb prints dependents; lint fails on each approved one
+2. verb may print `APPLIED-WITH-ERRORS`; run `repair` for dependency order and collapsed ADR blockers
 3. `stale D-NNN "…"` those not worth revisiting now, `reopen` + re-`approve` the rest; evidence drops to stale by construction
 4. revisit only invalidated frontier, one node per cycle
 5. superseded ADR: keep, link replacement; `supersede D-OLD D-NEW "…"` for replaced nodes
@@ -345,7 +342,7 @@ Context entry, ancestor, ADR, or dependency changes:
 - Abstract statements, not tech-named components. Pseudocode until terminal; data as `set` / `seq` / `map` / `record` until no algorithm fits without concrete representation.
 - Open decision explicit. Silence ≠ approval.
 - Authz, privacy, durability, ordering, idempotency threaded through every affected node.
-- Stateful → transitions + invariants first. Concurrent / distributed → ownership, atomicity, retries, dupes, reordering, cancellation, partial failure exposed.
+- Stateful → transitions + invariants first, plus nominal, retry, and partial-failure scenario entries. Concurrent / distributed → ownership, atomicity, retries, dupes, reordering, cancellation, partial failure exposed.
 - Prototype → fact entries. Prototype ≠ spec.
 - Long proof = warning.
 
@@ -373,13 +370,13 @@ Context entry, ancestor, ADR, or dependency changes:
 | Open `ledger.json` / `DESIGN.md` / `nodes/*.md` in the editor | Views and ledger are tool-owned. Find the verb; none fits → say so, do not improvise |
 | Quick fix: edit the node view by hand | `check` fails on it; the next verb overwrites it. Use `set` / `body` / `reopen` |
 | Status needs a note (`approved (revised)`) | Status is one word from the verb; the note goes to history via `reopen` / `stale` / `supersede "reason"` |
-| Verb exited 1, looks fine anyway | Exit 0 before the next question or Proposal |
+| Verb exited 1, looks fine anyway | Rejected: ledger/views are unchanged. Fix invocation. `APPLIED-WITH-ERRORS` exits 0 and means repair state was saved; follow `repair`, then `check` |
 | Add a call / clause / node so lint goes quiet | That fabricates design. Resolve the conflict the error names |
 | Body no longer calls D-NNN, lint complains it lost its caller | `retire D-NNN "reason"` if the design dropped it; restore the call only if removing it was the mistake |
 | Evidence in separate doc | `evidence D-NNN …`, nowhere else |
 | Copy D-050 body, tweak one line | Call `↗ D-050` or `reopen` it. No forks |
 | Reuse draft / stale node | Only `approved` reusable (lint) |
-| Tests pass → verified | Evidence per Contract clause |
+| Tests pass → verified | Record realization separately; evidence must cover every current Contract clause and explicitly resolve every current failed EV |
 | ADR doesn't apply | Conflict Protocol decides |
 | Reopening ancestor = failure | Normal |
 | Ask user a fact in code | Explore |

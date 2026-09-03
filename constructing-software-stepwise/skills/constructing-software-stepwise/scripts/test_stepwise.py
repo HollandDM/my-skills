@@ -17,6 +17,10 @@ d = root / "design" / "job-runner"
 
 
 def run(*args, stdin="", ok=True):
+    args = list(args)
+    if args[0] == "approve" and "--actor" not in args:
+        node = json.loads((d / "ledger.json").read_text())["nodes"][args[1]]
+        args += ["--actor", "user:test", "--proposal-hash", sw.proposal_hash(node)]
     out, err = io.StringIO(), io.StringIO()
     sys.stdin = io.StringIO(stdin)
     with redirect_stdout(out), redirect_stderr(err):
@@ -96,7 +100,7 @@ body = """run_job(key, spec):
     job <- advance(job)                           -- D-020: move the job one durable step
   -> finish(job)
 """
-t = run("body", "D-000", stdin=body, ok=False)
+t = run("body", "D-000", stdin=body)
 assert "D-010" in t and "D-020" in t and "untagged call '-> finish(job)'" in t
 t = run("approve", "D-000", ok=False)
 assert "untagged call '-> finish(job)'" in t and "composition missing" in t and "walkthrough missing" in t
@@ -157,12 +161,14 @@ n = ledger()["nodes"]["D-020"]
 assert [h["event"] for h in n["history"]] == ["reopened", "re-approved"], n["history"]
 
 # context change -> stale dependents
-t = run("change", "Job Key", "--definition", "Caller-chosen key naming one Job across retries.", "--reason", "clarified retries", ok=False)
+t = run("change", "Job Key", "--definition", "Caller-chosen key naming one Job across retries.", "--reason", "clarified retries")
 assert "dependents to re-check: D-000" in t and "Job Key changed" in t
+repair = run("repair")
+assert repair.index("D-010") < repair.index("D-000") and "changed dependencies" in repair, repair
 t = run("check", ok=False)
 assert "Job Key changed" in t
 assert ledger()["nodes"]["D-010"]["depends"] == ["Job Key"]  # derived from the effect text
-run("stale", "D-000", "Job Key redefined", ok=False)
+run("stale", "D-000", "Job Key redefined")
 run("stale", "D-010", "Job Key redefined")
 v10 = (d / "nodes" / "D-010.md").read_text()
 assert "Stale: " in v10 and "Job Key redefined" in v10 and "invalidated by Job Key (" in v10, v10
@@ -185,7 +191,7 @@ assert "CTX-F01" in t
 run("set", "D-020", "depends", "CTX-F01")
 assert ledger()["nodes"]["D-020"]["depends"] == ["CTX-F01"]
 run("set", "D-020", "depends", "Nope", ok=False)
-t = run("set", "D-020", "depends", "Job Key", ok=False)  # Job Key changed after D-020's approval -> lint
+t = run("set", "D-020", "depends", "Job Key")  # applied; `check` stays red until re-approval
 assert "Job Key changed" in t
 run("reopen", "D-020", "depends on Job Key now")
 run("approve", "D-020")
@@ -216,7 +222,8 @@ ctx = (d / "CONTEXT.md").read_text()
 assert "| job identity | key vs row id | D-030 |" in ctx and "- scheduling" in ctx and "CTX-F01" in ctx and "Given a job committed step 1" in ctx
 
 # evidence
-run("evidence", "D-010", "--kind", "test", "--ref", "spec/job.test.ts:12", "--result", "pass")
+run("set", "D-010", "realization", "implemented")
+run("evidence", "D-010", "--kind", "test", "--ref", "spec/job.test.ts:12", "--result", "pass", "--covers", "pre,post")
 assert "D-010 ✓ postgres" in (d / "DESIGN.md").read_text()
 
 # collapsed leaf: realization derived from body tags
@@ -247,11 +254,11 @@ assert "What it does:" in v0 and "- D-010 — create or load the job row" in v0,
 run("new", "D-022")
 run("set", "D-022", "gloss", "wait for the step to settle")
 run("reopen", "D-020", "wait_for folded into pick_step")
-t = run("body", "D-020", stdin="advance(job):\n  step <- pick_step(job)   -- ↗ D-021\n", ok=False)
+t = run("body", "D-020", stdin="advance(job):\n  step <- pick_step(job)   -- ↗ D-021\n")
 assert "lost every caller" in t and "D-022" in t, t
 run("set", "D-020", "depends", "D-022")  # a durable entry point started, not called, is nobody's orphan
 assert "lost every caller" not in run("check")
-run("set", "D-020", "depends", "-", ok=False)  # orphan error is back
+run("set", "D-020", "depends", "-")  # applied; orphan error is back
 run("retire", "D-021", "still called", ok=False)
 run("retire", "D-022", "wait_for folded into pick_step")
 before = ledger()
@@ -264,23 +271,25 @@ run("check")
 assert "retired" in (d / "nodes" / "D-022.md").read_text()
 
 # a changed contract travels the graph; a body-only revision does not
-run("reopen", "D-021", "reword the body", ok=False)  # D-020 reuses it: red until re-approved
-run("body", "D-021", ok=False, stdin="pick_step(job):\n  done <- job.stepsDone   -- ⇒ typescript: property access -- read the counter\n  -> job.spec.steps[done]  -- ⇒ typescript: index -- take the step at that position\n")
+run("reopen", "D-021", "reword the body")  # D-020 reuses it: applied, `check` red until re-approved
+run("body", "D-021", stdin="pick_step(job):\n  done <- job.stepsDone   -- ⇒ typescript: property access -- read the counter\n  -> job.spec.steps[done]  -- ⇒ typescript: index -- take the step at that position\n")
 run("approve", "D-021")
 assert json.loads((d / "ledger.json").read_text())["nodes"]["D-020"]["design"] == "approved"
-run("reopen", "D-021", "the step index now starts at one", ok=False)
-run("set", "D-021", "contract", "Post: returns the step at stepsDone + 1.", ok=False)
-t = run("approve", "D-021", ok=False)  # red until every stalled caller is re-approved
+run("reopen", "D-021", "the step index now starts at one")
+run("set", "D-021", "contract", "Post: returns the step at stepsDone + 1.")
+t = run("approve", "D-021")  # applied; `check` red until every stale caller is re-approved
 assert "contract changed, now stale: D-000, D-020" in t, t  # travels past the direct caller
 assert "D-021 (contract changed" in (d / "nodes" / "D-020.md").read_text()
-run("reopen", "D-020", "follow the new step index", ok=False)
-run("approve", "D-020", ok=False)
-run("reopen", "D-000", "its child moved with the step index", ok=False)
+repair = run("repair")
+assert repair.index("D-020") < repair.index("D-000"), repair
+run("reopen", "D-020", "follow the new step index")
+run("approve", "D-020")
+run("reopen", "D-000", "its child moved with the step index")
 run("approve", "D-000")
 
 # supersede + views drift + log
 run("new", "D-030")
-t = run("supersede", "D-030", "D-021", "folded into advance", ok=False)
+t = run("supersede", "D-030", "D-021", "folded into advance")
 assert "constrains D-030 which is superseded by D-021" in t  # ADR must be re-pointed by hand
 assert "now stale: D-000" in t, t  # the caller rests on a dead contract
 assert "invalidated by D-030 (superseded" in (d / "nodes" / "D-000.md").read_text()
@@ -290,9 +299,9 @@ t = run("set", "D-030", '{"depends":["D-021"]}', ok=False)
 assert "historical content cannot be edited" in t and ledger() == before
 t = run("check", ok=False)
 assert "D-000: calls D-030 which is superseded by D-021" in t
-run("reopen", "D-000", "record the outcome through D-021", ok=False)
-run("body", "D-000", ok=False, stdin=body.replace("-> finish(job)", "-> finish(job)                                  -- ↗ D-021"))
-run("approve", "D-000", ok=False)  # ADR-0001 still constrains the superseded D-030
+run("reopen", "D-000", "record the outcome through D-021")
+run("body", "D-000", stdin=body.replace("-> finish(job)", "-> finish(job)                                  -- ↗ D-021"))
+run("approve", "D-000")  # applied; ADR-0001 still constrains the superseded D-030
 adr = next((root / "adr").glob("0001-*.md"))
 adr.write_text(adr.read_text().replace("D-010, D-030", "D-010, D-021"))
 run("sync")

@@ -39,6 +39,7 @@ The entry's key is its name everywhere: `answer D-020 run-identity "Run Key"`, J
 - **Opinionated.** Rejected synonyms in `--avoid`. Confusable neighbours in `--not` (must be terms; lint warns otherwise).
 - **Project-specific only.** General programming concepts (timeout, retry, error type) are not terms — even when used heavily.
 - **Source always.** `--source user | <code path> | <doc url> | experiment`. Confirmation date is filled by the tool.
+- **Stateful scenarios required.** Before a stateful design completes, record nominal, retry/resume, and partial-failure scenarios. `check` warns when a complete stateful design has none.
 - Term → project-wide glossary only when used across multiple designs / bounded contexts. Local stays local.
 
 ## View — `CONTEXT.md` (generated)
@@ -102,7 +103,7 @@ Ambiguous boundary → scenario forcing it. Resolve iff active node's draft Cont
 Terms / facts = dependencies of design nodes. Entry changes →
 
 1. `change <dir> <ref> --definition "…" --reason "…"`; typo / wording with identical meaning → add `--minor` (no invalidation)
-2. the verb prints every dependent; lint fails for each approved dependent until `stale D-NNN "…"` or `reopen` + `approve`
+2. the verb prints every dependent; `repair` orders affected nodes, while strict `check` fails until each becomes `stale` or is reopened and re-approved
 3. review invalidated nodes before resuming; evidence on them is stale by construction
 
 No obsolete definition as active context. Historical meaning mattered to a durable decision → keep it in that ADR.
