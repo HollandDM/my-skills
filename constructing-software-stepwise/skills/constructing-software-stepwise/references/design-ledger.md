@@ -32,7 +32,7 @@ Views exist for humans and PR review. The agent reads them (or `show D-NNN`) and
 | `depends` | `answer`; JSON `set` array (replace), or granular `set D-NNN depends "Name" …` (append); also derived from any term / `CTX-…` / `ADR-…` / `D-NNN` named in gloss, effect, contract | dependencies for `Used by` and staleness |
 | `body` | `body D-NNN` (stdin / `--file`) | pseudocode lines → `{indent, code, child \| reuse \| target \| note}`; refused on an approved node |
 | `composition`, `decisions`, `deferred`, `adaptation` | JSON `set` arrays | bullet lists, replaced whole |
-| `target` | `terminal D-NNN "<target>: <identifier>"` | the real thing; Exists test enforced |
+| `target` | `terminal D-NNN "<target>: <identifier>"` | what implements the statement; shape enforced, existence is `realization` |
 | `design` | `approve` · `reaffirm` · `reopen` · `stale` · `supersede` · `adr new` (→ draft, `adr_pending`) · `adr accept` | `draft` · `approved` · `stale` · `superseded` (+ `superseded_by`) |
 | `approved`, `approved_by`, `approved_at`, `approved_hash`, `proposal_hash` | `approve --actor … --proposal-hash …` | who / when / exact accepted proposal; body hash guards against silent edits |
 | `realization`, `verification` | JSON `set` or granular `set D-NNN realization <v>` · clause-scoped `evidence` | `not-started \| partial \| implemented` · `unverified \| partial \| verified \| stale`; direct `set verification verified` is refused |
@@ -60,11 +60,13 @@ Status shown in views: `draft` · `draft (k ?)` · `draft (ADR pending ADR-NNNN)
 
 ## Realization Target
 
-"Real" = whatever the statement maps onto **outside the design**: language construct, framework API, platform primitive, managed service, infra resource, config, repo function that exists on disk. Written `<target>: <identifier>` — `scala: AgentRuns.claim`, `dbos: DBOS.startWorkflow`, `postgres: SELECT … ORDER BY seq`, `k8s: CronJob`, `repo: src/billing/Ledger.scala#append`.
+A target names whatever the statement maps onto: language construct, framework API, platform primitive, managed service, infra resource, config, repo function on disk, or a unit of our own code still to be written. Written `<target>: <identifier>` — `scala: AgentRuns.claim`, `dbos: DBOS.startWorkflow`, `postgres: SELECT … ORDER BY seq`, `k8s: CronJob`, `repo: src/billing/Ledger.scala#append`, `service: AgentLedger.read`. Only the shape is enforced: a lowercase single-word head, then an identifier.
 
-Exists test: target resolvable today — docs page, API signature, file path, SQL. Own code not yet written (`service: AgentLedger.read`, `module: Foo`, `application service: …`) is not a target; it is the design. `terminal` refuses it. Such a statement is composite or a collapsed leaf (see Node Kinds), never terminal.
+Whether the thing exists yet is not a design question — it is `realization`, moved by `set … realization` and answered by evidence. A leaf whose contract is small enough to write from does not earn extra refinement rounds by having no library to point at; the same holds inside a collapsed leaf, whose `-- ⇒ service: …` lines are constructs like any other.
 
-Adaptation = one line per Contract clause, `<clause> → <concrete construct>`: query text, API call with arguments, type / constraint, config key. Contract verb restated ("query one snapshot in order") ≠ adaptation. No construct nameable → not terminal.
+Adaptation = one line per Contract clause, `<clause> → <concrete construct>`: query text, API call with arguments, type / constraint, config key. Contract verb restated ("query one snapshot in order") ≠ adaptation. **No construct nameable → not terminal**: that is the whole brake on stopping too early, and with the contract cap of six clauses it is enough. A clause you cannot point at a query, call or type for means the node is still too big — refine it.
+
+Prefer a real thing a fact cites when one covers the Contract: platform guarantees (idempotent start by key, resume from checkpoint, CAS, lock, retry, version pin) are never refined into pseudocode, and a snapshot / decide / CAS / bind / schedule chain above one `dbos: startWorkflow` re-derives the platform.
 
 An ADR's `Constrains:` list makes it a dependency of each node it names: the link appears under `Depends on` with no verb.
 
@@ -111,16 +113,16 @@ Program tags are rendered from status: `(frontier)` · `(draft, k ?)` · `(draft
 
 | Kind | Test | Verbs |
 |---|---|---|
-| Terminal — real | Statement = ONE real thing that passes Exists test, or Contract already met by ONE such thing cited in a fact | `terminal`, JSON `set` with `adaptation`, `approve`; later `evidence` |
+| Terminal | Every Contract clause maps onto ONE nameable construct — real thing cited in a fact, or code of ours still to be written | `terminal`, JSON `set` with `adaptation`, `approve`; later `evidence` |
 | Leaf — collapsed | User rules node not worth child-by-child review; body still fully written to real lines | `body` with every statement `-- ⇒ <target>: <identifier> -- <one line>` (≤ 12 lines, no `-- D-NNN`), JSON `set` with `walkthrough` + `composition`, `approve` |
 | Terminal — reuse | Statement = call to existing `approved` node, Statement + Contract used verbatim | no new node; parent body line `-- ↗ D-NNN` |
 | Composite | else | `body` (2–7 child statements), one JSON `set` with proposal metadata, `approve` |
 
-Composite fan-out 2–7. 1 → rename. >7 → intermediate node. Terminal = only place refinement stops: adapt to real, or call approved node.
+Composite fan-out 2–7. 1 → rename. >7 → intermediate node. Terminal = only place refinement stops: name what implements it, or call an approved node.
 
 Collapse rule: "not worth digging" is the user's call — the **Make terminal** answer to a Proposal, and it collapses review, not refinement. Collapsed leaf = one approval, no child nodes, but the body is complete pseudocode down to real constructs — every statement line names its target, control + `{ assertion }` lines as usual, ≤ 12 lines. Needs > 12 lines or a line with no nameable target → it is worth digging: propose children.
 
-Terminal test precedes every body. Contract met by one real thing cited in a fact → terminal; `adaptation` maps each clause onto that thing, evidence verifies it. Platform guarantees (idempotent start by key, resume from checkpoint, CAS, lock, retry, version pin) never get refined into pseudocode — snapshot / decide / CAS / bind / schedule chains above one `dbos: startWorkflow` re-derive the platform.
+Terminal test precedes every body: every clause maps onto one nameable construct → terminal; `adaptation` records that map and evidence verifies it.
 
 Reuse rules: target must be `approved` (draft / stale → lint error); call matches its statement signature; parent's composition argument uses its Contract only, never its body; contract doesn't fit → `reopen` that node (all parents go stale via lint) or a new node — never copy a body with a tweak.
 
@@ -212,7 +214,7 @@ Reopen only when one changes: context entry it depends on; parent contract; inva
 Three independent axes:
 
 - `design` — statement + body accepted?
-- `realization` — real thing exists?
+- `realization` — does the thing the target names exist yet? (the only place that question lives)
 - `verification` — current evidence covers obligations?
 
 Approved ≠ implemented. Implemented can violate design. Verified means current clause coverage, not “some test passed,” and goes stale on failed evidence or dependency change.

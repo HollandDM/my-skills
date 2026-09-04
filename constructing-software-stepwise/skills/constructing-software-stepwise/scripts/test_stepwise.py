@@ -129,8 +129,10 @@ run("set", "D-010", "gloss", "create or load the job row")
 run("set", "D-010", "effect", "Job row exists exactly once per Job Key.")
 run("set", "D-010", "pre", "key valid")
 run("set", "D-010", "post", "row exists")
-t = run("terminal", "D-010", "application service: JobStore.create", ok=False)
-assert "design-owned" in t
+t = run("terminal", "D-010", "JobStore.create", ok=False)  # a target still names how it is reached
+assert "<target>: <identifier>" in t
+run("terminal", "D-010", "service: JobStore.create")  # code we still have to write is a target
+assert "Target: `service: JobStore.create`" in (d / "nodes" / "D-010.md").read_text()
 run("terminal", "D-010", "postgres: INSERT ... ON CONFLICT (key) DO NOTHING")
 run("set", "D-010", "adaptation", "establish -> INSERT ON CONFLICT", "Post: the unique index makes the second insert a no-op")
 run("approve", "D-010")
@@ -249,11 +251,11 @@ run("body", "D-021", stdin=wrapped)
 import stepwise as _sw
 _b = json.loads((d / "ledger.json").read_text())["nodes"]["D-021"]["body"]
 assert len(_b) == 2 and "ORDER BY seq ASC" in _b[0]["code"], _b
-run("body", "D-021", stdin="pick_step(job):\n  steps <- job.spec.steps   -- ⇒ typescript: property access -- read the declared step list\n  -> steps[job.done]        -- ⇒ typescript: index access -- take the one after the last done step\n")
+run("body", "D-021", stdin="pick_step(job):\n  steps <- job.spec.steps   -- ⇒ typescript: property access -- read the declared step list\n  steps <- order(steps)     -- ⇒ service: StepOrder.byIndex -- code of ours still to be written is a construct too\n  -> steps[job.done]        -- ⇒ typescript: index access -- take the one after the last done step\n")
 run("set", "D-021", "walkthrough", "Indexes the step list of the spec by how many steps are done.")
 run("set", "D-021", "composition", "pure lookup")
 run("approve", "D-021")
-assert "Collapsed leaf. Targets: `typescript`" in (d / "nodes" / "D-021.md").read_text()
+assert "Collapsed leaf. Targets: `typescript`, `service`" in (d / "nodes" / "D-021.md").read_text()
 v21 = (d / "nodes" / "D-021.md").read_text()
 assert "- typescript: property access — read the declared step list" in v21, v21
 v0 = (d / "nodes" / "D-000.md").read_text()
