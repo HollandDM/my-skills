@@ -110,6 +110,8 @@ run("set", "D-000", json.dumps({
 }))
 t = run("approve", "D-000")
 assert "approved D-000" in t and "next: `new <dir> D-010`" in t
+assert ledger()["nodes"]["D-000"]["approved"].endswith(" by user"), "default approver is the user"
+assert "by user" in (d / "nodes" / "D-000.md").read_text()
 before = ledger()
 t = run("set", "D-000", json.dumps({"contract": {"post": "a changed outcome"}}), ok=False)
 assert "is approved" in t and "`reopen D-000" in t and ledger() == before
@@ -129,7 +131,12 @@ t = run("terminal", "D-010", "application service: JobStore.create", ok=False)
 assert "design-owned" in t
 run("terminal", "D-010", "postgres: INSERT ... ON CONFLICT (key) DO NOTHING")
 run("set", "D-010", "adaptation", "establish -> INSERT ON CONFLICT", "Post: the unique index makes the second insert a no-op")
-run("approve", "D-010")
+run("approve", "D-010", "--by", "standing approval")
+assert ledger()["nodes"]["D-010"]["approved"].endswith(" by standing approval"), "auto-accepted approvals are not attributed to the user"
+assert "by standing approval" in (d / "nodes" / "D-010.md").read_text()
+run("reopen", "D-010", "re-approve as the user so the rest of the suite reads normally")
+run("approve", "D-010", "--by", "   ")  # blank falls back rather than writing "by "
+assert ledger()["nodes"]["D-010"]["approved"].endswith(" by user")
 design = (d / "DESIGN.md").read_text()
 assert "D-010 ⇒ postgres: INSERT ... ON CONFLICT (key) DO NOTHING" in design, design
 assert "D-020 (frontier)" in design and "D-030 (frontier)" in design

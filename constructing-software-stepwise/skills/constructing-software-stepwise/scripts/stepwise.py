@@ -21,7 +21,8 @@ Every verb ends with render + lint; exit 1 and `error <where>: <msg>` lines when
   body      <dir> D-NNN [--file F]                    refinement body from stdin/file (pseudocode, `-- D-NNN: <one line>` / `-- ↗ D-NNN -- <one line>` / `-- ⇒ target -- <one line>`; every tagged line says what it does)
   answer    <dir> D-NNN slug "Name"                   ?slug -> name in every clause; name added to depends
   terminal  <dir> D-NNN "<target>: <identifier>"      leaf: the real thing (Exists test enforced)
-  approve   <dir> D-NNN                               after the user says yes; refuses while anything is missing
+  approve   <dir> D-NNN [--by WHO]                    after the user says yes; refuses while anything is missing
+                                                     --by names who approved (default "user"); auto-accepted -> --by "standing approval"
   reopen    <dir> D-NNN "reason"                      approved -> draft for revision (history keeps the reason)
   stale     <dir> D-NNN "reason"                      a change invalidated it; the entries that changed are recorded with it
   retire    <dir> D-NNN "reason"                      the design dropped it; nothing calls it any more
@@ -1129,7 +1130,7 @@ def v_approve(led: Ledger, a) -> int:
     contract_changed = re_approval and n.get("contract_hash", contract_hash(n)) != contract_hash(n)
     n.pop("stale_by", None)
     n["design"] = "approved"
-    n["approved"] = f"{today()} by user"
+    n["approved"] = f"{today()} by {a.by.strip() or 'user'}"
     n["approved_at"] = now()
     n["approved_hash"] = body_hash(body)
     n["contract_hash"] = contract_hash(n)
@@ -1465,7 +1466,7 @@ def main(argv: list[str]) -> int:
     add("body", "id", file={"default": ""})
     add("answer", "id", "slug", "name")
     add("terminal", "id", "target")
-    add("approve", "id")
+    add("approve", "id", by={"default": "user"})
     add("reopen", "id", "reason"); add("stale", "id", "reason"); add("retire", "id", "reason"); add("supersede", "id", "new_id", "reason")
     add("evidence", "id", kind={"required": True}, ref={"required": True}, result={"required": True, "choices": ["pass", "fail"]}, note={"default": ""})
     add("entry", ("kind", {"choices": list(ENTRY_FILE)}), "heading", "definition",

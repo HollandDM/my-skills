@@ -26,16 +26,44 @@ This file is compressed on purpose. Nothing it writes is. Every artifact — glo
 | Interview bounded | Every question names the `?` it clears. No `?` → no question → `ambiguity … D-NNN` row for the child that owns it |
 | Scope leak gauge | `?` > 6 at draft → shrink effect, push detail to children, redraft. Questions per node ≤ initial `?` count |
 | Interview before proposal | No children while draft has any `?` or open user-owned decision |
-| One question per turn | Exactly one question to user. Then wait |
-| Turn ends only at WAIT | Two stops: after a question, after a Proposal block (plus ADR STOP). Answer → `entry` + `answer` → next `?` or Proposal, same turn. Approval → persist → pick next node → draft → question or Proposal, same turn. Never end a turn on a summary |
+| One question per turn | Exactly one question to user. Then wait — unless standing approval covers it |
+| Turn ends only at WAIT | Two stops: after a question, after a Proposal block (plus ADR STOP) — under standing approval only its carve-outs stop. Answer → `entry` + `answer` → next `?` or Proposal, same turn. Approval → persist → pick next node → draft → question or Proposal, same turn. Never end a turn on a summary |
 | Run to empty frontier | Default depth = whole tree: every leaf terminal or collapsed. Stop earlier only when user says stop or names a bound (`design only`, `to D-0xx`) |
-| Approval explicit | Yes to shown Proposal block. Agreement to prose ≠ approval → show block, ask |
+| Approval explicit | Yes to shown Proposal block. Agreement to prose ≠ approval → show block, ask. A standing auto-accept directive is approval, not prose |
 | Step small | Refinement body ≤ 12 pseudocode lines; each composition bullet ≤ 2 lines. Longer → insert intermediate node |
 | Pseudocode until terminal | Language keyword, library name, or concrete type in composite node = premature representation → move to child |
 | Terminal at platform | Contract already met by ONE real thing cited in a fact (idempotent start by key, resume from checkpoint, CAS, lock, retry, version pin) → terminal now, `adaptation` per clause. Never refine platform guarantee into pseudocode |
 | Write through the CLI | Every change to the ledger is one `stepwise.py` verb; grouped node fields use one JSON `set`, never one call per field. The only hand-written text is an ADR paragraph. A verb that exits 1 is fixed before the next question or Proposal. `ledger.json`, `DESIGN.md`, `CONTEXT.md`, `nodes/*.md` are never opened in an editor |
 | Lint error = design conflict | Read what the error says is inconsistent and fix the design. Never write content whose only purpose is to make the message go away |
 | Back up freely | Obligation fails → revise children or `reopen` ancestor |
+
+## Standing Approval — auto-accept mode
+
+Default = the two WAIT stops. The user may instead approve in advance — an explicit directive to take your own recommendation and not wait ("auto-accept your recommendations", "accept whatever you'd recommend", "don't wait for me, run it out"). Honour it.
+
+**It is an answer given early, not agreement to prose.** "Agreement to prose ≠ approval" bars reading a *comment on the design* as a yes. A standing directive is the opposite: not an opinion about content, a decision about who answers. The user read the recommendation rule, knows every question and Proposal arrives with your recommended answer attached, and instructed you to take it. Reclassifying that as the thing the rule excludes overrides the user with their own words.
+
+**What it does not claim.** It does not make the recommendation the user's choice. Under standing approval the run produces a *draft specification* whose every agent-sourced decision is separately attributed in the ledger and reversible by `reopen`. That is why provenance below is not optional: it is the whole basis on which the mode is legitimate. Fake the provenance and the objection is right — an unattributable spec nobody chose is worse than a stalled frontier, because a stalled frontier is visible.
+
+**Entry observable, never inferred.** Only the user's own words this session grant it. Not: silence, an earlier "looks good", impatience, a long frontier, your judgement that what is left is minor, or a depth bound (`to D-0xx` bounds where the run stops, never whether it asks). No directive → every WAIT stop holds unchanged.
+
+**Bound it on entry**, one line read back: what it covers, where it ends, which carve-outs still stop. The user's own bound (`to D-0xx`, `until I say stop`) replaces the default. It ends at that bound, on revocation, or on a carve-out — never silently.
+
+**Question** → write the block anyway (`Node` / `Resolves` / `Left` / `Q` / `Recommend` / `Else`, §2 shape): it is the record of what got decided for someone who was not there, and the `Else` line is where they look first on review. Then take `Recommend` as the answer — `entry <kind> "Name" "<definition>" --source "standing approval <YYYY-MM-DD>: agent recommendation"` → `answer`. Never `--source user`. Next `?` or Proposal, same turn.
+
+**Proposal** → show the whole block, three options as written. Then take option 1 yourself: `body` / `terminal` + `set` + `approve D-NNN --by "standing approval"`, and `Accepted under standing approval.` on its own line. Never `AskUserQuestion` — nobody is there, and an unanswerable question is where the run dies. Next node, same turn.
+
+**Still stops** — each is a decision no recommendation carries:
+
+| Stop | Why | Do |
+|---|---|---|
+| ADR conflict | Hard-to-reverse by definition; preserve-vs-supersede is the user's alone | Conflict Protocol STOP branch as written. Say standing approval does not reach it |
+| No confident `Recommend` | A `?` you cannot answer with a recommendation *and* a one-line why is a requirement only the user holds. Inventing one fabricates the spec | Ask it. One question, §2 shape. Wait |
+| Lint error you cannot resolve | A verb exits 1 and no revision of the design fixes it | Stop; show the error and what you tried. Never write content to silence it |
+
+Carve-out fired → name which one; standing approval still covers everything after it, and resuming needs no fresh grant.
+
+**Report on the way out** (bound reached, or stopped): every node `approved … by standing approval` and every entry sourced to it, listed once, so the review has one place to start.
 
 ## Design State Machine
 
@@ -44,7 +72,7 @@ Every node is in exactly one design state. Only the listed verb moves it; the to
 | From | Verb | To | Meaning |
 |---|---|---|---|
 | — | `new` | `draft` | node exists, being written |
-| `draft` | `approve` | `approved` | user accepted statement + contract + body/target |
+| `draft` | `approve` | `approved` | user accepted statement + contract + body/target; `--by "standing approval"` when auto-accepted for them |
 | `approved` | `reopen "reason"` | `draft` | revision starts; the replaced body is filed as `## Superseded refinement` |
 | `approved` \| `draft` | `stale "reason"` | `stale` | a term / fact / ADR / ancestor changed under it; still the current design |
 | `stale` | `reopen "reason"` → `approve` | `approved` | revised against the change. `approve` on a stale node is refused |
@@ -114,7 +142,7 @@ Rules:
 | propose→persist | `body <dir> D-NNN` (stdin heredoc or `--file`) | pseudocode body; tags `-- D-NNN` / `-- ↗ D-NNN` / `-- ⇒ target`; single-match calls auto-tagged |
 | propose→persist | `set <dir> D-NNN '{"walkthrough":["…"],"composition":["…"],"decisions":["…"]}'` | one atomic metadata write; walkthrough ≤ 3 lines and each supplied array replaces that whole field |
 | propose→persist | `terminal <dir> D-NNN "<target>: <identifier>"` · `set <dir> D-NNN '{"adaptation":["clause → construct"]}'` | leaf; Exists test enforced |
-| persist | `approve <dir> D-NNN` | refuses on `?`, empty prose, no body/target, missing walkthrough, a tagged body line that says nothing about what it does, missing composition, untagged call, pending ADR; drops ambiguity rows resolving at this node; prints next frontier id |
+| persist | `approve <dir> D-NNN [--by "standing approval"]` | `--by` records who approved (default `user`); refuses on `?`, empty prose, no body/target, missing walkthrough, a tagged body line that says nothing about what it does, missing composition, untagged call, pending ADR; drops ambiguity rows resolving at this node; prints next frontier id |
 | change | `reopen <dir> D-NNN "reason"` · `stale <dir> D-NNN "reason"` · `retire <dir> D-NNN "reason"` · `supersede <dir> D-OLD D-NEW "reason"` | status + history; `stale` also records which entries changed after approval; `reopen` files the body it replaces under `## Superseded refinement` |
 | change | `change <dir> <name\|CTX-id> [--definition …] [--rename "New heading"] [--status stale] --reason "…" [--minor]` | entry changed; approved dependents fail lint until `stale` / re-`approve` |
 | decision | `adr <dir> new "Title" --constrains D-NNN[,D-MMM]` · `adr <dir> accept ADR-NNNN` | stub (nodes → `draft (ADR pending)`); accept unblocks |
@@ -139,6 +167,8 @@ digraph refine {
     "Answerable from code/docs/tools?" [shape=diamond];
     "Explore; entry fact; answer ?" [shape=box];
     "Ask ONE question naming its ?, w/ recommendation" [shape=box];
+    "Standing approval, and Recommend is confident?" [shape=diamond];
+    "Take Recommend; entry --source standing approval; answer ?" [shape=box];
     "WAIT for answer" [shape=ellipse];
     "entry term/fact/scenario; answer ?" [shape=box];
     "One real thing (cited fact) satisfies Contract?" [shape=diamond];
@@ -148,7 +178,8 @@ digraph refine {
     "Insert intermediate node or reopen ancestor" [shape=box];
     "Conflicts accepted ADR?" [shape=diamond];
     "STOP branch: user picks preserve ADR or supersede" [shape=octagon, style=filled, fillcolor=red, fontcolor=white];
-    "Show Proposal block; ask approval" [shape=box];
+    "Show Proposal block; ask approval unless standing" [shape=box];
+    "Standing approval?" [shape=diamond];
     "WAIT for approval" [shape=ellipse];
     "Approved?" [shape=diamond];
     "body or terminal; JSON set proposal metadata; approve; fix errors" [shape=box];
@@ -164,7 +195,10 @@ digraph refine {
     "Answerable from code/docs/tools?" -> "Explore; entry fact; answer ?" [label="yes"];
     "Explore; entry fact; answer ?" -> "Any ? left in draft?";
     "Answerable from code/docs/tools?" -> "Ask ONE question naming its ?, w/ recommendation" [label="no"];
-    "Ask ONE question naming its ?, w/ recommendation" -> "WAIT for answer";
+    "Ask ONE question naming its ?, w/ recommendation" -> "Standing approval, and Recommend is confident?";
+    "Standing approval, and Recommend is confident?" -> "Take Recommend; entry --source standing approval; answer ?" [label="yes"];
+    "Standing approval, and Recommend is confident?" -> "WAIT for answer" [label="no"];
+    "Take Recommend; entry --source standing approval; answer ?" -> "Any ? left in draft?";
     "WAIT for answer" -> "entry term/fact/scenario; answer ?";
     "entry term/fact/scenario; answer ?" -> "Any ? left in draft?";
     "Any ? left in draft?" -> "One real thing (cited fact) satisfies Contract?" [label="no"];
@@ -176,8 +210,10 @@ digraph refine {
     "Insert intermediate node or reopen ancestor" -> "Propose pseudocode body (2-7 child statements) + 5-bullet composition";
     "Body <= 12 lines, bullets <= 2 lines, obligation holds?" -> "Conflicts accepted ADR?" [label="yes"];
     "Conflicts accepted ADR?" -> "STOP branch: user picks preserve ADR or supersede" [label="yes"];
-    "Conflicts accepted ADR?" -> "Show Proposal block; ask approval" [label="no"];
-    "Show Proposal block; ask approval" -> "WAIT for approval";
+    "Conflicts accepted ADR?" -> "Show Proposal block; ask approval unless standing" [label="no"];
+    "Show Proposal block; ask approval unless standing" -> "Standing approval?";
+    "Standing approval?" -> "body or terminal; JSON set proposal metadata; approve; fix errors" [label="yes: approve --by standing approval"];
+    "Standing approval?" -> "WAIT for approval" [label="no"];
     "WAIT for approval" -> "Approved?";
     "Approved?" -> "Propose pseudocode body (2-7 child statements) + 5-bullet composition" [label="no: revise"];
     "Approved?" -> "body or terminal; JSON set proposal metadata; approve; fix errors" [label="yes"];
@@ -213,7 +249,7 @@ Journal shape, budgets, tool ordering, cancellation → children's `?`. `?` > 6 
 Goal: zero `?` in draft.
 
 - Answerable from code / docs / tools / experiment → explore, never ask. Finding → `entry fact … --source <path|url>`, then `answer`.
-- Else ONE question, shape below, naming its `?`. Wait.
+- Else ONE question, shape below, naming its `?`. Wait — or, under standing approval, take the `Recommend`.
 - Each question carries recommended answer + one-line why.
 - `?` whose prerequisite `?` unresolved waits.
 - Challenge, don't transcribe: conflicts existing entry → "Glossary defines X as A; you mean B — which?"; vague → propose canonical; relationship → scenario probing edge; claim vs code → "Code does X; you said Y — which?"
@@ -239,7 +275,7 @@ Say what the function does first: ≤ 3 lines, plain prose, above the body (`wal
 
 Composition argument (data flow / failures / cleanup / invariants / progress, ≤ 2 lines each) = proof obligation: body preserves parent `{Pre} S {Post}`. Checklist: Refinement Obligation. Fails → revise body or reopen ancestor.
 
-Then STOP. Show block. Nothing else that turn.
+Then STOP. Show block. Nothing else that turn. (Standing approval → show it, then accept it yourself.)
 
 ~~~markdown
 ## Proposal — D-NNN — `<statement>`
@@ -287,13 +323,13 @@ Then STOP. Show block. Nothing else that turn.
 
 One clause per line, one bullet per item — never `Pre … · Post … · Failure …` strung across one line, in the Proposal or anywhere else. Each clause is 1–2 full lines, written so it can be checked without the rest of the design: name the thing, the condition on it, and what holds. `Post: exactly one row per Job Key survives, whatever the caller retried` beats `Post: row exists`. Clarity outranks brevity in a contract — never compress a clause into a fragment to save a line; split the node if six clear clauses do not fit.
 
-End every Proposal with those three options, in that order, worded as they stand. Ask them the way the host lets you ask a multiple-choice question (Claude Code: `AskUserQuestion`; otherwise plain text); the user may always answer something else.
+End every Proposal with those three options, in that order, worded as they stand. Ask them the way the host lets you ask a multiple-choice question (Claude Code: `AskUserQuestion`; otherwise plain text); the user may always answer something else. Standing approval in force → no `AskUserQuestion`: show the block and take option 1.
 
 **Make terminal** = the user rules this branch not worth child-by-child review. Do not persist the composite body as proposed: re-propose the same node as a collapsed leaf — every statement written down to a real construct and tagged `-- ⇒ <target>: <identifier> -- <one line>`, ≤ 12 lines, no `-- D-NNN` tags, no children. Statements whose target you cannot name, or a body that runs past 12 lines, mean the branch was worth digging: say so, show the shortest composite that works, and ask again. A child that is already an approved node stays a call (`-- ↗ D-NNN`).
 
 ### 4. Approve + persist
 
-User owns semantic / risk / compat / hard-to-reverse choices. Approval = Accept (or Make terminal on the re-proposed leaf); Changes → revise and propose again, same node. Then, verbatim from the block:
+User owns semantic / risk / compat / hard-to-reverse choices — exercised live, or in advance by standing approval. Approval = Accept (or Make terminal on the re-proposed leaf); Changes → revise and propose again, same node. Then, verbatim from the block:
 
 ```bash
 body <dir> D-NNN <<'EOF'
@@ -305,10 +341,10 @@ set <dir> D-NNN '{
   "decisions": ["…"]
 }'
 ambiguity <dir> "<claim>" "<conflict>" D-child   # one per deferred question; node view derives its Deferred list from these
-approve <dir> D-NNN
+approve <dir> D-NNN [--by "standing approval"]   # --by ONLY when you accepted it for the user; omit it when they said yes
 ```
 
-Terminal: `terminal <dir> D-NNN "<target>: <identifier>"`, `set <dir> D-NNN '{"adaptation":["<clause> → <construct>"]}'`, `approve`. Errors → fix with verbs, `approve` again. Same turn. Then, still same turn: `approve` prints the next frontier id → §1, draft, and either ask its first question or show its Proposal. No recap, no "next I will", no pause for permission — approval of one node is the instruction to continue.
+Terminal: `terminal <dir> D-NNN "<target>: <identifier>"`, `set <dir> D-NNN '{"adaptation":["<clause> → <construct>"]}'`, `approve` (`--by "standing approval"` when you accepted it for the user). Errors → fix with verbs, `approve` again. Same turn. Then, still same turn: `approve` prints the next frontier id → §1, draft, and either ask its first question or show its Proposal. No recap, no "next I will", no pause for permission — approval of one node is the instruction to continue.
 
 Approved node = composed fn: descendants use Statement + Contract, never re-derive. `reopen` only on changed context entry, invariant, dependency, ADR, evidence.
 
@@ -343,7 +379,7 @@ Context entry, ancestor, ADR, or dependency changes:
 
 - Terminology at node needing it.
 - Abstract statements, not tech-named components. Pseudocode until terminal; data as `set` / `seq` / `map` / `record` until no algorithm fits without concrete representation.
-- Open decision explicit. Silence ≠ approval.
+- Open decision explicit. Silence ≠ approval; an explicit standing auto-accept directive is.
 - Authz, privacy, durability, ordering, idempotency threaded through every affected node.
 - Stateful → transitions + invariants first. Concurrent / distributed → ownership, atomicity, retries, dupes, reordering, cancellation, partial failure exposed.
 - Prototype → fact entries. Prototype ≠ spec.
@@ -354,6 +390,11 @@ Context entry, ancestor, ADR, or dependency changes:
 | Thought | Rule |
 |---|---|
 | Several questions to save turns | One. Wait |
+| User granted auto-accept, but this decision feels important | The directive is the answer. Write the block, record the provenance, continue. A carve-out stops you; a feeling does not |
+| Advance authorization = "agreement to prose" | No. Prose is an opinion on content; the directive says who answers. Reading it as the excluded thing overrides the user with their own words |
+| Auto-accepted, filed `--source user` / plain `approve` | False provenance, and the one thing that makes the mode legitimate. `--source "standing approval …"`, `approve --by "standing approval"` |
+| `AskUserQuestion` while the user is away | Unanswerable question = dead run. Show the block, take option 1, say so |
+| No directive, but the user clearly wants speed | Speed is not a grant. WAIT stops hold |
 | Related question, no `?` for it | `ambiguity`, child's job. Question count = leak gauge |
 | Root needs full vocabulary | Root ≤ 6 coarse clauses. Detail = children |
 | Ask first, draft later | Draft first. No draft = no bound |
