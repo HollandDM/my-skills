@@ -177,10 +177,19 @@ t = run("set", "D-010", '{"contract":{"post":"changed while stale"}}', ok=False)
 assert "is stale" in t and "`reopen D-010" in t and ledger() == before
 run("check", ok=True)
 t = run("approve", "D-000", ok=False)
-assert "is stale" in t and "From stale: reopen, retire, supersede" in t, t
-run("reopen", "D-000", "Job Key definition sharpened")
-run("approve", "D-000")
+assert "nothing in it changed" in t and "reaffirm" in t, t
+assert "reaffirm --actor" in run("status"), "a stale node nobody touched should be offered `reaffirm`"
+t = run("reaffirm", "D-000", ok=False)  # a reaffirmation is still someone accepting the node
+assert "approval actor missing" in t, t
+t = run("reaffirm", "D-000", "--actor", "user:test")
+assert "reaffirmed D-000 against Job Key" in t, t
+v00 = (d / "nodes" / "D-000.md").read_text()
+assert "reaffirmed 20" in v00 and "— reaffirmed: Job Key" in v00
+assert "Superseded refinement" not in v00, "reaffirm records no revision, so it replaces no refinement"
+assert "stale_by" not in json.dumps(ledger()["nodes"]["D-000"])
 run("reopen", "D-010", "Job Key definition sharpened")
+t = run("reaffirm", "D-010", "--actor", "user:test", ok=False)
+assert "is draft; `reaffirm` returns a stale node" in t, t
 run("approve", "D-010")
 st = run("status")
 assert "D-000  approved" in st and "refine its children" in st, st

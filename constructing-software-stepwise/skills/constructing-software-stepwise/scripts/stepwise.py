@@ -88,6 +88,7 @@ NEXT_STEP = {
     "draft": "finish the draft, run `proposal`, get explicit approval, then `approve --actor … --proposal-hash …`",
     "approved": "nothing — refine its children, or `reopen` / `stale` / `supersede` / `retire` when something changes",
     "stale": "`reopen` and re-`approve` it, or `retire` / `supersede` it",
+    "stale-intact": "`reaffirm --actor <name>` — nothing in it changed, only what it rests on; or `reopen` + re-`approve` to revise it",
     "superseded": "nothing — the replacement carries the work",
     "retired": "nothing — the design dropped it; `reopen` only to revive it",
 }
@@ -282,6 +283,12 @@ def proposal_hash(n: dict) -> str:
               "decisions", "deferred", "target", "adaptation")
     proposal = {f: n.get(f) for f in fields if n.get(f)}
     return hashlib.sha256(json.dumps(proposal, sort_keys=True, ensure_ascii=False).encode()).hexdigest()[:16]
+
+
+def intact(n: dict) -> bool:
+    """Nothing a reader approved has moved: same proposal, same body, same contract."""
+    return bool(n.get("proposal_hash")) and n["proposal_hash"] == proposal_hash(n) \
+        and n.get("approved_hash") == body_hash(n.get("body", [])) and n.get("contract_hash") == contract_hash(n)
 
 
 def contract_hash(n: dict) -> str:
@@ -1260,6 +1267,9 @@ def v_approve(led: Ledger, a) -> int:
         return 1
     if TRANSITIONS.get((n["design"], "approved")) is None:
         legal = sorted({v for (f, _), v in TRANSITIONS.items() if f == n["design"]})
+        if n["design"] == "stale" and intact(n):
+            return fail(f"{a.id} is stale but nothing in it changed; `reaffirm <dir> {a.id} --actor <name>` returns it, "
+                        f"or `reopen` first if you mean to revise it")
         return fail(f"{a.id} is {n['design']}; `approve` moves a draft. From {n['design']}: {', '.join(legal) or 'none'}")
     re_approval = bool(n.get("approved"))
     contract_changed = re_approval and n.get("contract_hash", contract_hash(n)) != contract_hash(n)
@@ -1364,6 +1374,28 @@ def v_stale(led: Ledger, a) -> int:
     if n is not None:
         n["stale_by"] = changed_deps(led, n)
     return flip(led, a.id, "stale", "stale", a.reason)
+
+
+def v_reaffirm(led: Ledger, a) -> int:
+    """A dependency's contract moved and cascaded this node stale, but the node itself is untouched. `reopen` + `approve`
+    would demand a revision reason nobody has and overwrite the superseded-refinement record with a copy of the current body."""
+    n = need(led, a.id)
+    if n is None:
+        return 1
+    if n["design"] != "stale":
+        return fail(f"{a.id} is {n['design']}; `reaffirm` returns a stale node, nothing else")
+    if not a.actor.strip():
+        return fail(f"approval actor missing — pass `--actor <name>`; a reaffirmation is still someone accepting {a.id}")
+    if not intact(n):
+        return fail(f"{a.id} changed since it was approved; `reopen {a.id} \"<reason>\"` then `proposal` + `approve` — "
+                    "reaffirm only returns a node whose own statement, contract and body are untouched")
+    why = ", ".join(n.pop("stale_by", [])) or "changed dependencies"
+    n["design"] = "approved"
+    n["approved"] = f"{n.get('approved', today())}; reaffirmed {today()} by {a.actor.strip()}"
+    n["approved_by"] = a.actor.strip()
+    n["approved_at"] = now()  # the node now stands against the dependency as it is today
+    hist(n, "reaffirmed", why)
+    return finish(led, f"reaffirmed {a.id} against {why}; verification stays {n['verification']}")
 
 
 def v_supersede(led: Ledger, a) -> int:
@@ -1608,7 +1640,8 @@ def v_repair(led: Ledger, a) -> int:
     print("repair plan:")
     for i, nid in enumerate(order, 1):
         n = led.nodes[nid]
-        action = "`stale` for later, or `reopen` and re-approve against changed dependencies" if nid in invalid_approved else NEXT_STEP[n["design"]]
+        action = ("`stale` for later, or `reopen` and re-approve against changed dependencies" if nid in invalid_approved
+                  else NEXT_STEP["stale-intact" if n["design"] == "stale" and intact(n) else n["design"]])
         print(f"{i}. {nid} ({led.status(nid)}) — {action}")
     constrained: dict[str, list[str]] = {}
     for adr in led.adrs():
@@ -1625,7 +1658,7 @@ def v_status(led: Ledger, a) -> int:
         state = n["design"]
         if state in ("superseded", "retired") and not a.all:
             continue
-        print(f"{nid}  {led.status(nid):28}  {NEXT_STEP[state]}")
+        print(f"{nid}  {led.status(nid):28}  {NEXT_STEP['stale-intact' if state == 'stale' and intact(n) else state]}")
     for fid, (stmt, parent) in sorted(led.frontier().items()):
         print(f"{fid}  {'frontier':28}  `new <dir> {fid}` — {stmt} (child of {parent})")
     return 0
@@ -1701,6 +1734,7 @@ def main(argv: list[str]) -> int:
     add("answer", "id", "slug", "name")
     add("terminal", "id", "target")
     add("approve", "id", actor={"default": ""}, proposal_hash={"default": ""})
+    add("reaffirm", "id", actor={"default": ""})
     add("reopen", "id", "reason"); add("stale", "id", "reason"); add("retire", "id", "reason"); add("supersede", "id", "new_id", "reason")
     add("evidence", "id", kind={"required": True}, ref={"required": True}, result={"required": True, "choices": ["pass", "fail"]},
         covers={"action": "append", "default": []}, resolves={"action": "append", "default": []}, note={"default": ""})

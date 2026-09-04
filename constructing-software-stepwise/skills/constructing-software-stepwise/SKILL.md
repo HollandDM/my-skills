@@ -47,6 +47,7 @@ Every node is in exactly one design state. Only the listed verb moves it; the to
 | `draft` | `approve` | `approved` | user accepted statement + contract + body/target |
 | `approved` | `reopen "reason"` | `draft` | revision starts; the replaced body is filed as `## Superseded refinement` |
 | `approved` \| `draft` | `stale "reason"` | `stale` | a term / fact / ADR / ancestor changed under it; still the current design |
+| `stale` | `reaffirm --actor <name>` | `approved` | the node itself never changed — only what it rests on. No reason, no revision, no `## Superseded refinement` |
 | `stale` | `reopen "reason"` → `approve` | `approved` | revised against the change. `approve` on a stale node is refused |
 | any live | `supersede D-OLD D-NEW "reason"` | `superseded by D-NEW` | another node took the work; the replacement must exist |
 | any live | `retire "reason"` | `retired` | design dropped it, nothing replaces it; refused while a body still calls it |
@@ -59,6 +60,8 @@ Staleness propagates along the link graph; you never hunt for what a change brok
 - re-`approve` with a changed statement or contract → every approved node downstream, transitively, becomes `stale` with `invalidated by D-NNN (contract changed <date>)`;
 - re-`approve` with only the body changed → nothing cascades, because no caller depended on the body;
 - `supersede` or `retire` → the same cascade, because the contract those nodes referenced is gone.
+
+Most cascaded nodes need no revision at all: the caller still holds against the new contract. `reaffirm` is that answer and the one to reach for first — it refuses any node whose own proposal, body or contract moved, so it cannot be used to skip real work. Reaching for `reopen` there costs an invented reason and overwrites the node's superseded-refinement record with a copy of its current body.
 
 `check` refuses an approved node that depends on a `stale` / `superseded` / `retired` node, and a body that still calls a superseded child. The fix is design work — re-approve the dependent against the new contract, or re-point the call — never editing the message away.
 
@@ -89,7 +92,7 @@ docs/adr/NNNN-<slug>.md   one decision = one file; stub + status by the tool, pa
 | Dimension | Record | Why | Verbs | Format |
 |---|---|---|---|---|
 | Meaning | `terms` / `facts` / `scenarios` entries | edited in place; dated `changed` list | `entry`, `change`, `meta`, `ambiguity` | [context-ledger.md](references/context-ledger.md) |
-| Design + evidence | node record; evidence list | status by verb only; history keeps reasons | `new`, `set`, `body`, `answer`, `terminal`, `approve`, `reopen`, `stale`, `supersede`, `evidence` | [design-ledger.md](references/design-ledger.md) |
+| Design + evidence | node record; evidence list | status by verb only; history keeps reasons | `new`, `set`, `body`, `answer`, `terminal`, `approve`, `reaffirm`, `reopen`, `stale`, `supersede`, `evidence` | [design-ledger.md](references/design-ledger.md) |
 | Decision | ADR markdown | supersede, never rewrite | `adr new`, `adr accept`, `adr supersede`, `adr constrains` | [adr-ledger.md](references/adr-ledger.md) |
 
 Rules:
@@ -115,7 +118,7 @@ Rules:
 | propose→persist | `set <dir> D-NNN '{"walkthrough":["…"],"composition":["…"],"decisions":["…"]}'` | one atomic metadata write; walkthrough ≤ 3 lines and each supplied array replaces that whole field |
 | propose→persist | `terminal <dir> D-NNN "<target>: <identifier>"` · `set <dir> D-NNN '{"adaptation":["clause → construct"]}'` | leaf; Exists test enforced |
 | persist | `proposal <dir> D-NNN` · `approve <dir> D-NNN --actor <name> --proposal-hash <hash>` | hash exact staged proposal; approval refuses missing provenance, stale hash, `?`, incomplete refinement, or pending ADR; drops ambiguity rows resolving at this node; prints next frontier id |
-| change | `reopen <dir> D-NNN "reason"` · `stale <dir> D-NNN "reason"` · `retire <dir> D-NNN "reason"` · `supersede <dir> D-OLD D-NEW "reason"` | status + history; `stale` also records which entries changed after approval; `reopen` files the body it replaces under `## Superseded refinement` |
+| change | `reaffirm <dir> D-NNN --actor <name>` (stale, nothing in it moved) · `reopen <dir> D-NNN "reason"` · `stale <dir> D-NNN "reason"` · `retire <dir> D-NNN "reason"` · `supersede <dir> D-OLD D-NEW "reason"` | status + history; `stale` also records which entries changed after approval; `reopen` files the body it replaces under `## Superseded refinement` |
 | change | `change <dir> <name\|CTX-id> [--definition …] [--rename "New heading"] [--status stale] --reason "…" [--minor]` | entry changed; approved dependents fail lint until `stale` / re-`approve` |
 | decision | `adr <dir> new "Title" --constrains D-NNN[,D-MMM]` · `adr <dir> accept ADR-NNNN` | stub (nodes → `draft (ADR pending)`); accept unblocks |
 | implement | `set <dir> D-NNN '{"realization":"implemented"}'` · `evidence <dir> D-NNN --kind K --ref R --result pass\|fail --covers <clause>[,<clause>] [--resolves EV-N]` | `verified` only when current passing evidence covers every clause, realization is implemented, and every current failure is explicitly resolved |
