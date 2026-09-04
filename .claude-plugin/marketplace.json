@@ -94,7 +94,7 @@
       "name": "constructing-software-stepwise",
       "source": "./constructing-software-stepwise",
       "description": "Stepwise refinement for hard designs: one node per approval cycle, one-question-at-a-time interview, contract-preserving decomposition, ADR-gated decisions, hash-bound approvals, clause-scoped evidence, and dependency-ordered repair; Dijkstra-style pseudocode refined until terminal nodes adapt to real language, framework, platform, service, or repository constructs; typed ledger.json written only through the bundled audit-safe stdlib CLI, which renders DESIGN.md, CONTEXT.md, and node views and keeps rejected commands distinct from saved repair states",
-      "version": "86d9a80",
+      "version": "a5315f3",
       "author": {
         "name": "HollandDM"
       },
