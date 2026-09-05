@@ -1,18 +1,24 @@
 ---
 name: constructing-software-stepwise
-description: Contract-based software design when the user requests Stepwise or auditable refinement; interactive HTML browsing of existing Stepwise ledgers.
+description: Stepwise software design, reconstruction of existing code, source-change reconciliation, and interactive design review.
 ---
 
 # Constructing Software Stepwise
 
 Refine an abstract operation into smaller operations whose contracts compose, until each leaf maps to a real construct or has a bounded implementation approach and validation plan. Keep the design, assumptions, decisions, and evidence durable enough for another engineer to continue.
 
-## Choose the working mode
+## Choose the workflow
+
+- **Design new or changed behavior:** use the design discipline below.
+- **Adopt existing implementation or reconcile code changes:** read [existing-work.md](references/existing-work.md). Recover observed behavior before choosing intended contracts. Whole-file SHA-256 versions signal affected nodes, including uncommitted changes.
+- **Browse a model:** read [html-view.md](references/html-view.md).
+
+## Approval mode
 
 - **Interviewed (default):** work through one node with the user. Read [interaction.md](references/interaction.md).
 - **Auto-approval:** when the user explicitly delegates recommendations or says to proceed without waiting, refine coherent batches of nodes. Read [auto-approval.md](references/auto-approval.md). Honor existing authorization; do not request it again.
 
-State the scope and completion boundary briefly. Respect an explicit design-only, subtree, or depth bound. Otherwise finish the refinement tree; implement and verify only when implementation is part of the request. Auto-approval changes pacing and decision ownership within that scope, not permission for unrelated external actions.
+State the scope and completion boundary briefly. Respect an explicit design-only, subtree, or depth bound. For forward design, otherwise finish the refinement tree. For adoption or reconciliation, use the source-inspection completion boundary in existing-work.md. Implement and verify only when implementation is part of the request. Auto-approval changes pacing and decision ownership within that scope, not permission for unrelated external actions.
 
 ## Design discipline
 
@@ -42,7 +48,7 @@ Approval, implementation, and verification are distinct claims. Record who suppl
 
 ## Completion
 
-For a complete design, every live node is approved, each leaf is terminal, collapsed, or implementation-ready, the frontier is empty, applicable ADRs are resolved, and `check` succeeds. An empty frontier alone is insufficient if draft or stale nodes remain. For a bounded request, report the completed boundary and remaining frontier explicitly.
+For a complete intended design, every in-scope design node is approved, each leaf is terminal, collapsed, or implementation-ready, the frontier is empty, applicable ADRs are resolved, and `check` succeeds. An empty frontier alone is insufficient if intended design nodes remain draft or stale. Observational-only nodes do not require approval; assess their completeness through `scan`. If an intended refinement relies on one, give it an explicit contract through the design workflow. For a bounded request, report the completed boundary and remaining frontier explicitly.
 
 When implementation is requested, realize the approved design and gather evidence covering its contract obligations. Choose verification proportional to the obligation. Record evidence against explicit contract clauses. Verification is derived from coverage of the current approval revision and dependencies; failing checks prevent verified status. Evidence never changes implementation status. The CLI tracks coverage but cannot establish that an argument or test is sufficient.
 

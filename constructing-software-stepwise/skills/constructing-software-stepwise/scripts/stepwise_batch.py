@@ -18,7 +18,7 @@ def operations(payload: object) -> list[list[str]]:
                 raise ValueError('generic operations accept only verb and args')
             result.append([verb, *[v if isinstance(v, str) else json.dumps(v) for v in item['args']]])
             continue
-        shapes = {'new': ('statement',), 'set': ('fields',), 'body': ('text',),
+        shapes = {'adopt': ('statement', 'parent'), 'observe': ('payload', 'at'), 'new': ('statement',), 'set': ('fields',), 'body': ('text',),
                   'terminal': ('target',), 'approve': ('by',), 'ready': ('approach', 'validation'),
                   'reopen': ('reason',), 'stale': ('reason',), 'retire': ('reason',)}
         if verb not in shapes or set(item) - {'verb', 'id', *shapes.get(verb, ())}:
@@ -28,14 +28,14 @@ def operations(payload: object) -> list[list[str]]:
         args = [verb, item['id']]
         for field in shapes[verb]:
             if field not in item:
-                if (verb, field) in [('new', 'statement'), ('approve', 'by')]:
+                if (verb, field) in [('new', 'statement'), ('adopt', 'statement'), ('adopt', 'parent'), ('approve', 'by')]:
                     continue
                 raise ValueError(f'{verb}: {field} is required')
             value = item[field]
-            if field != 'fields' and not isinstance(value, str):
+            if field not in ('fields', 'payload') and not isinstance(value, str):
                 raise ValueError(f'{verb}.{field} must be a string')
-            if field in ('text', 'by', 'approach', 'validation'):
+            if field in ('text', 'by', 'approach', 'validation', 'parent', 'at'):
                 args.append('--' + field)
-            args.append(json.dumps(value) if field == 'fields' else value)
+            args.append(json.dumps(value) if field in ('fields', 'payload') else value)
         result.append(args)
     return result

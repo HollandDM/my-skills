@@ -23,12 +23,20 @@ The CLI serializes readers and writers through `.stepwise.lock`. Validated write
 
 Save the operations to a file, then run `batch <dir> --file changes.json`, or pass JSON on stdin. A batch applies operations sequentially in memory and renders once after final validation. Parents must expose child IDs before `new` creates them; reuse targets must be approved before reuse. Existing IDs and references resolve against the evolving batch state.
 
-Shorthand operations support `new`, `set`, `body` (`text`), `terminal` (`target`), `ready` (`approach`, `validation`), `approve` (`by`), and `reopen`/`stale`/`retire` (`reason`). Any mutation can use `{"verb":"entry","args":["term","Run Key","Caller-supplied identity.","--source","user"]}` or an argument array such as `["answer","D-000","run-key","Run Key"]`. Arguments never run through a shell. Nested batches and read-only operations are rejected.
+Shorthand operations also support `adopt` (`statement`, optional `parent`) and `observe` (`payload`, `at`); bindings and reconciliation use the generic `verb`/`args` form. Other shorthand operations support `new`, `set`, `body` (`text`), `terminal` (`target`), `ready` (`approach`, `validation`), `approve` (`by`), and `reopen`/`stale`/`retire` (`reason`). Any mutation can use `{"verb":"entry","args":["term","Run Key","Caller-supplied identity.","--source","user"]}` or an argument array such as `["answer","D-000","run-key","Run Key"]`. Arguments never run through a shell. Nested batches and read-only operations are rejected.
 
 ## Commands
 
+For reconstruction, source bindings, implementation versions, and inspection payloads, read [existing-work.md](existing-work.md). The adoption and observation commands participate in normal atomic batches.
+
 | Verb | Use |
 |---|---|
+| `adopt <dir> D-NNN ["statement"] [--parent D-NNN]` | Build or link an observational hierarchy without parent approval. |
+| `bind <dir> D-NNN PATH [--repo ROOT] [--binding S01] [--symbol NAME] [--lines START:END]` | Bind a whole-file source fingerprint; locators are navigation hints. |
+| `unbind <dir> D-NNN S01 --reason TEXT` | Remove a binding while preserving its history. |
+| `observe <dir> D-NNN JSON --at TOKEN` or `--file FILE` | Record inspected claims and optional comparisons against an exact source scope. |
+| `scan <dir> [--repo ROOT] [--json]` | Read current implementation versions and notifications. |
+| `reconcile <dir> [--repo ROOT]` | Persist implementation changes without overwriting observations or intended contracts. |
 | `new <dir> D-NNN ["statement"]` | Create a root or frontier node. |
 | `set <dir> D-NNN '{...}'` | Replace supplied fields atomically; see [design-ledger.md](design-ledger.md). |
 | `body <dir> D-NNN --text "..."` or `--file FILE` | Set pseudocode on a draft node; stdin is also supported outside a batch. |

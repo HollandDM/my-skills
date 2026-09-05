@@ -49,12 +49,21 @@ function chartLabel(svg, x, y, value, cls = "behavior-label") {
 }
 function drawBehavior() {
   const n = nodes.get(selected),
-    behavior = n?.behavior || {};
+    behavior =
+      ($("chart-basis").value === "observed"
+        ? n?.observation?.behavior
+        : n?.behavior) || {};
   const rows =
     chartMode === "states"
       ? behavior.states || []
       : behavior.participants || [];
   $("focus-node").disabled = true;
+  const observedBasis = $("chart-basis").value === "observed";
+  document.querySelector(".chart-note").textContent = observedBasis
+    ? "Observed behavior · Source inspection: " +
+      (n?.source_state || "not recorded") +
+      ". This is not an approved requirement."
+    : "Intended behavior from the recorded design. Select an operation to read its contract.";
   if (!rows.length) {
     const svg = behaviorCanvas(400, 200);
     chartLabel(

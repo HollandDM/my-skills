@@ -207,6 +207,36 @@ class HtmlBrowserTests(unittest.TestCase):
         self.page.locator("#chart-mode").select_option("design")
         self.assertEqual(self.page.locator("#graph .graph-node").count(), 4)
 
+    def test_observed_code_versions_and_drift_are_separate_from_intent(self):
+        data = fixture()
+        root = data["nodes"]["D-000"]
+        root.update(origin="existing-code", design="draft", contract={}, body=[], approved="", effect="", source_state="stale",
+                    bindings={"S01":{"path":"src/normalize.py","symbol":"normalize","baseline_sha256":"a"*64}},
+                    current_implementation_version="b"*64, implementation_version="b"*64, implementation_revision=2,
+                    conformance={"status":"unassessed","reason":"No intended contract is recorded."},
+                    observed_children=["D-001"],
+                    observation={"effect":"The inspected implementation strips whitespace.","revision":1,"date":"2026-09-05","by":"agent inspection",
+                        "implementation_version":"a"*64,"claims":[{"text":"normalize calls str.strip.","basis":"observed","sources":["S01"]}],
+                        "unknowns":["Non-string inputs are undocumented."],"body":[],
+                        "behavior":{"states":[{"id":"start","label":"Input","initial":True},{"id":"done","label":"Result","terminal":True}],"transitions":[{"from":"start","to":"done","event":"strip"}]}},
+                    source_report={"reason":"Bound sources changed.","implementation_version":"b"*64,"bindings":{}})
+        self.open(data)
+        self.assertEqual(self.page.get_by_role("tab",name="Observed code",exact=True).get_attribute("aria-selected"),"true")
+        self.assertIn("a"*64,self.page.locator("#detail-content").inner_text())
+        self.assertIn("b"*64,self.page.locator("#detail-content").inner_text())
+        self.assertIn("No intended contract",self.page.locator("#detail-content").inner_text())
+        self.page.locator("#review-filter").select_option("sources")
+        self.assertEqual(self.page.locator("#node-count").inner_text(),"1 matches")
+        self.page.get_by_role("tab",name="Contract & code").click()
+        self.assertIn("No intended contract is recorded",self.page.locator("#detail-content").inner_text())
+        self.map_view()
+        self.assertEqual(self.page.locator("#chart-basis").input_value(),"observed")
+        self.page.locator("#chart-mode").select_option("states")
+        self.assertIn("strip",self.page.locator("#graph").text_content())
+        self.assertIn("Source inspection: stale",self.page.locator(".chart-note").inner_text())
+        self.page.locator("#chart-basis").select_option("intended")
+        self.assertIn("No state model recorded",self.page.locator("#graph").text_content())
+
     def test_empty_design(self):
         data = fixture()
         data["nodes"] = {}

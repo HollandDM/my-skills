@@ -22,10 +22,11 @@ The body has two workspace tabs: **Read design** shows the outline and contract/
 
 - **Outline:** search IDs, statements, contracts, or code; expand and collapse branches. Shared operations appear as references to the same node.
 - **Contract & code:** read one operation at a time, with separate contract clauses, indented pseudocode, linked child calls, concrete targets, adaptation, and composition arguments.
+- **Observed code:** inspect source-backed claims, inferred intent, unknowns, whole-file SHA-256 versions, Git context, implementation history, and comparisons with the intended contract. Source-change and contract-difference filters expose pending reconciliation. Observed-only nodes open this tab by default.
 - **Context / Evidence & history:** inspect shared terminology, facts, scenarios, ADRs, verification records, and superseded refinements.
 - **Design map:** select a node in the SVG diagram, zoom, fit the graph, or focus the selected operation. Solid edges represent refinement, dashed edges reuse, and dotted edges dependencies. Scroll the panel to explore larger graphs.
 - **Review:** filter stale/failed nodes, open work, agent-chosen decisions, or changed/unreviewed nodes. The Changes tab compares the selected node and its relevant context with the last marked review. Mark one node or the whole design reviewed; save/load the review JSON to carry the baseline across browsers or file locations. Browser storage can be unavailable for local files, so use the review file when persistence matters. Reviews never alter ledger approval or evidence.
-- **Behavior charts:** choose State transitions or Interaction sequence in the chart panel. These render explicit `behavior` records on the selected node, with linked operations where provided.
+- **Behavior charts:** choose State transitions or Interaction sequence in the chart panel. Choose Intended behavior or Observed behavior to render the corresponding explicit model on the selected node, with linked operations where provided.
 - **Deep links:** selected node IDs appear in the URL fragment. Browser back/forward restores the selected node.
 
 On narrow screens, the outline stacks above the reader in Read design; Design map remains a separate full-width view. The Outline button toggles navigation in the reader. Draft, stale, retired, superseded, and uncreated nodes remain visibly distinct. The export derives verification and shows current clause coverage. It does not establish the truth or adequacy of the evidence. Implementation-ready leaves remain distinct from implemented code.
@@ -62,7 +63,7 @@ Choose models that expose the relevant ordering, ownership, failure, and progres
 
 ## Maintaining the renderer
 
-`scripts/stepwise_html.py` embeds a JSON snapshot in `assets/design-view.html`; the template and its `review-ui.js` / `behavior-ui.js` assets are embedded into one HTML file. Keep them bundled with the CLI. Ledger content is inserted as DOM text, never executable HTML.
+`scripts/stepwise_html.py` embeds a JSON snapshot in `assets/design-view.html`; the template and its `review-ui.js`, `behavior-ui.js`, and `existing-ui.js` assets are embedded into one HTML file. Keep them bundled with the CLI. Ledger content is inserted as DOM text, never executable HTML.
 
 Core checks (standard library only):
 

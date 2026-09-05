@@ -9,7 +9,9 @@
     />
     <title>Stepwise · Design reader</title>
     <style>
-      [hidden] { display: none !important; }
+      [hidden] {
+        display: none !important;
+      }
       :root {
         color-scheme: light;
         --ink: #202d3b;
@@ -1171,6 +1173,30 @@
           height: auto;
         }
       }
+      .badge.observation {
+        background: #edf0ff;
+        border-color: #cfd7f0;
+        color: #48629a;
+      }
+      .badge.inference {
+        background: #fff6e4;
+        color: #8a6426;
+      }
+      .graph-edge.observed {
+        stroke: #7383b1;
+        stroke-dasharray: 8 3;
+      }
+      .legend i.observed {
+        border-color: #7383b1;
+        border-top-style: dashed;
+      }
+      .tabs {
+        overflow-x: auto;
+        white-space: nowrap;
+      }
+      .tabs button {
+        flex-shrink: 0;
+      }
     </style>
   </head>
   <body>
@@ -1243,7 +1269,11 @@
             <option value="changed">Changed / unreviewed</option>
             <option value="stale">Stale or failed</option>
             <option value="agent">Agent-chosen decisions</option>
-            <option value="open">Open design work</option></select
+            <option value="open">Open design work</option>
+            <option value="sources">
+              Implementation changed / uninspected
+            </option>
+            <option value="differences">Contract differences</option></select
           ><button id="review-all">Mark all reviewed</button
           ><button id="review-download">Save review file</button
           ><label class="upload"
@@ -1281,6 +1311,10 @@
             <option value="design">Refinement map</option>
             <option value="states">State transitions</option>
             <option value="sequence">Interaction sequence</option></select
+          ><label class="sr-only" for="chart-basis">Behavior model</label
+          ><select id="chart-basis">
+            <option value="intended">Intended behavior</option>
+            <option value="observed">Observed behavior</option></select
           ><button id="zoom-out" aria-label="Zoom out">−</button
           ><output id="zoom-label" aria-live="polite">100%</output
           ><button id="zoom-in" aria-label="Zoom in">+</button
@@ -1304,7 +1338,8 @@
         <div class="chart-footer">
           <div class="legend">
             <span><i></i>Refinement</span><span><i class="reuse"></i>Reuse</span
-            ><span><i class="dependency"></i>Dependency</span>
+            ><span><i class="dependency"></i>Dependency</span
+            ><span><i class="observed"></i>Observed relationship</span>
           </div>
           <div id="chart-selection">No node selected</div>
           <div>Snapshot only · Regenerate with the html command.</div>
@@ -1348,6 +1383,7 @@
       const txt = (value) =>
         typeof value === "string" ? value : JSON.stringify(value);
       const state = (n) => (stateNames.has(n.design) ? n.design : "unresolved");
+      __STEPWISE_EXISTING_JS__;
       const name = (n) =>
         (n.statement || "")
           .split("<-")
@@ -1378,6 +1414,12 @@
         for (const line of n.body || []) {
           if (line.child) addEdge(id, line.child, "child", line.code);
           if (line.reuse) addEdge(id, line.reuse, "reuse", line.code);
+        }
+        for (const cid of n.observed_children || [])
+          addEdge(id, cid, "observed", nodes.get(cid)?.statement || cid);
+        for (const line of n.observation?.body || []) {
+          const cid = line.child || line.reuse;
+          if (cid) addEdge(id, cid, "observed", line.code);
         }
         for (const dep of n.depends || [])
           if (/^D-\d+$/.test(dep)) addEdge(id, dep, "dependency", dep);
@@ -1435,9 +1477,16 @@
           (n) => !["retired", "superseded"].includes(n.design),
         );
         const approved = live.filter((n) => n.design === "approved").length;
+        const adoptionOnly = live.length > 0 && live.every(observedOnly);
+        const observedCount = live.filter(
+          (n) => n.observation && n.source_state === "current",
+        ).length;
         const counts = [
           [live.length, "live nodes"],
-          [approved, "approved"],
+          [
+            adoptionOnly ? observedCount : approved,
+            adoptionOnly ? "current observations" : "approved",
+          ],
           [
             [...nodes.values()].filter((n) => n.placeholder).length,
             "unrefined",
@@ -1459,10 +1508,16 @@
         const denominator =
           live.length + [...nodes.values()].filter((n) => n.placeholder).length;
         const percent = denominator
-          ? Math.round((approved / denominator) * 100)
+          ? Math.round(
+              ((adoptionOnly ? observedCount : approved) / denominator) * 100,
+            )
           : 0;
         label.append(
-          el("span", "", "Design approval"),
+          el(
+            "span",
+            "",
+            adoptionOnly ? "Observed coverage" : "Design approval",
+          ),
           el("span", "", percent + "%"),
         );
         fill.style.width = percent + "%";
@@ -1530,7 +1585,11 @@
           const copy = el("span", "tree-copy");
           copy.append(
             el("strong", "", (reference ? "↗ " : "") + name(n)),
-            el("small", "mono", id + " · " + state(n)),
+            el(
+              "small",
+              "mono",
+              id + " · " + (observedOnly(n) ? "observed-only" : state(n)),
+            ),
           );
           a.append(el("span", "dot " + state(n)), copy);
           r.append(a);
@@ -1560,7 +1619,12 @@
         for (const item of items) ul.append(el("li", "", txt(item)));
         return ul;
       }
-      function renderCode(n, body = n.body || [], historical = false) {
+      function renderCode(
+        n,
+        body = n.body || [],
+        historical = false,
+        caption = null,
+      ) {
         const card = el("div", "card code-card"),
           bar = el("div", "code-bar");
         bar.append(
@@ -1568,11 +1632,12 @@
           el(
             "span",
             "",
-            historical
-              ? "Superseded body"
-              : state(n) === "approved"
-                ? "Approved refinement"
-                : "Unapproved refinement",
+            caption ||
+              (historical
+                ? "Superseded body"
+                : state(n) === "approved"
+                  ? "Approved refinement"
+                  : "Unapproved refinement"),
           ),
         );
         card.append(bar, el("div", "signature mono", n.statement || n.id));
@@ -1627,7 +1692,9 @@
               "empty",
               n.placeholder
                 ? "This operation has not been refined. No contract has been recorded yet."
-                : "No contract has been recorded.",
+                : observedOnly(n)
+                  ? "No intended contract is recorded. See Observed code for the inspected implementation."
+                  : "No contract has been recorded.",
             ),
           );
         into.append(section("Contract", contract, clauses.length + " clauses"));
@@ -1915,14 +1982,27 @@
         crumbs.append(el("span", "mono", selected));
         reader.append(crumbs);
         const heading = el("div", "node-heading");
-        heading.append(el("span", "mono", selected), statusBadge(n));
+        heading.append(
+          el("span", "mono", selected),
+          observedOnly(n)
+            ? el("span", "badge observation", "observed-only")
+            : statusBadge(n),
+        );
         if (n.target) heading.append(el("span", "badge", "terminal"));
         else if (n.body?.length && !n.body.some((l) => l.child || l.reuse))
           heading.append(el("span", "badge", "collapsed leaf"));
         reader.append(
           heading,
           el("h2", "", name(n)),
-          el("p", "lead", n.effect || n.gloss || n.statement || ""),
+          el(
+            "p",
+            "lead",
+            (observedOnly(n) ? n.observation?.effect : null) ||
+              n.effect ||
+              n.gloss ||
+              n.statement ||
+              "",
+          ),
         );
         if (n.implementation_plan)
           heading.append(el("span", "badge", "implementation-ready"));
@@ -1934,11 +2014,20 @@
               baseline.nodes[n.id] ? "changed since review" : "unreviewed",
             ),
           );
+        if (n.source_state)
+          heading.append(
+            el("span", "badge observation", "sources: " + n.source_state),
+          );
         const statuses = el("div", "status-line");
-        for (const [label, value] of [
-          ["Implementation", n.realization || "not-started"],
-          ["Verification", n.verification || "unverified"],
-        ]) {
+        for (const [label, value] of observedOnly(n)
+          ? [
+              ["Source inspection", n.source_state || "unbound"],
+              ["Intended contract", "not specified"],
+            ]
+          : [
+              ["Implementation", n.realization || "not-started"],
+              ["Verification", n.verification || "unverified"],
+            ]) {
           const item = el("span");
           item.append(
             document.createTextNode(label + " · "),
@@ -1957,7 +2046,7 @@
               "Referenced operation · This node has no recorded definition yet. It remains open design work.",
             ),
           );
-        else if (n.design !== "approved")
+        else if (n.design !== "approved" && !observedOnly(n))
           reader.append(
             el(
               "div",
@@ -1977,15 +2066,18 @@
           reader.append(
             el("div", "notice", "Invalidated by: " + n.stale_by.join(", ")),
           );
-        const tabs = el("div", "tabs");
-        tabs.setAttribute("role", "tablist");
-        tabs.setAttribute("aria-label", "Node detail");
-        for (const [key, label] of [
+        const detailTabs = [
           ["overview", "Contract & code"],
+          ...(hasObserved(n) ? [["observed", "Observed code"]] : []),
           ["context", "Context"],
           ["evidence", "Evidence & history"],
           ["review", "Changes"],
-        ]) {
+        ];
+        if (tab === "observed" && !hasObserved(n)) tab = "overview";
+        const tabs = el("div", "tabs");
+        tabs.setAttribute("role", "tablist");
+        tabs.setAttribute("aria-label", "Node detail");
+        for (const [key, label] of detailTabs) {
           const b = el("button", "", label);
           b.setAttribute("role", "tab");
           b.id = "tab-" + key;
@@ -1998,7 +2090,7 @@
             $("tab-" + key).focus();
           };
           b.onkeydown = (event) => {
-            const keys = ["overview", "context", "evidence", "review"];
+            const keys = detailTabs.map(([key]) => key);
             let index = keys.indexOf(key);
             if (event.key === "ArrowRight") index = (index + 1) % keys.length;
             else if (event.key === "ArrowLeft")
@@ -2018,7 +2110,7 @@
         content.id = "detail-content";
         content.setAttribute("role", "tabpanel");
         content.setAttribute("aria-labelledby", "tab-" + tab);
-        ({ overview, context, evidence, review })[tab](n, content);
+        ({ overview, observed, context, evidence, review })[tab](n, content);
         reader.append(content);
         const parents = [...new Set(incoming.get(n.id).map((e) => e.from))];
         if (parents.length) {
@@ -2042,6 +2134,8 @@
       let workspaceView = "read";
       __STEPWISE_BEHAVIOR_JS__;
       function drawGraph() {
+        $("chart-basis").hidden=chartMode==="design";
+        if(chartMode==="design")document.querySelector(".chart-note").textContent="Explore intended refinements and observed relationships. Select a node, then read its contract or inspected implementation.";
         document.querySelector(".chart .panel-heading h2").textContent =
           chartMode === "states"
             ? "STATE MODEL"
@@ -2137,7 +2231,13 @@
               { x: 12, y: 40 },
               name(n).length > 23 ? name(n).slice(0, 22) + "…" : name(n),
             ),
-            svgEl("text", { x: 12, y: 57, class: "graph-status" }, state(n)),
+            svgEl(
+              "text",
+              { x: 12, y: 57, class: "graph-status" },
+              observedOnly(n)
+                ? "observed · " + (n.source_state || "unbound")
+                : state(n),
+            ),
           );
           g.onclick = () => navigate(id);
           g.onkeydown = (e) => {
@@ -2204,6 +2304,8 @@
       function select(id, reveal = false) {
         if (!nodes.has(id)) return;
         selected = id;
+        if (observedOnly(nodes.get(id)) && tab === "overview") tab = "observed";
+        if (observedOnly(nodes.get(id))) $("chart-basis").value = "observed";
         let p = treeParent.get(id);
         while (p) {
           expanded.add(p);
@@ -2305,6 +2407,11 @@
       window.addEventListener("hashchange", fromHash);
       window.addEventListener("resize", () => requestAnimationFrame(fitGraph));
       initReview();
+      $("chart-basis").onchange = () => {
+        drawGraph();
+        highlightGraph();
+        fitGraph();
+      };
       $("chart-mode").onchange = (e) => {
         chartMode = e.target.value;
         drawGraph();

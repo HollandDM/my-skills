@@ -1,22 +1,22 @@
 {
   "name": "constructing-software-stepwise",
-  "version": "1.0.0+codex.20260905041609",
-  "description": "Contract-based software design with interviewed or auto-approved batch refinement and an interactive HTML tree and diagram reader.",
+  "version": "1.0.0+codex.20260905050814",
+  "description": "Stepwise design and reconstruction of existing code, with whole-file source versions, incremental reconciliation, and an interactive design reader.",
   "author": {
     "name": "HollandDM"
   },
   "skills": "./skills/",
   "interface": {
     "displayName": "Stepwise Software Design",
-    "shortDescription": "Refine designs in batches and explore contracts visually.",
-    "longDescription": "Contract-based software design with interviewed or auto-approved batch refinement and an interactive HTML tree and diagram reader.",
+    "shortDescription": "Design software and track existing implementation changes.",
+    "longDescription": "Stepwise design and reconstruction of existing code, with whole-file source versions, incremental reconciliation, and an interactive design reader.",
     "developerName": "HollandDM",
     "category": "Productivity",
     "capabilities": [],
     "defaultPrompt": [
       "Design this system with Stepwise.",
-      "Auto-approve recommendations and refine in batches.",
-      "Render this Stepwise design as an HTML tree."
+      "Adopt this implementation and track changes.",
+      "Reconcile this design against current code."
     ],
     "brandColor": "#007C78"
   },

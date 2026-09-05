@@ -93,8 +93,8 @@
     {
       "name": "constructing-software-stepwise",
       "source": "./constructing-software-stepwise",
-      "description": "Contract-based software design with interviewed or auto-approved batch refinement and an interactive HTML tree and diagram reader.",
-      "version": "1.0.0+codex.20260905041609",
+      "description": "Stepwise design and reconstruction of existing code, with whole-file source versions, incremental reconciliation, and an interactive design reader.",
+      "version": "1.0.0+codex.20260905050814",
       "author": {
         "name": "HollandDM"
       },

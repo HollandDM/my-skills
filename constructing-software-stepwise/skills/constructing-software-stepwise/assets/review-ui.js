@@ -57,15 +57,22 @@ function agentChosen(n) {
   );
 }
 function matchesReview(n) {
+  if (reviewFilter === "sources")
+    return !!n.source_state && n.source_state !== "current";
+  if (reviewFilter === "differences")
+    return n.conformance?.status === "differs";
   if (reviewFilter === "changed") return isChanged(n.id);
   if (reviewFilter === "stale")
     return (
       n.design === "stale" ||
       n.verification === "stale" ||
-      n.verification === "failed"
+      n.verification === "failed" ||
+      n.source_state === "stale" ||
+      n.source_state === "missing"
     );
   if (reviewFilter === "agent") return agentChosen(n);
-  if (reviewFilter === "open") return n.placeholder || n.design === "draft";
+  if (reviewFilter === "open")
+    return n.placeholder || (n.design === "draft" && !observedOnly(n));
   return true;
 }
 function reviewMessage(message) {

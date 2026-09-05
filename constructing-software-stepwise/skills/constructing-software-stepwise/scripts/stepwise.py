@@ -30,6 +30,11 @@ Read-only orientation and HTML export do not mutate the ledger; HTML is an expli
   supersede <dir> D-OLD D-NEW "reason"
   evidence  <dir> D-NNN --kind K --ref R --result pass|fail [--clause LABEL ...] [--note N]
   ready     <dir> D-NNN --approach TEXT --validation TEXT   bounded implementation leaf
+  adopt     <dir> D-NNN ["statement"] [--parent D-NNN]   reconstruct an observational hierarchy
+  bind      <dir> D-NNN PATH [--repo ROOT] [--binding S01] [--symbol NAME] [--lines START:END]
+  observe   <dir> D-NNN JSON [--file FILE] --at TOKEN    record inspected behavior, preserving intended contracts
+  scan      <dir> [--repo ROOT] [--json]                source versions and inspection notifications, read-only
+  reconcile <dir> [--repo ROOT]                        persist source-change signals; observations stay unchanged
   batch     <dir> [--file FILE]                       validate and commit JSON operations together
   entry     <dir> term|fact|scenario "Heading" "definition" [--source S] [--avoid a,b] [--not T] [--example E]
                                                       [--given G --when W --then T --excludes X --settles T]
@@ -60,6 +65,7 @@ from pathlib import Path
 
 from stepwise_state import CONTENT_FIELDS, fingerprint, coverage, refresh, validate_behavior
 from stepwise_transaction import locked, commit
+import stepwise_existing as existing
 
 LEDGER = "ledger.json"
 LOG = ".stepwise.log"
@@ -342,10 +348,13 @@ class Ledger:
         """Nodes whose own design rests on this one: the bodies that call or reuse it, and anyone naming it in `depends`."""
         return sorted(set(self.parents(nid)) | {m for m, v in self.nodes.items() if nid in v.get("depends", [])})
 
+    def observed_parents(self, nid: str) -> list[str]:
+        return sorted(pid for pid, p in self.nodes.items() if nid in p.get("observed_children", []))
+
     def roots(self) -> list[str]:
         """Nothing calls it and nothing rests on it. A node reached only through `depends` — a durable entry point
         another node starts rather than calls — is not a root and not an orphan."""
-        return [nid for nid in self.nodes if not self.dependents(nid)]
+        return [nid for nid in self.nodes if not self.dependents(nid) and not self.observed_parents(nid)]
 
     def frontier(self) -> dict[str, tuple[str, str]]:
         out: dict[str, tuple[str, str]] = {}
@@ -430,11 +439,15 @@ class Ledger:
 
 
 def refresh_ledger(led: Ledger) -> None:
+    led.source_scan = existing.refresh_sources(led)
     adrs = {a["id"]: a for a in led.adrs()}
     for nid, node in led.nodes.items():
         seen, context, queue = {nid}, {}, [nid]
         while queue:
-            current = led.nodes[queue.pop()]
+            current_id = queue.pop()
+            current = led.nodes[current_id]
+            if current.get("bindings") or current.get("observation") or current.get("observed_children"):
+                context["source:" + current_id] = current.get("source_scope_hash")
             refs = [*current.get("depends", []), *[it.get("child") or it.get("reuse") for it in current.get("body", [])]]
             for ref in refs:
                 if not ref or ref in seen:
@@ -452,6 +465,7 @@ def refresh_ledger(led: Ledger) -> None:
                     context[ref] = "unresolved"
         node["evidence_context"] = hashlib.sha256(json.dumps(context, sort_keys=True).encode()).hexdigest()
     refresh(led.nodes)
+    existing.refresh_assessments(led, led.source_scan)
 
 
 def node_unknowns(n: dict) -> list[str]:
@@ -586,6 +600,23 @@ def render_node(led: Ledger, nid: str) -> str:
             heads = dict.fromkeys(it["target"].split(":", 1)[0].strip() for it in n["body"] if it.get("target"))
             L.append("Collapsed leaf. Targets: " + ", ".join(f"`{h}`" for h in heads))
         L += [f"Adaptation: {a}" for a in n.get("adaptation", [])]
+    if n.get("bindings") or n.get("observation") or n.get("origin") == "existing-code":
+        L += ["", "## Existing implementation", f"Sources: {n.get('source_state', 'unbound')} · Conformance: {n.get('conformance', {}).get('status', 'unassessed')}",
+              f"Current implementation: {n.get('current_implementation_version', 'unknown')}",
+              f"Recorded implementation revision: {n.get('implementation_revision', 0)} · {n.get('implementation_version', 'none')}"]
+        for sid, b in n.get("bindings", {}).items():
+            L.append(f"- {sid}: `{b['path']}`" + (f" · {b['symbol']}" if b.get('symbol') else "") + f" · SHA-256 {b['baseline_sha256']}")
+        if n.get("observed_children"):
+            L += ["", "Observed children: " + ", ".join(link_ref(led, cid, p) for cid in n['observed_children'])]
+        if obs := n.get("observation"):
+            L += ["", "### Observed behavior", obs['effect'], f"Inspected: {obs['date']} by {obs['by']} · implementation {obs.get('implementation_version', 'unknown')}"]
+            L += [f"- {c['basis']}: {c['text']} (sources: {', '.join(c['sources'])})" for c in obs['claims']]
+            if obs.get("body"):
+                L += ["", "```pseudo", *body_text(obs['body']), "```"]
+            if obs.get("unknowns"):
+                L += ["", "### Unknowns", *[f"- {v}" for v in obs['unknowns']]]
+            for clause, value in obs.get("comparisons", {}).items():
+                L.append(f"- Intended {clause}: {value['status']} — {value['reason']}")
     if n.get("implementation_plan"):
         L += ["", "## Implementation plan", *[f"- {k.title()}: {v}" for k, v in n["implementation_plan"].items()]]
     if n.get("behavior"):
@@ -670,6 +701,11 @@ def render_design(led: Ledger) -> str:
     L += ["", "## Program", "", "```pseudo", *main, "```"]
     if procs:
         L += ["", "### Procedures", "", "```pseudo", *procs, "```"]
+    observed = [(nid, n) for nid, n in led.nodes.items() if n.get("origin") == "existing-code" or n.get("observation")]
+    if observed:
+        L += ["", "## Observed implementation", "", "| Node | Observed children | Source state | Conformance |", "| --- | --- | --- | --- |"]
+        L += [f"| [{nid}](nodes/{nid}.md) | {', '.join(n.get('observed_children', [])) or '-'} | {n.get('source_state', 'unbound')} | {n.get('conformance', {}).get('status', 'unassessed')} |" for nid, n in observed]
+        L += ["", "Observed behavior is descriptive; it does not approve an intended contract. Use `scan` to find changes and unfinished inspection."]
     return "\n".join(L) + "\n"
 
 
@@ -727,6 +763,7 @@ def check(led: Ledger, *, views: bool = True) -> None:
     E = led.errors.append
     W = led.warnings.append
     nodes = led.nodes
+    led.errors.extend(existing.validate(led))
     fr = led.frontier()
     live_roots = [r for r in led.roots() if nodes[r]["design"] not in ("retired", "superseded")]
     if nodes and len(live_roots) != 1:
@@ -902,11 +939,11 @@ def hist(n: dict, event: str, reason: str = "") -> None:
 def v_frontier(led: Ledger, a) -> int:
     for fid, (stmt, parent) in sorted(led.frontier().items()):
         print(f"{fid}  frontier  {stmt}  (child of {parent})")
-    drafts = [nid for nid, n in led.nodes.items() if n["design"] == "draft"]
+    drafts = [nid for nid, n in led.nodes.items() if n["design"] == "draft" and (n.get("origin") != "existing-code" or n.get("contract") or led.dependents(nid))]
     for nid in drafts:
         print(f"{nid}  {led.status(nid)}  {led.nodes[nid]['statement']}")
     if not led.frontier() and not drafts:
-        print("frontier empty — every leaf terminal or collapsed" if led.nodes else 'no nodes — `new <dir> D-000 "outcome <- f(x)"`')
+        print("design frontier empty; use scan for existing-code observation work" if any(n.get("origin") == "existing-code" for n in led.nodes.values()) else "frontier empty — check approval and leaf readiness" if led.nodes else 'no nodes — `new <dir> D-000 "outcome <- f(x)"`')
     return 0
 
 
@@ -1495,6 +1532,57 @@ def v_adr(led: Ledger, a) -> int:
     return fail("adr <dir> new ... | accept ADR-NNNN | supersede ADR-OLD ADR-NEW | constrains ADR-NNNN --constrains D-NNN")
 
 
+def v_adopt(led: Ledger, a) -> int:
+    if a.statement and not fn_of(a.statement):
+        return fail("an adopted statement needs an abstract call such as result <- process(input)")
+    return finish(led, existing.adopt(led, a.id, a.statement, a.parent))
+
+
+def v_bind(led: Ledger, a) -> int:
+    if need(led, a.id) is None:
+        return 1
+    return finish(led, existing.bind(led, a.id, a.path, root=a.repo, binding_id=a.binding, symbol=a.symbol, lines=a.lines))
+
+
+def v_unbind(led: Ledger, a) -> int:
+    if need(led, a.id) is None:
+        return 1
+    return finish(led, existing.unbind(led, a.id, a.binding, a.reason))
+
+
+def v_observe(led: Ledger, a) -> int:
+    if need(led, a.id) is None:
+        return 1
+    if bool(a.file) == bool(a.payload):
+        return fail("observe needs either a JSON payload argument or --file")
+    payload = json.loads(Path(a.file).read_text() if a.file else a.payload)
+    refresh_ledger(led)
+    return finish(led, existing.observe(led, a.id, payload, a.at, by=a.by, parse_body=parse_body, fn_of=fn_of))
+
+
+def scan_text(report: dict) -> str:
+    lines = []
+    for nid, row in report['nodes'].items():
+        lines.append(f"{nid} {row['state']} · conformance {row['conformance']['status']} · implementation {(row['implementation_version'] or 'unbound')[:12]} — {row['reason']}")
+    lines.append(f"Inspection pending: {', '.join(report['pending']) or 'none'}; assessment pending: {', '.join(report['assessment_pending']) or 'none'}; recorded differences: {', '.join(report['differences']) or 'none'}")
+    return "\n".join(lines)
+
+
+def v_scan(led: Ledger, a) -> int:
+    report = existing.scan(led, a.repo)
+    print(json.dumps(report, indent=2) if a.json else scan_text(report))
+    return 0
+
+
+def v_reconcile(led: Ledger, a) -> int:
+    if a.repo:
+        existing.set_repository(led, a.repo)
+    report = existing.refresh_sources(led)
+    for nid, row in report['nodes'].items():
+        existing.record_version(led.nodes[nid], row, report['commit'])
+    return finish(led, scan_text(report))
+
+
 def v_sync(led: Ledger, a) -> int:
     return finish(led)
 
@@ -1504,7 +1592,12 @@ def v_status(led: Ledger, a) -> int:
         state = n["design"]
         if state in ("superseded", "retired") and not a.all:
             continue
-        print(f"{nid}  {led.status(nid):28}  {NEXT_STEP[state]}")
+        if n.get("origin") == "existing-code" and not n.get("contract") and not led.dependents(nid):
+            print(f"{nid}  observed-only ({n.get('source_state', 'unbound')})  inspect sources and record observations; no intended contract required")
+        else:
+            print(f"{nid}  {led.status(nid):28}  {NEXT_STEP[state]}")
+        if n.get("bindings") and n.get("source_state") != "current":
+            print(f"  implementation notification: {n.get('source_state')} — `scan <dir> --json` for current versions and inspection tokens")
     for fid, (stmt, parent) in sorted(led.frontier().items()):
         print(f"{fid}  {'frontier':28}  `new <dir> {fid}` — {stmt} (child of {parent})")
     return 0
@@ -1520,6 +1613,8 @@ def v_html(led: Ledger, a) -> int:
     try:
         adrs = [{"id": adr["id"], "text": "\n".join(adr["lines"])} for adr in led.adrs()]
         snapshot = copy.deepcopy(led.data)
+        for nid, row in led.source_scan["nodes"].items():
+            snapshot["nodes"][nid]["source_report"] = {**row, "commit": led.source_scan.get("commit")}
         for n in snapshot["nodes"].values():
             n["coverage"] = coverage(n)
         document = render_html(snapshot, title=led.title, exported_at=now(), adrs=adrs, review_key=hashlib.sha256(str(led.path).encode()).hexdigest())
@@ -1555,6 +1650,12 @@ def parser() -> argparse.ArgumentParser:
     add("html", output={"default": "", "metavar": "FILE", "help": "HTML destination (default: <dir>/DESIGN.html)"})
     add("frontier"); add("sync"); add("check"); add("show", "id"); add("status", all={"action": "store_true"})
     add("new", "id", ("statement", {"nargs": "?"}))
+    add("adopt", "id", ("statement", {"nargs": "?"}), parent={"default": None})
+    add("bind", "id", "path", repo={"default": None}, binding={"default": None}, symbol={"default": ""}, lines={"default": None})
+    add("unbind", "id", "binding", reason={"required": True})
+    add("observe", "id", ("payload", {"nargs": "?"}), file={"default": ""}, at={"required": True}, by={"default": "agent inspection"})
+    add("scan", repo={"default": None}, json={"action": "store_true"})
+    add("reconcile", repo={"default": None})
     add("set", "id", "field", ("value", {"nargs": "*"}))
     add("body", "id", file={"default": ""}, text={"default": None})
     add("batch", file={"default": ""})
@@ -1574,11 +1675,11 @@ def parser() -> argparse.ArgumentParser:
     return ap
 
 
-READ_ONLY = {"check", "show", "frontier", "status", "html"}
+READ_ONLY = {"check", "show", "frontier", "status", "html", "scan"}
 
 
 def dispatch(led: Ledger, a) -> int:
-    for key in ("id", "new_id"):
+    for key in ("id", "new_id", "parent"):
         if getattr(a, key, None) is not None and not is_node_id(getattr(a, key)):
             return fail(f"{getattr(a, key)!r}: expected a D-NNN node ID")
     if a.cmd not in READ_ONLY | {"batch"}:
@@ -1623,6 +1724,9 @@ def finalize(led: Ledger, command: str) -> int:
             hist(n, "stale", "derived dependencies changed")
             cascade_stale(led, nid, "derived dependencies changed")
     refresh_ledger(led)
+    for nid, row in led.source_scan["nodes"].items():
+        if not led.nodes[nid].get("implementation_version"):
+            existing.record_version(led.nodes[nid], row, led.source_scan["commit"])
     check(led, views=False)
     if led.errors:
         return report(led, "No changes committed. Resolve related changes together with `batch`.")
@@ -1632,6 +1736,8 @@ def finalize(led: Ledger, command: str) -> int:
     led.data["nodes"] = dict(sorted(led.nodes.items()))
     files[led.path] = json.dumps(led.data, indent=1, ensure_ascii=False) + "\n"
     commit(led.dir, files)
+    if led.source_scan["pending"] and command != "reconcile":
+        print("Implementation inspection pending: " + ", ".join(led.source_scan["pending"]) + "; run scan --json")
     return report(led, led.messages[-1] if led.messages else command)
 
 
@@ -1644,7 +1750,7 @@ def main(argv: list[str]) -> int:
         with locked(d):
             led = Ledger(d)
             if not led.data:
-                if a.cmd in ("new", "entry", "meta", "batch"):
+                if a.cmd in ("new", "entry", "meta", "batch", "adopt"):
                     led = Ledger.create(d, d.name.replace("-", " ").title())
                 else:
                     return fail(f"{d / LEDGER} missing; start with `new` or `batch`")

@@ -11,6 +11,6 @@ def render_html(ledger: dict, *, title: str, exported_at: str, adrs: list[dict],
     encoded = json.dumps(payload, ensure_ascii=True).replace("<", "\\u003c").replace(">", "\\u003e").replace("&", "\\u0026")
     template = Path(__file__).resolve().parent.parent / "assets" / "design-view.html"
     document = template.read_text(encoding="utf-8")
-    for marker, filename in [("__STEPWISE_REVIEW_JS__", "review-ui.js"), ("__STEPWISE_BEHAVIOR_JS__", "behavior-ui.js")]:
+    for marker, filename in [("__STEPWISE_REVIEW_JS__", "review-ui.js"), ("__STEPWISE_BEHAVIOR_JS__", "behavior-ui.js"), ("__STEPWISE_EXISTING_JS__", "existing-ui.js")]:
         document = document.replace(marker, (template.parent / filename).read_text(encoding="utf-8"), 1)
     return document.replace("__STEPWISE_DATA__", encoded, 1)

@@ -24,6 +24,12 @@ The ledger records how child operations satisfy parent contracts, what was appro
 
 JSON `set` accepts the prose fields, contract, metadata arrays, dependencies, implementation plan, behavior, and realization. Supplied arrays and nested objects replace their whole field. Approval content includes the statement, contract, body, target, adaptation, decisions, dependencies, plans, and behavior. Changes require `reopen`; historical retired or superseded content cannot be silently edited. Reopening a retired node explicitly revives it.
 
+## Observed implementations
+
+A node may additionally contain `bindings`, `observed_children`, `observation`, `observation_history`, `binding_history`, and implementation-version history. These are descriptive records, outside the approved intended-content fingerprint. They are maintained by `adopt`, `bind`, `observe`, and `reconcile`, not ordinary `set`.
+
+Whole-file source fingerprints feed the evidence dependency context. A source change can invalidate verification without rewriting an approved contract. `implementation_version` and `implementation_revision` record recognized code versions; `current_implementation_version` and `source_state` are refreshed when inspecting the ledger. The observation keeps the exact inspected version. `conformance` compares current observations with intended clauses and never promotes verification. See [existing-work.md](existing-work.md) for these workflows and their completion rules.
+
 ## Refinement and leaves
 
 Use a composite when separate operations or obligations need separate reasoning. There are no fixed clause, statement, or fan-out caps. Explain the relevant data flow, failures, cleanup, invariants, progress, and budgets. A large body is a signal to inspect its responsibilities, not a reason to split mechanically.
