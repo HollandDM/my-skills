@@ -46,6 +46,12 @@ class HtmlBrowserTests(unittest.TestCase):
         self.page.goto(path.as_uri())
         self.page.wait_for_function("document.querySelector('#reader h2') !== null")
 
+    def map_view(self):
+        self.page.get_by_role("tab", name="Design map", exact=True).click()
+
+    def read_view(self):
+        self.page.get_by_role("tab", name="Read design", exact=True).click()
+
     def selected(self, node):
         self.page.wait_for_function("id => document.querySelector('#reader .node-heading .mono')?.textContent === id", arg=node)
 
@@ -58,8 +64,10 @@ class HtmlBrowserTests(unittest.TestCase):
         self.selected("D-000")
         self.page.locator('#tree a[href="#D-001"]').first.click()
         self.selected("D-001")
+        self.map_view()
         self.page.locator('#graph g[data-node-id="D-002"]').click()
         self.selected("D-002")
+        self.page.get_by_role("button", name="Read selected node").click()
         self.assertIn("Stale", self.page.locator("#reader .notice").first.inner_text())
         self.page.locator('#reader .code-ref[href="#D-001"]').click()
         self.selected("D-001")
@@ -89,17 +97,23 @@ class HtmlBrowserTests(unittest.TestCase):
 
     def test_zoom_keyboard_tabs_and_mobile(self):
         self.open()
+        self.map_view()
+        self.assertGreater(self.page.locator("#graph-viewport").bounding_box()["width"], 1200)
+        self.assertFalse(self.page.locator("#reader").is_visible())
         before = self.page.locator("#zoom-label").inner_text()
         self.page.get_by_role("button", name="Zoom in", exact=True).click()
         self.assertNotEqual(before, self.page.locator("#zoom-label").inner_text())
         self.page.get_by_role("button", name="Fit", exact=True).click()
         self.page.get_by_role("button", name="Focus selected").click()
+        self.read_view()
         self.page.get_by_role("tab", name="Contract & code").focus()
         self.page.keyboard.press("ArrowRight")
         self.assertEqual(self.page.get_by_role("tab", name="Context", exact=True).get_attribute("aria-selected"), "true")
         self.page.set_viewport_size({"width": 390, "height": 844})
+        self.map_view()
         self.assertTrue(self.page.locator("#graph-viewport").is_visible())
         self.assertTrue(self.page.evaluate("document.documentElement.scrollWidth <= window.innerWidth"))
+        self.read_view()
         self.page.get_by_role("button", name="Outline", exact=True).click()
         self.assertFalse(self.page.locator("#outline").is_visible())
         self.page.get_by_role("button", name="Outline", exact=True).click()
@@ -125,6 +139,7 @@ class HtmlBrowserTests(unittest.TestCase):
         self.selected("D-001")
         self.page.reload()
         self.selected("D-001")
+        self.map_view()
         self.page.locator('#graph g[data-node-id="D-000"]').focus()
         self.page.keyboard.press("Enter")
         self.selected("D-000")
@@ -136,14 +151,61 @@ class HtmlBrowserTests(unittest.TestCase):
         data["nodes"]["D-002"]["design"] = "superseded"
         data["nodes"]["D-002"]["superseded_by"] = "D-001"
         self.open(data)
+        self.map_view()
         for node, status in [("D-000", "draft"), ("D-001", "retired"), ("D-002", "superseded"), ("D-003", "unresolved")]:
             self.page.locator(f'#graph g[data-node-id="{node}"]').click()
             self.selected(node)
             self.assertEqual(self.page.locator("#reader .badge").first.inner_text(), status)
         self.page.locator('#graph g[data-node-id="D-002"]').click()
         self.selected("D-002")
+        self.read_view()
         self.page.locator("#reader section").filter(has=self.page.get_by_role("heading", name="Replacement", exact=True)).get_by_role("link", name="D-001").click()
         self.selected("D-001")
+
+    def test_review_filters_baseline_and_changed_fields(self):
+        self.open()
+        self.page.locator("#review-filter").select_option("stale")
+        self.assertEqual(self.page.locator("#node-count").inner_text(), "1 matches")
+        self.page.locator("#review-filter").select_option("agent")
+        self.assertEqual(self.page.locator("#node-count").inner_text(), "1 matches")
+        self.page.locator("#review-filter").select_option("all")
+        self.page.get_by_role("button", name="Mark all reviewed").click()
+        self.page.locator("#review-filter").select_option("changed")
+        self.assertEqual(self.page.locator("#node-count").inner_text(), "0 matches")
+        self.page.get_by_role("tab", name="Changes", exact=True).click()
+        self.assertIn("No changes since your last review", self.page.locator("#detail-content").inner_text())
+        changed = fixture()
+        changed["nodes"]["D-000"]["contract"]["post"] = "One result is persisted before notification."
+        self.open(changed)
+        self.page.locator("#review-filter").select_option("changed")
+        self.assertEqual(self.page.locator("#node-count").inner_text(), "1 matches")
+        self.page.get_by_role("tab", name="Changes", exact=True).click()
+        self.assertIn("contract.post", self.page.locator("#detail-content").inner_text())
+        self.page.locator("#detail-content summary").filter(has_text="contract.post").click()
+        self.assertIn("One result is persisted before notification.", self.page.locator("#detail-content").inner_text())
+        with self.page.expect_download() as download:
+            self.page.get_by_role("button", name="Save review file").click()
+        self.assertEqual(download.value.suggested_filename, "stepwise-review.json")
+
+    def test_explicit_state_and_sequence_charts(self):
+        data = fixture()
+        data["nodes"]["D-000"]["behavior"] = {
+            "states": [{"id":"queued","label":"Queued","initial":True},{"id":"done","label":"Completed","terminal":True}],
+            "transitions": [{"from":"queued","to":"done","event":"finish","guard":"durable"}],
+            "participants": [{"id":"caller","label":"Caller"},{"id":"worker","label":"Worker","node":"D-001"}],
+            "messages": [{"from":"caller","to":"worker","label":"Validate","node":"D-001"}, {"from":"worker","to":"caller","label":"Result","kind":"return"}]}
+        self.open(data)
+        self.map_view()
+        self.page.locator("#chart-mode").select_option("states")
+        self.assertIn("2 states", self.page.locator("#edge-count").inner_text())
+        self.assertIn("finish [durable]", self.page.locator("#graph").text_content())
+        self.page.locator("#chart-mode").select_option("sequence")
+        self.assertIn("2 messages", self.page.locator("#edge-count").inner_text())
+        self.page.locator('#graph text').filter(has_text="1. Validate").click()
+        self.selected("D-001")
+        self.assertIn("No interaction sequence recorded", self.page.locator("#graph").text_content())
+        self.page.locator("#chart-mode").select_option("design")
+        self.assertEqual(self.page.locator("#graph .graph-node").count(), 4)
 
     def test_empty_design(self):
         data = fixture()

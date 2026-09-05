@@ -9,6 +9,7 @@
     />
     <title>Stepwise · Design reader</title>
     <style>
+      [hidden] { display: none !important; }
       :root {
         color-scheme: light;
         --ink: #202d3b;
@@ -931,6 +932,245 @@
           color: #385565;
         }
       }
+      .review-tools {
+        padding: 0 14px 12px;
+        display: flex;
+        gap: 6px;
+        flex-wrap: wrap;
+      }
+      .review-tools button,
+      .review-tools label {
+        font-size: 10px;
+      }
+      .review-tools select {
+        width: 100%;
+        padding: 8px;
+        border: 1px solid var(--line);
+        border-radius: 6px;
+        background: white;
+        color: var(--ink);
+      }
+      .review-tools label.upload {
+        border: 1px solid var(--line);
+        border-radius: 6px;
+        padding: 7px;
+        background: white;
+        cursor: pointer;
+      }
+      .review-message {
+        font-size: 10px;
+        color: var(--muted);
+        padding: 0 14px 10px;
+        line-height: 1.5;
+      }
+      .change-record {
+        margin: 14px 0;
+        padding: 14px;
+      }
+      .change-record summary {
+        cursor: pointer;
+        font-size: 12px;
+        font-weight: 650;
+        margin-bottom: 8px;
+      }
+      .change-record pre {
+        font-size: 11px;
+        white-space: pre-wrap;
+        overflow-wrap: anywhere;
+        line-height: 1.7;
+      }
+      .badge.changed {
+        background: #eaf0ff;
+        color: #385782;
+      }
+      .behavior-edge {
+        fill: none;
+        stroke: #007c78;
+        stroke-width: 1.6;
+      }
+      .behavior-edge.returning {
+        stroke-dasharray: 6 4;
+      }
+      .behavior-label {
+        fill: #36564e;
+        font:
+          12px Arial,
+          sans-serif;
+        paint-order: stroke;
+        stroke: #fcfdfb;
+        stroke-width: 4px;
+      }
+      .behavior-state rect {
+        fill: white;
+        stroke: #007c78;
+        stroke-width: 1.4;
+      }
+      .behavior-state text {
+        fill: #203e35;
+        font:
+          12px Arial,
+          sans-serif;
+      }
+      .behavior-state {
+        cursor: pointer;
+      }
+      .lifeline {
+        fill: none;
+        stroke: #aabcb4;
+        stroke-dasharray: 5 5;
+      }
+      .chart-tools select {
+        max-width: 100%;
+        border: 1px solid var(--line);
+        border-radius: 6px;
+        padding: 6px;
+        color: var(--ink);
+        background: white;
+      }
+      .coverage {
+        font-size: 11px;
+        line-height: 1.8;
+        padding: 12px;
+        border-left: 3px solid var(--teal);
+        background: #e9f3ee;
+        margin-bottom: 16px;
+      }
+      @media (max-width: 700px) {
+        .tabs {
+          gap: 10px;
+        }
+        .tabs button {
+          font-size: 11px;
+        }
+        .review-tools {
+          padding-bottom: 6px;
+        }
+      }
+
+      .workspace-tabs {
+        display: flex;
+        align-items: stretch;
+        gap: 20px;
+        padding: 0 26px;
+        height: 48px;
+        border-bottom: 1px solid var(--line);
+        background: white;
+      }
+      .workspace-tabs button {
+        border: 0;
+        border-bottom: 2px solid transparent;
+        border-radius: 0;
+        background: none;
+        color: var(--muted);
+        padding: 12px 2px;
+        font-size: 13px;
+      }
+      .workspace-tabs button[aria-selected="true"] {
+        color: var(--teal);
+        border-bottom-color: var(--teal);
+        font-weight: 650;
+      }
+      .workspace[data-view="read"] {
+        display: grid;
+        grid-template-columns: 255px minmax(0, 1fr);
+        height: calc(100vh - 206px);
+      }
+      .workspace[data-view="read"] .chart {
+        display: none;
+      }
+      .workspace[data-view="map"] {
+        display: block;
+        height: calc(100vh - 206px);
+        min-height: 420px;
+      }
+      .workspace[data-view="map"] .outline,
+      .workspace[data-view="map"] .reader {
+        display: none;
+      }
+      .workspace[data-view="map"] .chart {
+        display: flex;
+        height: 100%;
+        border-left: 0;
+        border-top: 0;
+        grid-column: auto;
+      }
+      .workspace[data-view="map"] .chart .panel-heading {
+        padding: 16px 26px 8px;
+      }
+      .workspace[data-view="map"] .chart-note {
+        padding: 0 26px 12px;
+      }
+      .workspace[data-view="map"] .chart-tools {
+        padding: 0 26px 14px;
+      }
+      .workspace[data-view="map"] .graph-viewport {
+        min-height: 180px;
+      }
+      .workspace[data-view="map"] #graph {
+        margin-inline: auto;
+      }
+      .workspace[data-view="read"] .reader {
+        max-width: 1250px;
+        width: 100%;
+        justify-self: center;
+      }
+      @media (max-width: 1150px) {
+        .workspace[data-view="read"] {
+          grid-template-columns: 225px minmax(0, 1fr);
+          height: calc(100vh - 206px);
+          align-items: stretch;
+        }
+        .workspace[data-view="read"] .outline {
+          position: static;
+          height: auto;
+          grid-row: auto;
+        }
+        .workspace[data-view="read"] .reader {
+          overflow: auto;
+          min-height: 0;
+        }
+      }
+      @media (max-width: 700px) {
+        .workspace-tabs {
+          padding-inline: 16px;
+        }
+        .workspace[data-view="read"] {
+          display: block;
+          height: auto;
+        }
+        .workspace[data-view="read"] .outline {
+          max-height: 360px;
+        }
+        .workspace[data-view="read"] .reader {
+          min-height: 420px;
+          overflow: visible;
+        }
+        .workspace[data-view="map"] {
+          height: calc(100dvh - 192px);
+          min-height: 440px;
+        }
+        .workspace[data-view="map"] .chart .panel-heading,
+        .workspace[data-view="map"] .chart-note,
+        .workspace[data-view="map"] .chart-tools {
+          padding-left: 16px;
+          padding-right: 16px;
+        }
+      }
+      @media print {
+        .workspace-tabs {
+          display: none;
+        }
+        .workspace[data-view="read"] {
+          display: block;
+          height: auto;
+        }
+        .workspace[data-view="map"] {
+          height: auto;
+        }
+        .workspace[data-view="map"] .chart {
+          height: auto;
+        }
+      }
     </style>
   </head>
   <body>
@@ -950,7 +1190,32 @@
       </button>
     </header>
     <div class="summary" id="summary" aria-label="Design status summary"></div>
-    <main class="workspace">
+    <nav class="workspace-tabs" role="tablist" aria-label="Preview workspace">
+      <button
+        id="view-read"
+        role="tab"
+        aria-selected="true"
+        aria-controls="workspace"
+      >
+        Read design
+      </button>
+      <button
+        id="view-map"
+        role="tab"
+        aria-selected="false"
+        aria-controls="workspace"
+        tabindex="-1"
+      >
+        Design map
+      </button>
+    </nav>
+    <main
+      class="workspace"
+      id="workspace"
+      data-view="read"
+      role="tabpanel"
+      aria-labelledby="view-read"
+    >
       <aside class="outline" id="outline" aria-label="Design outline">
         <div class="panel-heading">
           <h2>OUTLINE</h2>
@@ -971,6 +1236,25 @@
           ><button id="collapse-all">Collapse all</button
           ><button id="clear-search" hidden>Clear search</button>
         </div>
+        <div class="review-tools">
+          <label class="sr-only" for="review-filter">Filter nodes</label
+          ><select id="review-filter">
+            <option value="all">All nodes</option>
+            <option value="changed">Changed / unreviewed</option>
+            <option value="stale">Stale or failed</option>
+            <option value="agent">Agent-chosen decisions</option>
+            <option value="open">Open design work</option></select
+          ><button id="review-all">Mark all reviewed</button
+          ><button id="review-download">Save review file</button
+          ><label class="upload"
+            >Load review file<input
+              id="review-upload"
+              type="file"
+              accept="application/json"
+              class="sr-only"
+          /></label>
+        </div>
+        <p id="review-message" class="review-message" aria-live="polite"></p>
         <nav class="tree" id="tree" aria-label="Refinement tree"></nav>
         <div class="outline-footer">
           Select any operation to read its contract.<br />Shared references link
@@ -992,11 +1276,17 @@
           pseudocode.
         </p>
         <div class="chart-tools">
-          <button id="zoom-out" aria-label="Zoom out">−</button
+          <label class="sr-only" for="chart-mode">Chart type</label
+          ><select id="chart-mode">
+            <option value="design">Refinement map</option>
+            <option value="states">State transitions</option>
+            <option value="sequence">Interaction sequence</option></select
+          ><button id="zoom-out" aria-label="Zoom out">−</button
           ><output id="zoom-label" aria-live="polite">100%</output
           ><button id="zoom-in" aria-label="Zoom in">+</button
           ><button id="fit-graph">Fit</button
-          ><button id="focus-node">Focus selected</button>
+          ><button id="focus-node">Focus selected</button
+          ><button id="read-selected">Read selected node</button>
         </div>
         <div
           class="graph-viewport"
@@ -1127,6 +1417,7 @@
       let tab = "overview";
       let query = "";
       const expanded = new Set(forest);
+      __STEPWISE_REVIEW_JS__;
       const searchIndex = new Map(
         [...nodes].map(([id, n]) => [id, JSON.stringify(n).toLowerCase()]),
       );
@@ -1182,7 +1473,9 @@
       function renderTree() {
         const matches = new Set(
           [...nodes.keys()].filter(
-            (id) => !query || searchIndex.get(id).includes(query),
+            (id) =>
+              (!query || searchIndex.get(id).includes(query)) &&
+              matchesReview(nodes.get(id)),
           ),
         );
         const visible = new Set(matches);
@@ -1194,16 +1487,17 @@
           }
         }
         $("tree").replaceChildren();
-        $("node-count").textContent = query
-          ? matches.size + " matches"
-          : nodes.size + " nodes";
+        $("node-count").textContent =
+          query || reviewFilter !== "all"
+            ? matches.size + " matches"
+            : nodes.size + " nodes";
         $("clear-search").hidden = !query;
         if (!matches.size) {
           $("tree").append(
             el(
               "div",
               "empty",
-              "No matching nodes. Try an ID, contract phrase, or function name.",
+              "No matching nodes. Try another search or review filter.",
             ),
           );
           return;
@@ -1308,6 +1602,16 @@
         return card;
       }
       function overview(n, into) {
+        if (n.implementation_plan)
+          into.append(
+            section(
+              "Implementation-ready",
+              list([
+                "Approach: " + n.implementation_plan.approach,
+                "Validation: " + n.implementation_plan.validation,
+              ]),
+            ),
+          );
         const clauses = Object.entries(n.contract || {}),
           contract = el("div", "card");
         if (clauses.length)
@@ -1455,6 +1759,19 @@
           );
       }
       function evidence(n, into) {
+        if (n.coverage)
+          into.append(
+            el(
+              "div",
+              "coverage",
+              "Covered: " +
+                (n.coverage.covered.join(", ") || "none") +
+                " · Missing: " +
+                (n.coverage.missing.join(", ") || "none") +
+                " · Failed: " +
+                (n.coverage.failed.join(", ") || "none"),
+            ),
+          );
         into.append(
           el(
             "p",
@@ -1479,6 +1796,16 @@
             el("p", "", ev.ref || ""),
             el("small", "", ev.date || ""),
           );
+          r.append(
+            el(
+              "small",
+              "",
+              "Clauses: " +
+                ((ev.clauses || []).join(", ") || "unscoped") +
+                " · Approval revision: " +
+                (ev.revision ?? "legacy"),
+            ),
+          );
           if (ev.note) r.append(el("p", "", ev.note));
           card.append(r);
         });
@@ -1498,6 +1825,57 @@
               ),
             ),
           );
+        if (n.revisions?.length) {
+          const archive = el("div");
+          for (const rev of [...n.revisions].reverse()) {
+            const detail = el("details", "card change-record"),
+              old = rev.content || {};
+            detail.append(
+              el(
+                "summary",
+                "",
+                "Approval revision " + rev.revision + " · " + rev.date,
+              ),
+              el("p", "lead", rev.reason || ""),
+            );
+            if (old.statement) detail.append(el("p", "mono", old.statement));
+            if (old.contract)
+              detail.append(
+                section(
+                  "Previous contract",
+                  list(
+                    Object.entries(old.contract).map(([k, v]) => k + ": " + v),
+                  ),
+                ),
+              );
+            if (old.body?.length)
+              detail.append(
+                renderCode(
+                  { ...old, id: n.id, design: "approved" },
+                  old.body,
+                  true,
+                ),
+              );
+            if (old.target)
+              detail.append(section("Previous target", list([old.target])));
+            for (const field of ["adaptation", "decisions", "composition"])
+              if (old[field]?.length)
+                detail.append(section(field, list(old[field])));
+            if (old.implementation_plan)
+              detail.append(
+                section(
+                  "Previous implementation plan",
+                  list(
+                    Object.entries(old.implementation_plan).map(
+                      ([k, v]) => k + ": " + v,
+                    ),
+                  ),
+                ),
+              );
+            archive.append(detail);
+          }
+          into.append(section("Earlier approvals", archive));
+        }
         if (n.superseded) {
           into.append(
             section(
@@ -1546,6 +1924,16 @@
           el("h2", "", name(n)),
           el("p", "lead", n.effect || n.gloss || n.statement || ""),
         );
+        if (n.implementation_plan)
+          heading.append(el("span", "badge", "implementation-ready"));
+        if (isChanged(n.id))
+          heading.append(
+            el(
+              "span",
+              "badge changed",
+              baseline.nodes[n.id] ? "changed since review" : "unreviewed",
+            ),
+          );
         const statuses = el("div", "status-line");
         for (const [label, value] of [
           ["Implementation", n.realization || "not-started"],
@@ -1596,6 +1984,7 @@
           ["overview", "Contract & code"],
           ["context", "Context"],
           ["evidence", "Evidence & history"],
+          ["review", "Changes"],
         ]) {
           const b = el("button", "", label);
           b.setAttribute("role", "tab");
@@ -1609,12 +1998,13 @@
             $("tab-" + key).focus();
           };
           b.onkeydown = (event) => {
-            const keys = ["overview", "context", "evidence"];
+            const keys = ["overview", "context", "evidence", "review"];
             let index = keys.indexOf(key);
-            if (event.key === "ArrowRight") index = (index + 1) % 3;
-            else if (event.key === "ArrowLeft") index = (index + 2) % 3;
+            if (event.key === "ArrowRight") index = (index + 1) % keys.length;
+            else if (event.key === "ArrowLeft")
+              index = (index + keys.length - 1) % keys.length;
             else if (event.key === "Home") index = 0;
-            else if (event.key === "End") index = 2;
+            else if (event.key === "End") index = keys.length - 1;
             else return;
             event.preventDefault();
             tab = keys[index];
@@ -1628,7 +2018,7 @@
         content.id = "detail-content";
         content.setAttribute("role", "tabpanel");
         content.setAttribute("aria-labelledby", "tab-" + tab);
-        ({ overview, context, evidence })[tab](n, content);
+        ({ overview, context, evidence, review })[tab](n, content);
         reader.append(content);
         const parents = [...new Set(incoming.get(n.id).map((e) => e.from))];
         if (parents.length) {
@@ -1649,7 +2039,18 @@
       let graphWidth = 400,
         graphHeight = 300,
         zoom = 1;
+      let workspaceView = "read";
+      __STEPWISE_BEHAVIOR_JS__;
       function drawGraph() {
+        document.querySelector(".chart .panel-heading h2").textContent =
+          chartMode === "states"
+            ? "STATE MODEL"
+            : chartMode === "sequence"
+              ? "INTERACTION SEQUENCE"
+              : "DESIGN MAP";
+        document.querySelector(".legend").hidden = chartMode !== "design";
+        if (chartMode !== "design") return drawBehavior();
+        $("focus-node").disabled = false;
         const columns = new Map();
         for (const id of nodes.keys()) {
           let depth = 0,
@@ -1765,18 +2166,19 @@
         $("zoom-label").textContent = Math.round(zoom * 100) + "%";
       }
       function fitGraph() {
+        if (workspaceView !== "map") return;
         const v = $("graph-viewport");
         setZoom(
           Math.min(
-            1,
+            1.5,
             (v.clientWidth - 20) / graphWidth,
-            (v.clientHeight - 20) / graphHeight,
+            chartMode === "design" ? (v.clientHeight - 20) / graphHeight : 1.5,
           ),
         );
         v.scrollTo(0, 0);
       }
       function focusGraph() {
-        if (!selected) return;
+        if (!selected || chartMode !== "design") return;
         const p = positions.get(selected),
           v = $("graph-viewport");
         if (zoom < 0.7) setZoom(0.85);
@@ -1809,9 +2211,13 @@
         }
         renderTree();
         renderReader();
+        if (chartMode !== "design") {
+          drawGraph();
+          fitGraph();
+        }
         highlightGraph();
         $("reader").scrollTop = 0;
-        if (reveal && window.innerWidth <= 1150)
+        if (reveal && workspaceView === "read" && window.innerWidth <= 1150)
           $("reader").scrollIntoView({ block: "start" });
       }
       function navigate(id) {
@@ -1827,6 +2233,45 @@
         }
         select(nodes.has(id) ? id : forest[0], !!event);
       }
+      function showWorkspace(view, focus = false) {
+        workspaceView = view;
+        $("workspace").dataset.view = view;
+        $("workspace").setAttribute("aria-labelledby", "view-" + view);
+        for (const key of ["read", "map"]) {
+          const button = $("view-" + key);
+          button.setAttribute("aria-selected", String(key === view));
+          button.tabIndex = key === view ? 0 : -1;
+        }
+        $("outline-toggle").hidden = view === "map";
+        if (view === "map") {
+          drawGraph();
+          highlightGraph();
+          requestAnimationFrame(fitGraph);
+        }
+        if (focus) $("view-" + view).focus();
+      }
+      for (const key of ["read", "map"]) {
+        $("view-" + key).onclick = () => showWorkspace(key);
+        $("view-" + key).onkeydown = (e) => {
+          if (["ArrowRight", "ArrowLeft", "Home", "End"].includes(e.key)) {
+            e.preventDefault();
+            showWorkspace(
+              e.key === "Home"
+                ? "read"
+                : e.key === "End"
+                  ? "map"
+                  : key === "read"
+                    ? "map"
+                    : "read",
+              true,
+            );
+          }
+        };
+      }
+      $("read-selected").onclick = () => {
+        showWorkspace("read");
+        $("reader").scrollIntoView({ block: "start" });
+      };
       $("design-title").textContent = snapshot.title;
       document.title = snapshot.title + " · Stepwise";
       $("snapshot-date").textContent =
@@ -1859,6 +2304,13 @@
       };
       window.addEventListener("hashchange", fromHash);
       window.addEventListener("resize", () => requestAnimationFrame(fitGraph));
+      initReview();
+      $("chart-mode").onchange = (e) => {
+        chartMode = e.target.value;
+        drawGraph();
+        highlightGraph();
+        fitGraph();
+      };
       summary();
       drawGraph();
       renderTree();

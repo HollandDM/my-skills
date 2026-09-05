@@ -1,6 +1,6 @@
 {
   "name": "constructing-software-stepwise",
-  "version": "1.0.0",
+  "version": "1.0.0+codex.20260905041609",
   "description": "Contract-based software design with interviewed or auto-approved batch refinement and an interactive HTML tree and diagram reader.",
   "author": {
     "name": "HollandDM"

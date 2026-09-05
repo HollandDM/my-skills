@@ -1,32 +1,51 @@
 # CLI operations
 
-Read when creating or updating a ledger. Commands are sequential writes to one shared ledger; there is no multi-node transaction or concurrency protection. A failed write may already have persisted changes: inspect state before retrying.
+Run `python3 <skill>/scripts/stepwise.py <verb> <dir> ...`. `<dir>` is the design directory. Python 3 and its standard library are sufficient.
 
-## Tooling — `scripts/stepwise.py` (python 3, stdlib, no regex, any agent)
+## Transactional updates
 
-`<dir>` = `docs/design/<topic>`. Script lives in this skill's `scripts/`; `python3 <skill>/scripts/stepwise.py <verb> <dir> …`. Every write verb renders the views and lints; exit 1 + `error …` lines mean fix with more verbs, never with an editor. `.stepwise.log` records attempted write/state commands after the ledger is loaded; read-only `frontier`, `show`, `status`, `check`, and `html` calls are omitted.
+Commands mutate in memory, validate the final ledger, then commit the canonical data, generated views, ADR changes, and audit record together. Rejected operations and invalid final states do not change those files. Related changes that temporarily invalidate each other belong in one `batch`.
 
-| Phase | Verb | Effect |
-|---|---|---|
-| browse | `html <dir> [--output FILE]` | export a standalone HTML snapshot; default `DESIGN.html`; see [html-view.md](html-view.md) |
-| orient | `frontier <dir>` · `status <dir>` · `show <dir> D-NNN` | what to pick; every node's state + its one legal next move; one node view |
-| draft | `new <dir> D-NNN ["stmt"]` | node from frontier line (root: pass statement) |
-| draft | `set <dir> D-NNN '{"gloss":"…","effect":"…","contract":{"pre":"…","post":"…"}}'` | atomically replaces supplied node fields; contract ≤ 6 clauses with free lowercase labels (`budget`, `determinism`, `boundary` …); `?slug` allowed |
-| interview | `entry <dir> term\|fact\|scenario "Name" "definition" [--source --avoid --not --example \| --given --when --then --excludes --settles]` | context entry; ids allocated |
-| interview | `answer <dir> D-NNN slug "Name"` · `set <dir> D-NNN depends "Name" …` | `?slug` → name in every clause; depends += name. `set depends` for a dependency with no `?` (e.g. a fact born later) |
-| interview | `ambiguity <dir> "claim" "conflict" D-NNN` · `meta <dir> scope\|title "…"` · `meta <dir> nongoals "a" "b"` | deferred question; scope; non-goals |
-| propose→persist | `body <dir> D-NNN` (stdin heredoc or `--file`) | pseudocode body; tags `-- D-NNN` / `-- ↗ D-NNN` / `-- ⇒ target`; single-match calls auto-tagged |
-| propose→persist | `set <dir> D-NNN '{"walkthrough":["…"],"composition":["…"],"decisions":["…"]}'` | one atomic metadata write; walkthrough ≤ 3 lines and each supplied array replaces that whole field |
-| propose→persist | `terminal <dir> D-NNN "<target>: <identifier>"` · `set <dir> D-NNN '{"adaptation":["clause → construct"]}'` | leaf; target syntax checked, actual existence requires grounding |
-| persist | `approve <dir> D-NNN [--by "standing approval"]` | `--by` records who approved (default `user`); refuses on `?`, empty prose, no body/target, missing walkthrough, a tagged body line that says nothing about what it does, missing composition, untagged call, pending ADR; drops ambiguity rows resolving at this node; prints next frontier id |
-| change | `reopen <dir> D-NNN "reason"` · `stale <dir> D-NNN "reason"` · `retire <dir> D-NNN "reason"` · `supersede <dir> D-OLD D-NEW "reason"` | status + history; `stale` also records which entries changed after approval; `reopen` files the body it replaces under `## Superseded refinement` |
-| change | `change <dir> <name\|CTX-id> [--definition …] [--rename "New heading"] [--status stale] --reason "…" [--minor]` | entry changed; approved dependents fail lint until `stale` / re-`approve` |
-| decision | `adr <dir> new "Title" --constrains D-NNN[,D-MMM]` · `adr <dir> accept ADR-NNNN` | stub (nodes → `draft (ADR pending)`); accept unblocks |
-| implement | `set <dir> D-NNN '{"realization":"implemented"}'` · `evidence <dir> D-NNN --kind K --ref R --result pass\|fail` | pass automatically sets `verified`; see evidence limitations in [design-ledger.md](design-ledger.md#evidence-rules) |
-| audit | `status <dir> [--all]` · `sync <dir>` · `check <dir>` | re-render after an ADR paragraph edit; lint only |
+The CLI serializes readers and writers through `.stepwise.lock`. Validated writes use `.stepwise-transaction.json` as a recovery journal: after process interruption or an I/O failure, the next command completes the prepared commit before loading the ledger. Generated files are replaced individually under that lock; external programs reading them directly do not get a filesystem-wide atomic snapshot. Do not manually delete a pending journal.
 
-Inspect errors to distinguish inconsistent design from a tool limitation. Resolve it in the design: `retire` a node the refinement dropped, `stale` / `reopen` what a changed entry invalidated, `supersede` what a replacement took over, restore a call you removed by mistake. Never invent a body line, a call, a clause, or a node to silence a message — a green `check` bought that way records a design nobody chose, and the next reader cannot tell. If no supported verb can express the design, report the tool limitation rather than inventing content.
+```json
+[
+  {"verb":"new","id":"D-000","statement":"result <- normalize(value)"},
+  {"verb":"set","id":"D-000","fields":{
+    "gloss":"Normalize one string.",
+    "effect":"Remove surrounding whitespace.",
+    "contract":{"pre":"The caller supplies a string.","post":"The result has no surrounding whitespace."}
+  }},
+  {"verb":"ready","id":"D-000","approach":"Implement with str.strip without mutating input.","validation":"Check empty, whitespace-only, and already-normalized inputs."},
+  {"verb":"approve","id":"D-000","by":"standing approval"}
+]
+```
 
-JSON `set` is the default whenever more than one node field changes. Allowed keys: `gloss`, `effect`, `contract`, `walkthrough`, `composition`, `decisions`, `deferred`, `adaptation`, `depends`, `realization`, `verification`. Only supplied top-level fields change; `contract` and every supplied array replace their whole current value. Invalid JSON, unknown keys, wrong value types, or unresolved dependencies write nothing. The granular `set <dir> D-NNN <field> <value...>` form remains for one-field corrections and appending a dependency without restating its existing list.
+Save the operations to a file, then run `batch <dir> --file changes.json`, or pass JSON on stdin. A batch applies operations sequentially in memory and renders once after final validation. Parents must expose child IDs before `new` creates them; reuse targets must be approved before reuse. Existing IDs and references resolve against the evolving batch state.
 
-Lint covers: one root; status vocabulary; caps; untagged calls; reuse of non-approved node; target format and disallowed design-owned prefixes; approved with `?` / no body / no walkthrough / unglossed body line / no composition / body changed / pending ADR; dependency names that do not exist; entry changed after approval; ADR constrains stale or missing node; ambiguity at approved node; hand-edited view. Target existence, contract correctness, composition, and evidence coverage remain reasoning obligations; lint does not establish them.
+Shorthand operations support `new`, `set`, `body` (`text`), `terminal` (`target`), `ready` (`approach`, `validation`), `approve` (`by`), and `reopen`/`stale`/`retire` (`reason`). Any mutation can use `{"verb":"entry","args":["term","Run Key","Caller-supplied identity.","--source","user"]}` or an argument array such as `["answer","D-000","run-key","Run Key"]`. Arguments never run through a shell. Nested batches and read-only operations are rejected.
+
+## Commands
+
+| Verb | Use |
+|---|---|
+| `new <dir> D-NNN ["statement"]` | Create a root or frontier node. |
+| `set <dir> D-NNN '{...}'` | Replace supplied fields atomically; see [design-ledger.md](design-ledger.md). |
+| `body <dir> D-NNN --text "..."` or `--file FILE` | Set pseudocode on a draft node; stdin is also supported outside a batch. |
+| `terminal <dir> D-NNN "target: identifier"` | Map a draft leaf to an existing construct. |
+| `ready <dir> D-NNN --approach TEXT --validation TEXT` | Record a bounded implementation leaf. |
+| `approve <dir> D-NNN [--by WHO]` | Accept a draft's complete design revision; auto-approval uses `standing approval`. |
+| `reopen` / `stale` / `retire <dir> D-NNN "reason"` | Revise, invalidate, or drop a node. |
+| `supersede <dir> D-OLD D-NEW "reason"` | Record a replacement. |
+| `evidence <dir> D-NNN --kind K --ref R --result pass\|fail [--clause LABEL ...] [--note TEXT]` | Record actual checks and derive current coverage. |
+| `entry <dir> term\|fact\|scenario "Name" "definition" [--source TEXT ...]` | Record shared meaning; see [context-ledger.md](context-ledger.md). |
+| `answer <dir> D-NNN slug "Name"` | Resolve a draft unknown using an existing entry. |
+| `change <dir> REF --definition TEXT --reason TEXT [--minor]` | Update context and invalidate affected designs. |
+| `ambiguity <dir> "claim" "conflict" D-NNN` | Assign an unresolved decision to its owning node. |
+| `meta <dir> scope\|title TEXT` / `meta <dir> nongoals TEXT ...` | Set design boundaries. |
+| `adr <dir> new\|accept\|supersede\|constrains ...` | Maintain consequential decisions; see [adr-ledger.md](adr-ledger.md). |
+| `status <dir> [--all]` / `frontier <dir>` / `show <dir> D-NNN` | Inspect state and next work. |
+| `check <dir>` / `sync <dir>` | Validate, or refresh derived statuses and Markdown. |
+| `html <dir> [--output FILE]` | Export the reader and review charts; see [html-view.md](html-view.md). |
+
+Use `--help` on the command for flags. An error should be resolved in the design or operation payload, not silenced by invented calls or claims. Evidence sufficiency, actual target guarantees, and architectural correctness remain reasoning obligations.

@@ -14,7 +14,7 @@ docs/design/<topic>/
   CONTEXT.md      generated view: scope, three tables, open ambiguities, non-goals, then every entry in full
 ```
 
-Entries change in place (meaning sharpens, facts go stale) → `change` appends a dated reason and lint names every approved dependent.
+Entries change in place. `change` appends a dated reason and automatically marks affected approved nodes and their dependents stale in the same transaction.
 
 ## Records — `ledger.json`
 
@@ -103,7 +103,7 @@ Use a scenario to clarify ambiguous behavior. Resolve unknowns in the active nod
 Terms / facts = dependencies of design nodes. Entry changes →
 
 1. `change <dir> <ref> --definition "…" --reason "…"`; typo / wording with identical meaning → add `--minor` (no invalidation)
-2. the verb prints every dependent; lint fails for each approved dependent until `stale D-NNN "…"` or `reopen` + `approve`
-3. review invalidated nodes before resuming; evidence on them is stale by construction
+2. affected approved nodes and their dependents become stale automatically
+3. revisit those nodes through `reopen` and `approve`; old evidence remains recorded but no longer establishes current coverage
 
 No obsolete definition as active context. Historical meaning mattered to a durable decision → keep it in that ADR.

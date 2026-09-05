@@ -51,7 +51,7 @@ Batch-parallel plan execution for the Stargazer codebase. Lighter alternative to
 
 ### [constructing-software-stepwise](./constructing-software-stepwise/)
 
-Contract-based stepwise refinement for complex stateful designs. Interviewed mode reviews one node at a time; explicit auto-approval advances coherent batches of related nodes, records agent decisions, and continues to the agreed completion boundary. A Python CLI maintains the design ledger, generated views, dependency invalidation, and evidence records. The `html` command exports a standalone reader with a searchable tree, linked pseudocode and contracts, and an interactive diagram. Mode-specific procedures and ledger details load only when needed.
+Contract-based stepwise refinement for complex stateful designs. Interviewed mode reviews one node at a time; explicit auto-approval advances coherent batches of related nodes, records agent decisions, and continues to the agreed completion boundary. The CLI commits validated batches atomically, protects approved revisions, and derives verification from current clause evidence. Refinement may stop at a bounded implementation-ready leaf. The `html` reader separates contract reading from a full-width design map, with state/sequence charts, review filters, and changes since the last review. Mode-specific procedures and ledger details load only when needed.
 
 ### [mixed-agent-sdd](./mixed-agent-sdd/)
 

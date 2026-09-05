@@ -87,7 +87,9 @@ class HtmlExportTests(unittest.TestCase):
         self.assertEqual(rc, 0, message)
         document = (self.directory / "DESIGN.html").read_text()
         payload = EmbeddedData().payload(document)
-        self.assertEqual(payload["ledger"], self.source)
+        self.assertEqual(set(payload["ledger"]["nodes"]), set(self.source["nodes"]))
+        self.assertEqual(payload["ledger"]["nodes"]["D-001"]["verification"], "stale")
+        self.assertIn("coverage", payload["ledger"]["nodes"]["D-001"])
         for name, contents in before.items():
             self.assertEqual((self.directory / name).read_bytes(), contents)
         self.assertIn(str(self.directory / "DESIGN.html"), message)

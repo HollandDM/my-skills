@@ -14,8 +14,8 @@ Read-only orientation and HTML export do not mutate the ledger; HTML is an expli
   set       <dir> D-NNN '{"gloss":"...","effect":"...","contract":{"pre":"..."}}'
                                                        atomically replace the supplied node fields from one JSON object
   set       <dir> D-NNN gloss|effect "text"           targeted single-field correction
-  set       <dir> D-NNN pre|post|failure|invariant|<label> "clause"   contract clause, any lowercase label (<= 6 clauses; unknowns as ?slug)
-  set       <dir> D-NNN walkthrough "l1" ["l2" "l3"]  <= 3 lines: what the function does (above the body)
+  set       <dir> D-NNN pre|post|failure|invariant|<label> "clause"   contract clause, any lowercase label (unknowns as ?slug)
+  set       <dir> D-NNN walkthrough "l1" ["l2" "l3"]  what the function does (above the body)
   set       <dir> D-NNN composition|decisions|deferred|adaptation "b1" "b2" ...    bullet lists (replace)
   set       <dir> D-NNN depends "Name" ...            add dependencies that carry no ?slug (append; each must exist)
   set       <dir> D-NNN realization|verification <vocab>
@@ -28,7 +28,9 @@ Read-only orientation and HTML export do not mutate the ledger; HTML is an expli
   stale     <dir> D-NNN "reason"                      a change invalidated it; the entries that changed are recorded with it
   retire    <dir> D-NNN "reason"                      the design dropped it; nothing calls it any more
   supersede <dir> D-OLD D-NEW "reason"
-  evidence  <dir> D-NNN --kind K --ref R --result pass|fail [--note N]
+  evidence  <dir> D-NNN --kind K --ref R --result pass|fail [--clause LABEL ...] [--note N]
+  ready     <dir> D-NNN --approach TEXT --validation TEXT   bounded implementation leaf
+  batch     <dir> [--file FILE]                       validate and commit JSON operations together
   entry     <dir> term|fact|scenario "Heading" "definition" [--source S] [--avoid a,b] [--not T] [--example E]
                                                       [--given G --when W --then T --excludes X --settles T]
   change    <dir> <ref> [--definition D] [--rename "New Heading"] [--status confirmed|stale] --reason R   sharpen, rename or stale an entry
@@ -46,6 +48,9 @@ Stdlib only, no regex: the ledger is typed data, not text to be parsed.
 from __future__ import annotations
 
 import argparse
+import copy
+import io
+from contextlib import redirect_stdout, redirect_stderr
 import datetime as _dt
 import hashlib
 import json
@@ -53,16 +58,19 @@ import os
 import sys
 from pathlib import Path
 
+from stepwise_state import CONTENT_FIELDS, fingerprint, coverage, refresh, validate_behavior
+from stepwise_transaction import locked, commit
+
 LEDGER = "ledger.json"
 LOG = ".stepwise.log"
 CODE_COL = 58
 CONTRACT_KEYS = ("pre", "post", "failure", "cancellation", "invariant", "progress")
 TEXT_FIELDS = ("gloss", "effect")
 LIST_FIELDS = ("walkthrough", "composition", "decisions", "deferred", "adaptation")
-JSON_SET_FIELDS = TEXT_FIELDS + ("contract",) + LIST_FIELDS + ("depends", "realization", "verification")
-DESIGN_CONTENT_FIELDS = TEXT_FIELDS + ("contract",) + LIST_FIELDS + ("depends",)
+JSON_SET_FIELDS = TEXT_FIELDS + ("contract",) + LIST_FIELDS + ("depends", "realization", "verification", "implementation_plan", "behavior")
+DESIGN_CONTENT_FIELDS = CONTENT_FIELDS
 REALIZATION = ("not-started", "partial", "implemented")
-VERIFICATION = ("unverified", "partial", "verified", "stale")
+VERIFICATION = ("unverified", "partial", "verified", "stale", "failed")
 DESIGN = ("draft", "approved", "stale", "superseded", "retired")
 # design state machine: (from, to) -> verb that makes the move. Nothing else moves a node.
 TRANSITIONS = {
@@ -296,6 +304,15 @@ class Ledger:
         self.data: dict = json.loads(self.path.read_text(encoding="utf-8")) if self.path.exists() else {}
         self.errors: list[str] = []
         self.warnings: list[str] = []
+        self.files: dict[Path, str] = {}
+        self.messages: list[str] = []
+        self.operations: list[str] = []
+        for n in self.data.get("nodes", {}).values():
+            if n.get("design") == "approved":
+                n.setdefault("approved_content_hash", fingerprint(n))
+                n.setdefault("revision", 0)
+        if self.data:
+            refresh_ledger(self)
 
     # --- storage
     @classmethod
@@ -304,12 +321,7 @@ class Ledger:
         led = cls(d)
         led.data = {"schema": 1, "title": title, "scope": "", "nongoals": [], "ambiguities": [],
                     "nodes": {}, "terms": {}, "facts": {}, "scenarios": {}}
-        led.save()
         return led
-
-    def save(self) -> None:
-        self.data["nodes"] = dict(sorted(self.nodes.items()))
-        self.path.write_text(json.dumps(self.data, indent=1, ensure_ascii=False) + "\n", encoding="utf-8")
 
     @property
     def nodes(self) -> dict[str, dict]:
@@ -338,7 +350,7 @@ class Ledger:
     def frontier(self) -> dict[str, tuple[str, str]]:
         out: dict[str, tuple[str, str]] = {}
         for pid, p in self.nodes.items():
-            if p["design"] == "draft":
+            if p["design"] in ("draft", "retired", "superseded"):
                 continue
             for it in p.get("body", []):
                 cid = it.get("child")
@@ -386,10 +398,11 @@ class Ledger:
         return None
 
     def adrs(self) -> list[dict]:
-        return parse_adrs(self.adr_dir())
+        return parse_adrs(self.adr_dir(), self.files)
 
     def adr_dir(self) -> Path | None:
-        return next((p / "adr" for p in [self.dir, *self.dir.parents][:5] if (p / "adr").is_dir()), None)
+        staged = next((p.parent for p in self.files if p.parent.name == "adr"), None)
+        return staged or next((p / "adr" for p in [self.dir, *self.dir.parents][:5] if (p / "adr").is_dir()), None)
 
     def resolves(self, ref: str) -> bool:
         return (is_node_id(ref) and (ref in self.nodes or ref in self.frontier())) or \
@@ -414,6 +427,31 @@ class Ledger:
     def terms_in(self, text: str) -> list[str]:
         low = f" {text.lower()} "
         return [t for t in self.data.get("terms", {}) if f" {t.lower()} " in low or low.strip().startswith(t.lower())]
+
+
+def refresh_ledger(led: Ledger) -> None:
+    adrs = {a["id"]: a for a in led.adrs()}
+    for nid, node in led.nodes.items():
+        seen, context, queue = {nid}, {}, [nid]
+        while queue:
+            current = led.nodes[queue.pop()]
+            refs = [*current.get("depends", []), *[it.get("child") or it.get("reuse") for it in current.get("body", [])]]
+            for ref in refs:
+                if not ref or ref in seen:
+                    continue
+                seen.add(ref)
+                if ref in led.nodes:
+                    dep = led.nodes[ref]
+                    context[ref] = [dep.get("revision", 0), dep["design"], fingerprint(dep)]
+                    queue.append(ref)
+                elif ref in adrs:
+                    context[ref] = adrs[ref]["lines"]
+                elif entry := led.entry(ref):
+                    context[ref] = [entry[2].get("status"), entry[2].get("changed", [])]
+                else:
+                    context[ref] = "unresolved"
+        node["evidence_context"] = hashlib.sha256(json.dumps(context, sort_keys=True).encode()).hexdigest()
+    refresh(led.nodes)
 
 
 def node_unknowns(n: dict) -> list[str]:
@@ -442,10 +480,13 @@ def _header_parts(line: str) -> list[str]:
     return [p.strip() for p in line.replace(" | ", " · ").split(" · ")]
 
 
-def parse_adrs(adr_dir: Path | None) -> list[dict]:
+def parse_adrs(adr_dir: Path | None, staged: dict | None = None) -> list[dict]:
     out = []
-    for p in sorted(adr_dir.glob("*.md")) if adr_dir else []:
-        lines = p.read_text(encoding="utf-8").splitlines()
+    staged = staged or {}
+    paths = set(adr_dir.glob("*.md")) if adr_dir else set()
+    paths.update(p for p in staged if p.parent == adr_dir)
+    for p in sorted(paths):
+        lines = (staged[p] if p in staged else p.read_text(encoding="utf-8")).splitlines()
         aid, title = p.stem[:4], p.stem
         header: dict[str, str] = {}
         for ln in lines:
@@ -545,10 +586,16 @@ def render_node(led: Ledger, nid: str) -> str:
             heads = dict.fromkeys(it["target"].split(":", 1)[0].strip() for it in n["body"] if it.get("target"))
             L.append("Collapsed leaf. Targets: " + ", ".join(f"`{h}`" for h in heads))
         L += [f"Adaptation: {a}" for a in n.get("adaptation", [])]
+    if n.get("implementation_plan"):
+        L += ["", "## Implementation plan", *[f"- {k.title()}: {v}" for k, v in n["implementation_plan"].items()]]
+    if n.get("behavior"):
+        L += ["", "## Behavior diagrams", "```json", json.dumps(n["behavior"], indent=2), "```"]
+    cov = coverage(n)
+    L += ["", "## Evidence coverage", f"Covered: {', '.join(cov['covered']) or 'none'} · Missing: {', '.join(cov['missing']) or 'none'} · Failed: {', '.join(cov['failed']) or 'none'}"]
     if n.get("evidence"):
         L += ["", "## Evidence", ""]
         for i, ev in enumerate(n["evidence"], 1):
-            L += [f"### EV-{i} {ev['kind']} — {ev['result']}", f"{ev['date']} · {ev['ref']}" + (f" · {ev['note']}" if ev.get("note") else "")]
+            L += [f"### EV-{i} {ev['kind']} — {ev['result']}", f"{ev['date']} · {ev['ref']} · clauses {ev.get('clauses', [])} · revision {ev.get('revision', 'legacy')}" + (f" · {ev['note']}" if ev.get("note") else "")]
     if n.get("history"):
         L += ["", "## History", "", *[f"- {h['date']} — {h['event']}" + (f": {h['reason']}" if h.get("reason") else "") for h in n["history"]]]
     return "\n".join(L) + "\n"
@@ -558,6 +605,8 @@ def tag_for(led: Ledger, cid: str, reuse: bool) -> str:
     n = led.nodes.get(cid)
     if n and n["design"] == "approved" and led.is_terminal(n):
         return f"{cid} {'✓' if n['verification'] == 'verified' else '⇒'} {n['target']}"
+    if n and n["design"] == "approved" and n.get("implementation_plan"):
+        return f"{cid} ◇ implementation-ready"
     if reuse or (n and len(led.parents(cid)) >= 2):
         return f"↗ {cid}"
     if not n:
@@ -674,17 +723,7 @@ def render_all(led: Ledger) -> dict[Path, str]:
     return out
 
 
-def write_views(led: Ledger) -> None:
-    (led.dir / "nodes").mkdir(parents=True, exist_ok=True)
-    for p, text in render_all(led).items():
-        if not p.exists() or p.read_text(encoding="utf-8") != text:
-            p.write_text(text, encoding="utf-8")
-
-
-# ----------------------------------------------------------------------------- lint
-
-
-def check(led: Ledger) -> None:
+def check(led: Ledger, *, views: bool = True) -> None:
     E = led.errors.append
     W = led.warnings.append
     nodes = led.nodes
@@ -700,6 +739,8 @@ def check(led: Ledger) -> None:
     adr_ids = {a["id"] for a in adrs}
     for nid, n in nodes.items():
         where = f"{nid}"
+        if not is_node_id(nid):
+            E(f"{where}: invalid node ID")
         if n["design"] not in DESIGN:
             E(f"{where}: design {n['design']!r} not in {DESIGN}")
         if n["realization"] not in REALIZATION:
@@ -710,12 +751,8 @@ def check(led: Ledger) -> None:
             E(f"{where}: superseded_by {n.get('superseded_by')!r} does not exist")
         if not fn_of(n["statement"]):
             E(f"{where}: statement {n['statement']!r} has no call `f(...)`")
-        if len(n.get("contract", {})) > 6:
-            E(f"{where}: contract has {len(n['contract'])} clauses > 6")
         body = n.get("body", [])
         stmts = [it for it in body if stmt_kind(it["code"]) == "stmt"]
-        if len(stmts) > 12:
-            E(f"{where}: refinement has {len(stmts)} statements > 12")
         for it in stmts:
             if not any(k in it for k in ("child", "reuse", "target")) and call_names(it["code"]):
                 E(f"{where}: untagged call {it['code']!r}; tag `-- D-NNN` (new id), `-- ↗ D-NNN` (reuse) or `-- ⇒ <target>: <identifier>`")
@@ -726,9 +763,11 @@ def check(led: Ledger) -> None:
             if "target" in it and (why := target_ok(it["target"])):
                 E(f"{where}: {why}")
         if n["design"] == "approved":
+            if n.get("approved_content_hash") != fingerprint(n):
+                E(f"{where}: approved content changed; reopen and re-approve it")
             if node_unknowns(n):
                 E(f"{where}: approved with unresolved ?{', ?'.join(node_unknowns(n))}")
-            if not body and not n.get("target"):
+            if not body and not n.get("target") and not n.get("implementation_plan"):
                 E(f"{where}: approved needs a refinement body (`body`) or a target (`terminal`)")
             if body and not led.is_collapsed(n) and not n.get("composition"):
                 E(f"{where}: approved composite lacks composition (`set {nid} composition ...`)")
@@ -740,6 +779,10 @@ def check(led: Ledger) -> None:
             clause = ad.partition(":")[0].strip().lower()
             if "→" not in ad and "->" not in ad and clause not in n.get("contract", {}):
                 E(f"{where}: adaptation {ad!r} must name the clause it maps — '<clause> → <concrete construct>' or '<Clause>: <concrete construct>' (query text, API call + args, type); behaviour prose is not adaptation")
+        if n.get("implementation_plan") and (body or n.get("target")):
+            E(f"{where}: implementation-ready leaves cannot also have a body or target")
+        if n.get("behavior") and (why := validate_behavior(n["behavior"])):
+            E(f"{where}: {why}")
         if n.get("target"):
             if (why := target_ok(n["target"])):
                 E(f"{where}: {why}")
@@ -762,10 +805,8 @@ def check(led: Ledger) -> None:
         if n.get("adr_pending") and n["adr_pending"] not in adr_ids:
             E(f"{where}: adr_pending {n['adr_pending']} has no file")
     for a in adrs:
-        if len(a["lines"]) > 40:
-            E(f"{a['path'].name}: {len(a['lines'])} lines > 40")
         for rid in a["constrains"]:
-            if rid in nodes and nodes[rid]["design"] in ("stale", "superseded"):
+            if a["status"] not in ("superseded", "deprecated") and rid in nodes and nodes[rid]["design"] == "superseded":
                 E(f"{a['path'].name}: constrains {rid} which is {led.status(rid)}; re-point to the live node")
             elif rid not in nodes and rid not in fr:
                 E(f"{a['path'].name}: constrains {rid} which does not exist")
@@ -784,7 +825,7 @@ def check(led: Ledger) -> None:
             for t in e.get("not", []):
                 if not led.entry(t):
                     W(f"{f}/{k}: not {t!r} is not a term")
-    for p, text in render_all(led).items():
+    for p, text in (render_all(led).items() if views else []):
         if not p.exists():
             E(f"{p.name}: missing; run sync")
         elif p.read_text(encoding="utf-8") != text:
@@ -821,6 +862,11 @@ def derive_depends(led: Ledger) -> None:
                     or (is_node_id(w) and w != nid and w not in called and w in led.nodes):
                 if w not in deps:
                     deps.append(w)
+        for rows in n.get("behavior", {}).values():
+            for row in rows:
+                ref = row.get("node")
+                if ref and ref != nid and ref not in deps:
+                    deps.append(ref)
         padded = f" {text} "
         for t in led.data.get("terms", {}):
             if f" {t} " in padded.replace(",", " ").replace(".", " ").replace(";", " ").replace("(", " ").replace(")", " ") and t not in deps:
@@ -828,11 +874,10 @@ def derive_depends(led: Ledger) -> None:
 
 
 def finish(led: Ledger, head: str = "") -> int:
-    derive_depends(led)
-    led.save()
-    write_views(led)
-    check(led)
-    return report(led, head)
+    # Commands mutate only memory. The outer transaction validates and renders once.
+    if head:
+        led.messages.append(head)
+    return 0
 
 
 def fail(msg: str) -> int:
@@ -896,7 +941,7 @@ def content_edit_error(nid: str, n: dict) -> str:
     if n["design"] == "draft":
         return ""
     if TRANSITIONS.get((n["design"], "draft")) == "reopen":
-        return f"{nid} is {n['design']}; `reopen {nid} \"reason\"` before changing its gloss, effect, or contract"
+        return f"{nid} is {n['design']}; `reopen {nid} \"reason\"` before changing approved design content"
     state = f"superseded by {n.get('superseded_by', '?')}" if n["design"] == "superseded" else n["design"]
     return f"{nid} is {state}; its historical content cannot be edited"
 
@@ -923,8 +968,6 @@ def v_set_json(led: Ledger, nid: str, n: dict, raw: str) -> int:
         elif f == "contract":
             if not isinstance(value, dict):
                 return fail(f"{nid}: JSON field 'contract' must be an object of lowercase label to clause")
-            if len(value) > 6:
-                return fail(f"{nid}: contract would have {len(value)} clauses > 6")
             contract: dict[str, str] = {}
             for label, clause in value.items():
                 if not label.isalpha() or not label.islower():
@@ -937,8 +980,6 @@ def v_set_json(led: Ledger, nid: str, n: dict, raw: str) -> int:
             if not isinstance(value, list) or any(not isinstance(item, str) for item in value):
                 return fail(f"{nid}: JSON field {f!r} must be an array of strings")
             items = [item.strip() for item in value if item.strip()]
-            if f == "walkthrough" and len(items) > 3:
-                return fail(f"{nid}: walkthrough is {len(items)} lines > 3 — say what the function does, not how")
             updates[f] = items
         elif f == "depends":
             if not isinstance(value, list) or any(not isinstance(item, str) for item in value):
@@ -956,11 +997,18 @@ def v_set_json(led: Ledger, nid: str, n: dict, raw: str) -> int:
                 return fail(f"{nid}: realization must be one of {REALIZATION}")
             updates[f] = value
         elif f == "verification":
-            if not isinstance(value, str) or value not in VERIFICATION:
-                return fail(f"{nid}: verification must be one of {VERIFICATION}")
+            if value != coverage(n)["status"]:
+                return fail(f"{nid}: verification is derived from current clause evidence; use `evidence --clause LABEL`")
+        elif f == "implementation_plan":
+            if not isinstance(value, dict) or set(value) != {"approach", "validation"} or not all(isinstance(v, str) and v.strip() for v in value.values()):
+                return fail(f"{nid}: implementation_plan needs nonempty approach and validation strings")
+            updates[f] = value
+        elif f == "behavior":
+            if why := validate_behavior(value):
+                return fail(f"{nid}: {why}")
             updates[f] = value
 
-    semantic_changed = any(f in TEXT_FIELDS + ("contract",) and n.get(f) != value for f, value in updates.items())
+    semantic_changed = any(f in DESIGN_CONTENT_FIELDS and n.get(f) != value for f, value in updates.items())
     historical_content_changed = n["design"] in ("superseded", "retired") and any(
         f in DESIGN_CONTENT_FIELDS and n.get(f) != value for f, value in updates.items()
     )
@@ -985,19 +1033,15 @@ def v_set(led: Ledger, a) -> int:
     contract_field = f in CONTRACT_KEYS or (f.isalpha() and f.islower() and f not in LIST_FIELDS + ("realization", "verification", "depends"))
     if n["design"] in ("superseded", "retired") and (f in TEXT_FIELDS + LIST_FIELDS + ("depends",) or contract_field):
         return fail(content_edit_error(a.id, n))
-    if (f in TEXT_FIELDS or contract_field) and (why := content_edit_error(a.id, n)):
+    if (f in DESIGN_CONTENT_FIELDS or contract_field) and (why := content_edit_error(a.id, n)):
         return fail(why)
     if f in TEXT_FIELDS:
         n[f] = " ".join(vals).strip()
     elif contract_field:
         # any lowercase word is a contract clause label: pre, post, failure, invariant, budget, determinism, boundary, ...
         n.setdefault("contract", {})[f] = " ".join(vals).strip()
-        if len(n["contract"]) > 6:
-            return fail(f"{a.id}: contract would have {len(n['contract'])} clauses > 6")
     elif f in LIST_FIELDS:
         n[f] = [v.strip() for v in vals if v.strip()]
-        if f == "walkthrough" and len(n[f]) > 3:
-            return fail(f"{a.id}: walkthrough is {len(n[f])} lines > 3 — say what the function does, not how")
     elif f == "depends":
         deps = n.setdefault("depends", [])
         if vals == ["-"]:  # a dependency named by mistake; derived ones come back on the next sync
@@ -1015,9 +1059,8 @@ def v_set(led: Ledger, a) -> int:
             return fail(f"realization must be one of {REALIZATION}")
         n[f] = vals[0]
     elif f == "verification":
-        if vals[0] not in VERIFICATION:
-            return fail(f"verification must be one of {VERIFICATION}")
-        n[f] = vals[0]
+        if vals[0] != coverage(n)["status"]:
+            return fail("verification is derived from current clause evidence; use `evidence --clause LABEL`")
     else:
         return fail(f"unknown field {f!r}; fields: {TEXT_FIELDS + CONTRACT_KEYS + LIST_FIELDS + ('realization', 'verification')}")
     return finish(led, f"{a.id}.{f} set" + (f"; open ?: {node_unknowns(n)}" if node_unknowns(n) else ""))
@@ -1027,13 +1070,17 @@ def v_body(led: Ledger, a) -> int:
     n = need(led, a.id)
     if n is None:
         return 1
-    if n["design"] == "approved":
-        return fail(f"{a.id} is approved; `reopen {a.id} \"reason\"` first")
-    text = Path(a.file).read_text(encoding="utf-8") if a.file else sys.stdin.read()
+    if why := content_edit_error(a.id, n):
+        return fail(why)
+    if a.file and a.text is not None:
+        return fail("body accepts --file or --text, not both")
+    text = a.text if a.text is not None else Path(a.file).read_text(encoding="utf-8") if a.file else sys.stdin.read()
     items = parse_body(text, fn_of(n["statement"]))
     if not items:
         return fail("empty body")
     n["body"] = items
+    n.pop("implementation_plan", None)
+    n.pop("target", None)
     autotag(led, a.id)
     new = [it["child"] for it in n["body"] if it.get("child") and it["child"] not in led.nodes]
     return finish(led, f"{a.id} body: {len(items)} lines; children {sorted(set(new)) or 'none new'}")
@@ -1056,6 +1103,8 @@ def v_answer(led: Ledger, a) -> int:
     n = need(led, a.id)
     if n is None:
         return 1
+    if why := content_edit_error(a.id, n):
+        return fail(why)
     slug = a.slug.lstrip("?")
     if slug not in node_unknowns(n):
         return fail(f"{a.id} has no ?{slug}; open: {node_unknowns(n) or 'none'}")
@@ -1079,12 +1128,15 @@ def v_terminal(led: Ledger, a) -> int:
     n = need(led, a.id)
     if n is None:
         return 1
+    if why := content_edit_error(a.id, n):
+        return fail(why)
     t = a.target.strip().strip("`")
     if (why := target_ok(t)):
         return fail(why)
     if n.get("body") and not led.is_collapsed(n):
         return fail(f"{a.id} has child statements; a terminal has no body (drop it) — or collapse: tag every statement `-- ⇒ <target>: <identifier>`")
     n["target"] = t
+    n.pop("implementation_plan", None)
     return finish(led, f"{a.id} terminal ⇒ {t}. Add `set <dir> {a.id} '{{\"adaptation\":[\"<clause> → <real>\"]}}'` when shape changes, then `approve {a.id}`")
 
 
@@ -1092,19 +1144,22 @@ def v_approve(led: Ledger, a) -> int:
     n = need(led, a.id)
     if n is None:
         return 1
+    derive_depends(led)
     problems = []
     if node_unknowns(n):
         problems.append(f"unresolved ?{', ?'.join(node_unknowns(n))} — `answer` each")
     for f in ("gloss", "effect"):
         if not n.get(f):
             problems.append(f"{f} empty — `set {a.id} {f} ...`")
+    if any(not clause.strip() for clause in n.get("contract", {}).values()):
+        problems.append("contract clauses must be nonempty")
     if not n.get("contract"):
         problems.append(f"contract empty — `set {a.id} pre|post|failure|invariant ...`")
     body = n.get("body", [])
-    if not body and not n.get("target"):
-        problems.append("no refinement body and no target — `body` (composite) or `terminal` (leaf)")
+    if not body and not n.get("target") and not n.get("implementation_plan"):
+        problems.append("needs a body, terminal target, or bounded `ready` implementation plan")
     if body and not n.get("walkthrough"):
-        problems.append(f"walkthrough missing — `set {a.id} walkthrough \"...\"` (<= 3 lines: what the function does)")
+        problems.append(f"walkthrough missing — `set {a.id} walkthrough \"...\"` (what the function does)")
     if body and not led.is_collapsed(n) and not n.get("composition"):
         problems.append(f"composition missing — `set {a.id} composition ...`")
     for it in body:
@@ -1134,6 +1189,8 @@ def v_approve(led: Ledger, a) -> int:
     n["design"] = "approved"
     n["approved"] = f"{today()} by {a.by.strip() or 'user'}"
     n["approved_at"] = now()
+    n["revision"] = n.get("revision", 0) + 1
+    n["approved_content_hash"] = fingerprint(n)
     n["approved_hash"] = body_hash(body)
     n["contract_hash"] = contract_hash(n)
     if re_approval:
@@ -1150,7 +1207,7 @@ def v_approve(led: Ledger, a) -> int:
     if new:
         print(f"next: `new <dir> {new[0]}`  (frontier: {', '.join(sorted(fr))})")
     elif not fr and not any(x["design"] == "draft" for x in led.nodes.values()):
-        print("frontier empty — design complete unless the user reopens something")
+        print("frontier empty — check remaining stale or unapproved nodes before declaring completion")
     return rc
 
 
@@ -1169,12 +1226,14 @@ def flip(led: Ledger, nid: str, design: str, event: str, reason: str, **extra) -
     if design != "approved" and n["verification"] == "verified":
         n["verification"] = "stale"
     hist(n, event, reason)
-    cascaded = cascade_stale(led, nid, event) if design in ("superseded", "retired") else []
+    cascaded = cascade_stale(led, nid, event) if design in ("stale", "superseded", "retired") else []
     return finish(led, f"{nid} -> {led.status(nid)}" + (f"; now stale: {', '.join(cascaded)}" if cascaded else ""))
 
 
 def v_reopen(led: Ledger, a) -> int:
     n = led.nodes.get(a.id)
+    if n and n["design"] in ("approved", "stale", "retired"):
+        n.setdefault("revisions", []).append({"date": now(), "reason": a.reason, "approved": n.get("approved"), "revision": n.get("revision", 0), "content": {f: copy.deepcopy(n[f]) for f in CONTENT_FIELDS if f in n}})
     if n and n.get("body"):  # keep the refinement being replaced as a record
         n["superseded"] = {"date": today(), "reason": a.reason,
                            **{f: n.get(f) for f in ("body", "composition", "decisions", "deferred") if n.get(f)}}
@@ -1239,12 +1298,32 @@ def v_evidence(led: Ledger, a) -> int:
     n = need(led, a.id)
     if n is None:
         return 1
-    n.setdefault("evidence", []).append({"date": today(), "kind": a.kind, "ref": a.ref, "result": a.result, **({"note": a.note} if a.note else {})})
-    if a.result == "pass":
-        n["verification"] = "verified"
-        if n["realization"] == "not-started":
-            n["realization"] = "implemented"
-    return finish(led, f"{a.id} evidence EV-{len(n['evidence'])} {a.kind} {a.result}; verification {n['verification']}")
+    clauses = list(dict.fromkeys(a.clause))
+    missing = set(clauses) - set(n.get("contract", {}))
+    if missing:
+        return fail(f"unknown contract clauses: {', '.join(sorted(missing))}")
+    if clauses and n["design"] != "approved":
+        return fail("approve the current design before recording scoped evidence")
+    refresh_ledger(led)
+    n.setdefault("evidence", []).append({"date": now(), "kind": a.kind, "ref": a.ref, "result": a.result,
+        "clauses": clauses, "revision": n.get("revision", 0), "content_hash": fingerprint(n), "dependency_hash": n["evidence_context"],
+        **({"note": a.note} if a.note else {})})
+    n["verification"] = coverage(n)["status"]
+    return finish(led, f"{a.id} evidence EV-{len(n['evidence'])}; verification {n['verification']}; missing clauses {coverage(n)['missing']}")
+
+
+def v_ready(led: Ledger, a) -> int:
+    n = need(led, a.id)
+    if n is None:
+        return 1
+    if why := content_edit_error(a.id, n):
+        return fail(why)
+    if not a.approach.strip() or not a.validation.strip():
+        return fail("ready requires a bounded implementation approach and a validation plan")
+    n.pop("body", None)
+    n.pop("target", None)
+    n["implementation_plan"] = {"approach": a.approach.strip(), "validation": a.validation.strip()}
+    return finish(led, f"{a.id} implementation-ready; approve its contract and plan")
 
 
 def v_entry(led: Ledger, a) -> int:
@@ -1313,6 +1392,13 @@ def v_change(led: Ledger, a) -> int:
         return finish(led, f"{f}/{key} reworded (minor, no invalidation)")
     e.setdefault("changed", []).append({"at": now(), "reason": a.reason})
     users = led.used_by().get(key, [])
+    for nid in users:
+        n = led.nodes.get(nid)
+        if n and n["design"] == "approved":
+            n["design"] = "stale"
+            n["stale_by"] = [key]
+            hist(n, "stale", f"{key} changed: {a.reason}")
+            cascade_stale(led, nid, f"{key} changed")
     return finish(led, f"{f}/{key} changed; dependents to re-check: {', '.join(users) or 'none'} (`stale` or `reopen`+`approve` each approved one)")
 
 
@@ -1359,12 +1445,11 @@ def v_adr(led: Ledger, a) -> int:
         if not a.title or not ids:
             return fail('adr <dir> new "Title" --constrains D-NNN[,D-MMM]')
         adr_dir = led.adr_dir() or (led.dir.parents[1] / "adr" if len(led.dir.parents) > 1 else led.dir / "adr")
-        adr_dir.mkdir(parents=True, exist_ok=True)
-        num = max((int(p.stem[:4]) for p in adr_dir.glob("*.md") if p.stem[:4].isdigit()), default=0) + 1
+        num = max((int(a["id"][4:]) for a in led.adrs() if is_adr_id(a["id"])), default=0) + 1
         slug = "-".join("".join(c.lower() if c.isalnum() else " " for c in a.title).split())[:50]
         path = adr_dir / f"{num:04d}-{slug}.md"
         aid = f"ADR-{num:04d}"
-        path.write_text(ADR_STUB.format(id=aid, title=a.title.strip(), date=today(), constrains=", ".join(ids)), encoding="utf-8")
+        led.files[path] = ADR_STUB.format(id=aid, title=a.title.strip(), date=today(), constrains=", ".join(ids))
         for nid in ids:
             if nid in led.nodes:
                 led.nodes[nid]["adr_pending"] = aid
@@ -1378,7 +1463,7 @@ def v_adr(led: Ledger, a) -> int:
             return fail(f"{a.title!r}: no such ADR")
         lines = adr["lines"]
         set_header(lines, "Status", "accepted")
-        adr["path"].write_text("\n".join(lines) + "\n", encoding="utf-8")
+        led.files[adr["path"]] = "\n".join(lines) + "\n"
         freed = [nid for nid, n in led.nodes.items() if n.get("adr_pending") == adr["id"]]
         for nid in freed:
             del led.nodes[nid]["adr_pending"]
@@ -1394,7 +1479,7 @@ def v_adr(led: Ledger, a) -> int:
         if missing:
             return fail(f"{', '.join(missing)}: not a node or frontier id")
         set_header(adr["lines"], "Constrains", ", ".join(ids))
-        adr["path"].write_text("\n".join(adr["lines"]) + "\n", encoding="utf-8")
+        led.files[adr["path"]] = "\n".join(adr["lines"]) + "\n"
         return finish(led, f"{adr['id']} constrains {', '.join(ids)}")
     if a.action == "supersede":
         by_id = {x["id"]: x for x in led.adrs()}
@@ -1404,8 +1489,8 @@ def v_adr(led: Ledger, a) -> int:
         set_header(old["lines"], "Status", "superseded")
         set_header(old["lines"], "Superseded by", new["id"])
         set_header(new["lines"], "Supersedes", old["id"])
-        old["path"].write_text("\n".join(old["lines"]) + "\n", encoding="utf-8")
-        new["path"].write_text("\n".join(new["lines"]) + "\n", encoding="utf-8")
+        led.files[old["path"]] = "\n".join(old["lines"]) + "\n"
+        led.files[new["path"]] = "\n".join(new["lines"]) + "\n"
         return finish(led, f"{old['id']} superseded by {new['id']}")
     return fail("adr <dir> new ... | accept ADR-NNNN | supersede ADR-OLD ADR-NEW | constrains ADR-NNNN --constrains D-NNN")
 
@@ -1434,7 +1519,10 @@ def v_html(led: Ledger, a) -> int:
         return fail("HTML output must have a .html extension; ledger files and Markdown views are not export targets")
     try:
         adrs = [{"id": adr["id"], "text": "\n".join(adr["lines"])} for adr in led.adrs()]
-        document = render_html(led.data, title=led.title, exported_at=now(), adrs=adrs)
+        snapshot = copy.deepcopy(led.data)
+        for n in snapshot["nodes"].values():
+            n["coverage"] = coverage(n)
+        document = render_html(snapshot, title=led.title, exported_at=now(), adrs=adrs, review_key=hashlib.sha256(str(led.path).encode()).hexdigest())
         output.parent.mkdir(parents=True, exist_ok=True)
         output.write_text(document, encoding="utf-8")
     except OSError as exc:
@@ -1451,23 +1539,7 @@ def v_check(led: Ledger, a) -> int:
 # ----------------------------------------------------------------------------- main
 
 
-def log(d: Path, argv: list[str], rc: int) -> None:
-    try:
-        args = argv[1:2] + argv[3:]
-        if len(args) >= 3 and args[0] == "set" and args[2].lstrip().startswith(("{", "[")):
-            try:
-                payload = json.loads(" ".join(args[2:]))
-                fields = ",".join(payload) if isinstance(payload, dict) else "non-object"
-            except json.JSONDecodeError:
-                fields = "invalid"
-            args = args[:2] + [f"<json:{fields}>"]
-        with (d / LOG).open("a", encoding="utf-8") as f:
-            f.write(f"{_dt.datetime.now().isoformat(timespec='seconds')} exit={rc} {' '.join(args)}\n")
-    except OSError:
-        pass
-
-
-def main(argv: list[str]) -> int:
+def parser() -> argparse.ArgumentParser:
     ap = argparse.ArgumentParser(prog="stepwise.py", description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = ap.add_subparsers(dest="cmd", required=True)
 
@@ -1484,12 +1556,14 @@ def main(argv: list[str]) -> int:
     add("frontier"); add("sync"); add("check"); add("show", "id"); add("status", all={"action": "store_true"})
     add("new", "id", ("statement", {"nargs": "?"}))
     add("set", "id", "field", ("value", {"nargs": "*"}))
-    add("body", "id", file={"default": ""})
+    add("body", "id", file={"default": ""}, text={"default": None})
+    add("batch", file={"default": ""})
+    add("ready", "id", approach={"required": True}, validation={"required": True})
     add("answer", "id", "slug", "name")
     add("terminal", "id", "target")
     add("approve", "id", by={"default": "user"})
     add("reopen", "id", "reason"); add("stale", "id", "reason"); add("retire", "id", "reason"); add("supersede", "id", "new_id", "reason")
-    add("evidence", "id", kind={"required": True}, ref={"required": True}, result={"required": True, "choices": ["pass", "fail"]}, note={"default": ""})
+    add("evidence", "id", kind={"required": True}, ref={"required": True}, result={"required": True, "choices": ["pass", "fail"]}, note={"default": ""}, clause={"action": "append", "default": []})
     add("entry", ("kind", {"choices": list(ENTRY_FILE)}), "heading", "definition",
         source={"default": ""}, avoid={"default": ""}, not_={"default": ""}, example={"default": ""},
         given={"default": ""}, when={"default": ""}, then={"default": ""}, excludes={"default": ""}, settles={"default": ""})
@@ -1497,21 +1571,96 @@ def main(argv: list[str]) -> int:
     add("meta", "field", ("value", {"nargs": "+"}))
     add("ambiguity", "claim", ("conflict", {"nargs": "?"}), ("resolves_at", {"nargs": "?"}), drop={"action": "store_true"})
     add("adr", ("action", {"choices": ["new", "accept", "supersede", "constrains"]}), ("title", {"nargs": "?"}), ("new_adr", {"nargs": "?"}), constrains={"default": ""})
-    a = ap.parse_args(argv[1:])
-    d = Path(a.dir).resolve()
+    return ap
+
+
+READ_ONLY = {"check", "show", "frontier", "status", "html"}
+
+
+def dispatch(led: Ledger, a) -> int:
     for key in ("id", "new_id"):
         if getattr(a, key, None) is not None and not is_node_id(getattr(a, key)):
-            return fail(f"{getattr(a, key)!r} is not a D-NNN id")
-    led = Ledger(d)
-    if not led.data:
-        if a.cmd in ("new", "entry", "meta") :
-            led = Ledger.create(d, d.name.replace("-", " ").title())
-        else:
-            return fail(f"{d / LEDGER} missing; start with `new <dir> D-000 \"outcome <- f(x)\"` or `entry` / `meta`")
-    rc = globals()[f"v_{a.cmd}"](led, a)
-    if a.cmd not in ("check", "show", "frontier", "status", "html"):
-        log(d, argv, rc)
-    return rc
+            return fail(f"{getattr(a, key)!r}: expected a D-NNN node ID")
+    if a.cmd not in READ_ONLY | {"batch"}:
+        label = a.cmd + (" " + a.id if hasattr(a, "id") else "")
+        if a.cmd == "set":
+            try:
+                payload = json.loads(a.field)
+                label += " <json:" + ",".join(payload) + ">"
+            except (ValueError, TypeError):
+                label += " " + a.field if not a.field.lstrip().startswith(("{", "[")) else " <invalid-json>"
+        led.operations.append(label)
+    return globals()[f"v_{a.cmd}"](led, a)
+
+
+def v_batch(led: Ledger, a) -> int:
+    from stepwise_batch import operations
+    raw = Path(a.file).read_text() if a.file else sys.stdin.read()
+    try:
+        commands = operations(json.loads(raw))
+    except (ValueError, TypeError) as exc:
+        return fail(f"invalid batch: {exc}")
+    for index, args in enumerate(commands, 1):
+        if not args or args[0] in READ_ONLY | {"batch"}:
+            return fail(f"batch operation {index}: only ledger mutation commands are allowed")
+        output = io.StringIO()
+        with redirect_stdout(output), redirect_stderr(output):
+            try:
+                op = parser().parse_args([args[0], str(led.dir), *args[1:]])
+                rc = dispatch(led, op)
+            except SystemExit:
+                rc = 1
+        if rc:
+            return fail(f"batch operation {index} failed; no changes committed: {output.getvalue().strip()}")
+    return finish(led, f"batch: {len(commands)} operations")
+
+
+def finalize(led: Ledger, command: str) -> int:
+    derive_depends(led)
+    for nid, n in led.nodes.items():
+        if n["design"] == "approved" and n.get("approved_content_hash") != fingerprint(n):
+            n["design"] = "stale"
+            hist(n, "stale", "derived dependencies changed")
+            cascade_stale(led, nid, "derived dependencies changed")
+    refresh_ledger(led)
+    check(led, views=False)
+    if led.errors:
+        return report(led, "No changes committed. Resolve related changes together with `batch`.")
+    files = {**led.files, **render_all(led)}
+    audit = led.dir / LOG
+    files[audit] = (audit.read_text() if audit.exists() else "") + f"{now()} exit=0 {command} operations={'; '.join(led.operations)}\n"
+    led.data["nodes"] = dict(sorted(led.nodes.items()))
+    files[led.path] = json.dumps(led.data, indent=1, ensure_ascii=False) + "\n"
+    commit(led.dir, files)
+    return report(led, led.messages[-1] if led.messages else command)
+
+
+def main(argv: list[str]) -> int:
+    a = parser().parse_args(argv[1:])
+    d = Path(a.dir).resolve()
+    if a.cmd in READ_ONLY and not (d / LEDGER).exists() and not (d / ".stepwise-transaction.json").exists():
+        return fail(f"{d / LEDGER} missing")
+    try:
+        with locked(d):
+            led = Ledger(d)
+            if not led.data:
+                if a.cmd in ("new", "entry", "meta", "batch"):
+                    led = Ledger.create(d, d.name.replace("-", " ").title())
+                else:
+                    return fail(f"{d / LEDGER} missing; start with `new` or `batch`")
+            if a.cmd in READ_ONLY:
+                return dispatch(led, a)
+            output = io.StringIO()
+            with redirect_stdout(output):
+                rc = dispatch(led, a)
+            if rc:
+                if output.getvalue():
+                    print(output.getvalue(), end="")
+                return rc
+            return finalize(led, a.cmd)
+    except (OSError, ValueError, TypeError) as exc:
+        recovery = " A prepared transaction remains; run sync to recover it before resubmitting changes." if (d / ".stepwise-transaction.json").exists() else ""
+        return fail(str(exc) + recovery)
 
 
 if __name__ == "__main__":

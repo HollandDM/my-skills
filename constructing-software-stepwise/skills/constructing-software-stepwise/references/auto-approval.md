@@ -10,16 +10,16 @@ The result contains agent-chosen design decisions. Record newly chosen meanings 
 
 Select several ready frontier nodes that form a useful design slice: siblings sharing context, a short dependency chain, or a bounded subtree. Choose the size from coupling and uncertainty rather than a fixed count. When several nodes are ready, advance multiple nodes in the same batch; a single uncertain root may first need refinement to expose that frontier.
 
-Draft contracts across the slice, resolve shared questions once, and reason about how the nodes compose. Keep separate contracts, adaptations, composition arguments, and decision provenance for every node. Batching changes the unit of planning and reporting; it does not collapse all reasoning into a batch summary.
+Draft contracts across the slice, resolve shared questions once, and reason about how the nodes compose. Keep separate contracts, composition arguments, and decision provenance for every node, plus adaptation or an implementation plan at leaves. Batching changes the unit of planning and reporting; it does not collapse all reasoning into a batch summary.
 
 Persist in an order supported by the ledger:
 
 - Approve a parent body before creating the child IDs it exposes on the frontier.
 - Approve a reusable node before adding an explicit reuse call to it.
-- Write each node through the existing CLI verbs, with one JSON `set` for grouped fields. Mutations to the shared ledger must be sequential; a batch is not an atomic transaction.
-- If a contract changes, revisit invalidated dependents before relying on them. Do not continue from an obsolete batch plan after a failed command; inspect and repair the actual ledger state.
+- Persist the slice with `batch --file changes.json` (or JSON on stdin). The CLI applies operations sequentially in memory, validates the final design, then commits and renders once. No operation in a rejected batch is persisted. See [tooling.md](tooling.md) for the format.
+- Include dependency repairs, reopenings, and retirements in the same transaction when they must change together. Context changes invalidate affected nodes automatically. After a rejected batch, revise the batch against the unchanged ledger.
 
-The agent may choose a collapsed leaf when its body reaches real constructs and satisfies its contract. Unresolved behavior still needs refinement. Reduce the batch size when a shared assumption is unstable or a composition argument becomes difficult; expand it for routine grounded refinements.
+The agent may choose a collapsed leaf when its body reaches real constructs, or an implementation-ready leaf when the approach and validation plan are bounded. Unresolved behavior still needs refinement. Reduce the batch size when a shared assumption is unstable or a composition argument becomes difficult; expand it for routine grounded refinements.
 
 For example, after approving a parent that exposes validation, transformation, and rendering, refine those three children together. If rendering needs a helper exposed by a new body, approve that body and include the helper in the same working batch when useful. There is no mandatory turn boundary between levels.
 
