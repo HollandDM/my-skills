@@ -40,12 +40,15 @@ For reconstruction, source bindings, implementation versions, and inspection pay
 | `new <dir> D-NNN ["statement"]` | Create a root or frontier node. |
 | `set <dir> D-NNN '{...}'` | Replace supplied fields atomically; see [design-ledger.md](design-ledger.md). |
 | `body <dir> D-NNN --text "..."` or `--file FILE` | Set pseudocode on a draft node; stdin is also supported outside a batch. |
-| `terminal <dir> D-NNN "target: identifier"` | Map a draft leaf to an existing construct. |
+| `terminal <dir> D-NNN "target: identifier"` | Map a draft leaf to a named construct, including unwritten application code. |
 | `ready <dir> D-NNN --approach TEXT --validation TEXT` | Record a bounded implementation leaf. |
 | `approve <dir> D-NNN [--by WHO]` | Accept a draft's complete design revision; auto-approval uses `standing approval`. |
+| `proposal <dir> D-NNN` | Hash the exact proposal for `approve --actor WHO --proposal-hash HASH`. |
+| `reaffirm <dir> D-NNN --by WHO` | Re-accept an unchanged stale node; `--actor` is also supported. |
+| `repair <dir>` | List pending design repairs in dependency order; group related changes in a batch. |
 | `reopen` / `stale` / `retire <dir> D-NNN "reason"` | Revise, invalidate, or drop a node. |
 | `supersede <dir> D-OLD D-NEW "reason"` | Record a replacement. |
-| `evidence <dir> D-NNN --kind K --ref R --result pass\|fail [--clause LABEL ...] [--note TEXT]` | Record actual checks and derive current coverage. |
+| `evidence <dir> D-NNN --kind K --ref R --result pass\|fail --clause LABEL [--resolves EV-N] [--note TEXT]` | Record actual checks and derive current coverage; `--covers pre,post` is also accepted. |
 | `entry <dir> term\|fact\|scenario "Name" "definition" [--source TEXT ...]` | Record shared meaning; see [context-ledger.md](context-ledger.md). |
 | `answer <dir> D-NNN slug "Name"` | Resolve a draft unknown using an existing entry. |
 | `change <dir> REF --definition TEXT --reason TEXT [--minor]` | Update context and invalidate affected designs. |

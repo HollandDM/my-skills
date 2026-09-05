@@ -1,5 +1,5 @@
 {
   "name": "constructing-software-stepwise",
   "description": "Stepwise design and reconstruction of existing code, with whole-file source versions, incremental reconciliation, and an interactive design reader.",
-  "version": "1.0.0+codex.20260905050814"
+  "version": "1.1.0"
 }

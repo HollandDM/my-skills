@@ -49,7 +49,7 @@ Batch-parallel plan execution for the Stargazer codebase. Lighter alternative to
 - Compile errors fed back to implementers — team lead never touches code
 - Reformat + batch-done commit after each clean compile
 
-### [constructing-software-stepwise](./constructing-software-stepwise/)
+### [constructing-software-stepwise](./constructing-software-stepwise/) `v1.1.0`
 
 Contract-based stepwise refinement for complex stateful designs. Interviewed mode reviews one node at a time; explicit auto-approval advances coherent batches of related nodes, records agent decisions, and continues to the agreed completion boundary. The adopt/reconcile workflows reconstruct existing behavior separately from intended contracts and track implementation changes through whole-file SHA-256 versions and Git context. The CLI commits validated batches atomically, protects approved revisions, and derives verification from current clause evidence. Refinement may stop at a bounded implementation-ready leaf. The `html` reader separates contract reading from a full-width design map, with state/sequence charts, review filters, and changes since the last review. Mode-specific procedures and ledger details load only when needed.
 
@@ -61,10 +61,10 @@ Claude Code plugin for executing a complete implementation plan through one cont
 
 ### Codex — Stepwise
 
-From a local checkout of this repository, register its marketplace and install Stepwise:
+Register the GitHub marketplace and install Stepwise:
 
 ```sh
-codex plugin marketplace add .
+codex plugin marketplace add HollandDM/my-skills
 codex plugin add constructing-software-stepwise@HollandDM-Skills
 ```
 
@@ -76,14 +76,14 @@ Use Stepwise to design this system. Auto-approve your recommendations and refine
 
 The Codex catalog is `.agents/plugins/marketplace.json`, and the plugin manifest is `constructing-software-stepwise/.codex-plugin/plugin.json`. Both Codex and Claude Code load the same skill, CLI, references, and HTML assets.
 
-Once these changes are published to GitHub, users without a local checkout can register the repository with `codex plugin marketplace add HollandDM/my-skills`, then run the same install command. See the [official plugin packaging documentation](https://developers.openai.com/plugins/build/plugins) for marketplace configuration.
+For local development, use `codex plugin marketplace add .` from this checkout, then run the same install command. See the [official plugin packaging documentation](https://developers.openai.com/plugins/build/plugins) for marketplace configuration.
 
 ### Claude Code
 
 Add the marketplace, then install individual plugins:
 
 ```
-/plugin marketplace add git@github.com:HollandDM/my-skills.git
+/plugin marketplace add HollandDM/my-skills
 /plugin install stargazer-review-gang@HollandDM-Skills
 /plugin install stargazer-batch-dev@HollandDM-Skills
 /plugin install prove@HollandDM-Skills

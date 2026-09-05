@@ -104,6 +104,6 @@ Terms / facts = dependencies of design nodes. Entry changes →
 
 1. `change <dir> <ref> --definition "…" --reason "…"`; typo / wording with identical meaning → add `--minor` (no invalidation)
 2. affected approved nodes and their dependents become stale automatically
-3. revisit those nodes through `reopen` and `approve`; old evidence remains recorded but no longer establishes current coverage
+3. use `repair` for dependency order, then `reaffirm --by WHO` for unchanged nodes or `reopen` and `approve` for revisions; old evidence remains recorded but no longer establishes current coverage
 
 No obsolete definition as active context. Historical meaning mattered to a durable decision → keep it in that ADR.

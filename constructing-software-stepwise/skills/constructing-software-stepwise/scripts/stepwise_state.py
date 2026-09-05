@@ -12,16 +12,24 @@ def fingerprint(node: dict) -> str:
     return hashlib.sha256(json.dumps(content, sort_keys=True, ensure_ascii=False).encode()).hexdigest()
 
 
+def current_evidence(node: dict) -> list[tuple[str, dict]]:
+    if node.get('design') != 'approved' or node.get('approved_content_hash') != fingerprint(node):
+        return []
+    return [(f'EV-{i}', ev) for i, ev in enumerate(node.get('evidence', []), 1)
+            if ev.get('dependency_hash', '') == node.get('evidence_context', '')
+            and ev.get('revision') == node.get('revision', 0)
+            and ev.get('content_hash') == node.get('approved_content_hash')]
+
+
 def coverage(node: dict) -> dict:
-    """Latest result of each check in the current approval revision, per clause."""
+    """Latest result per check, with explicit resolution across different checks."""
     clauses = set(node.get('contract', {}))
     records = node.get('evidence', [])
-    current = node.get('design') == 'approved' and node.get('approved_content_hash') == fingerprint(node)
+    evidence = current_evidence(node)
+    resolved = {ref for _, ev in evidence if ev.get('result') == 'pass' for ref in ev.get('resolves', [])}
     latest = {}
-    for ev in records:
-        if ev.get('dependency_hash', '') != node.get('evidence_context', ''):
-            continue
-        if not current or ev.get('revision') != node.get('revision', 0) or ev.get('content_hash') != node.get('approved_content_hash'):
+    for eid, ev in evidence:
+        if ev.get('result') == 'fail' and eid in resolved:
             continue
         for clause in ev.get('clauses', []) or ['']:
             latest[(clause, ev.get('kind'), ev.get('ref'))] = ev.get('result')

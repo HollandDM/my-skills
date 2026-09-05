@@ -26,7 +26,7 @@ Write a node's statement, effect, and contract before resolving its unknowns or 
 
 Choose boundaries around responsibilities, invariants, and uncertainty. Explain how the body establishes the parent guarantees without strengthening preconditions or permitting forbidden behavior. Address relevant data flow, failures, cleanup, invariants, and progress; give difficult obligations enough detail to assess them. Reopen an ancestor when a deeper finding invalidates its contract.
 
-Use pseudocode for composite operations and concrete targets at leaves. Established platform constraints may appear in contracts and facts when they determine feasibility. When a documented primitive already satisfies the contract, cite it and map each clause to the actual construct; do not reimplement its guarantees in the design. Unwritten application functions are still design work, not existing terminal targets.
+Use pseudocode for composite operations and concrete targets at leaves. Established platform constraints may appear in contracts and facts when they determine feasibility. When a documented primitive already satisfies the contract, cite it and map each clause to the actual construct; do not reimplement its guarantees in the design. A named application function may be a terminal target before it is written; record its intended clause mappings and leave realization as `not-started`. Refine further when its responsibilities or risks remain unclear.
 
 Refine until the remaining obligations and implementation risks are understood. Split by responsibility or difficult reasoning, not clause or line counts. Use `ready` for a bounded implementation leaf whose contract, approach, and validation are clear; unresolved behavior still needs refinement. Write self-contained sentences and explain tagged body lines. Use names and IDs to reference shared definitions instead of repeating them.
 
@@ -44,7 +44,7 @@ Read only the reference needed for the current operation:
 
 Use `status`, `frontier`, and relevant node views to orient. Persist a coherent slice through `batch`: operations are applied in memory, validated together, and committed with one render. A rejected operation or invalid final state leaves the ledger and views unchanged. Group node fields in one JSON `set`; never invent content to satisfy validation.
 
-Approval, implementation, and verification are distinct claims. Record who supplied decisions and who approved nodes. Preserve changed decisions through `reopen`, `stale`, `supersede`, or `retire`; revisit affected dependents instead of silently editing approved work.
+Approval, implementation, and verification are distinct claims. Record who supplied decisions and who approved nodes. Preserve changed decisions through `reopen`, `stale`, `supersede`, or `retire`. Use `repair` for dependency order and `reaffirm` when a stale node is unchanged and its dependencies have been re-accepted.
 
 ## Completion
 
