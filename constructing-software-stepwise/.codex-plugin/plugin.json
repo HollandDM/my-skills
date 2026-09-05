@@ -1,0 +1,25 @@
+{
+  "name": "constructing-software-stepwise",
+  "version": "1.0.0",
+  "description": "Contract-based software design with interviewed or auto-approved batch refinement and an interactive HTML tree and diagram reader.",
+  "author": {
+    "name": "HollandDM"
+  },
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "Stepwise Software Design",
+    "shortDescription": "Refine designs in batches and explore contracts visually.",
+    "longDescription": "Contract-based software design with interviewed or auto-approved batch refinement and an interactive HTML tree and diagram reader.",
+    "developerName": "HollandDM",
+    "category": "Productivity",
+    "capabilities": [],
+    "defaultPrompt": [
+      "Design this system with Stepwise.",
+      "Auto-approve recommendations and refine in batches.",
+      "Render this Stepwise design as an HTML tree."
+    ],
+    "brandColor": "#007C78"
+  },
+  "repository": "https://github.com/HollandDM/my-skills",
+  "homepage": "https://github.com/HollandDM/my-skills#constructing-software-stepwise"
+}

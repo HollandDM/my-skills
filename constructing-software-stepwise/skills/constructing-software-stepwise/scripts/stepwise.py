@@ -2,10 +2,11 @@
 """Stepwise ledger CLI — owns every write to the design ledger. Agent-agnostic; call it from any agent.
 
 Canonical data: <design-dir>/ledger.json (typed; this tool is the only writer).
-Generated views (never edit; regenerated on every verb): DESIGN.md, CONTEXT.md, nodes/D-NNN.md.
+Generated Markdown views (never edit; refreshed by ledger mutations): DESIGN.md, CONTEXT.md, nodes/D-NNN.md.
 ADRs stay markdown in docs/adr/ (repo convention); `adr new` stubs them, `adr accept` flips status.
 
-Every verb ends with render + lint; exit 1 and `error <where>: <msg>` lines when something must be fixed.
+Ledger mutations end with render + lint; exit 1 and `error <where>: <msg>` lines identify conflicts.
+Read-only orientation and HTML export do not mutate the ledger; HTML is an explicitly refreshed snapshot.
 
   frontier  <dir>                                     what to pick next
   show      <dir> D-NNN                               node view to stdout
@@ -38,6 +39,7 @@ Every verb ends with render + lint; exit 1 and `error <where>: <msg>` lines when
   sync      <dir>                                     render + lint (after hand-editing an ADR paragraph)
   status    <dir> [--all]                             every node, its design state, and the one move that advances it
   check     <dir>                                     lint only, no writes
+  html      <dir> [--output FILE]                     standalone HTML reader (default: <dir>/DESIGN.html)
 
 Stdlib only, no regex: the ledger is typed data, not text to be parsed.
 """
@@ -1423,6 +1425,24 @@ def v_status(led: Ledger, a) -> int:
     return 0
 
 
+def v_html(led: Ledger, a) -> int:
+    from stepwise_html import render_html
+
+    output = Path(a.output).expanduser() if a.output else led.dir / "DESIGN.html"
+    output = output.resolve()
+    if output.suffix.lower() != ".html":
+        return fail("HTML output must have a .html extension; ledger files and Markdown views are not export targets")
+    try:
+        adrs = [{"id": adr["id"], "text": "\n".join(adr["lines"])} for adr in led.adrs()]
+        document = render_html(led.data, title=led.title, exported_at=now(), adrs=adrs)
+        output.parent.mkdir(parents=True, exist_ok=True)
+        output.write_text(document, encoding="utf-8")
+    except OSError as exc:
+        return fail(f"could not export HTML: {exc}")
+    print(f"HTML snapshot: {output}")
+    return 0
+
+
 def v_check(led: Ledger, a) -> int:
     check(led)
     return report(led)
@@ -1460,6 +1480,7 @@ def main(argv: list[str]) -> int:
             s.add_argument("--" + k.rstrip("_"), dest=k, **kw)
         return s
 
+    add("html", output={"default": "", "metavar": "FILE", "help": "HTML destination (default: <dir>/DESIGN.html)"})
     add("frontier"); add("sync"); add("check"); add("show", "id"); add("status", all={"action": "store_true"})
     add("new", "id", ("statement", {"nargs": "?"}))
     add("set", "id", "field", ("value", {"nargs": "*"}))
@@ -1488,7 +1509,7 @@ def main(argv: list[str]) -> int:
         else:
             return fail(f"{d / LEDGER} missing; start with `new <dir> D-000 \"outcome <- f(x)\"` or `entry` / `meta`")
     rc = globals()[f"v_{a.cmd}"](led, a)
-    if a.cmd not in ("check", "show", "frontier", "status"):
+    if a.cmd not in ("check", "show", "frontier", "status", "html"):
         log(d, argv, rc)
     return rc
 

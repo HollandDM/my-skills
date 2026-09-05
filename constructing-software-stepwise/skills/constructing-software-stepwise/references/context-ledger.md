@@ -1,8 +1,8 @@
 # Context Ledger Format
 
-_Every field below is written in complete, self-explanatory sentences for a reader with no context — see Voice in SKILL.md. Caps bound how much is said, never how clearly._
+Write entries in self-contained sentences. Refer to shared definitions by name or ID.
 
-Context = shared meaning. Answers **what we mean, what world design must fit**. Glossary + facts + scenarios. Nothing else — not spec, not scratch pad, not impl decisions.
+Context = shared meaning. Answers **what we mean, what world design must fit**. Glossary, facts, and scenarios define shared meaning. Record chosen semantics here as terms or scenarios; implementation structure and decision rationale belong in design nodes or ADRs.
 
 ## Layout — typed entries in the ledger, one generated view
 
@@ -33,12 +33,12 @@ The entry's key is its name everywhere: `answer D-020 run-identity "Run Key"`, J
 
 ## Entry Rules
 
-- **One claim per entry.** Sentence joins two citable claims with "and" / ";" → two entries.
+- **One claim per entry.** Split claims when they need independent sources or may change independently.
 - **Name = identity.** `Run Key`, `CTX-F01`. One canonical spelling; the tool matches case-insensitively and refuses duplicates.
 - **Tight.** Definition 1–2 sentences. What it IS, not what it does.
 - **Opinionated.** Rejected synonyms in `--avoid`. Confusable neighbours in `--not` (must be terms; lint warns otherwise).
 - **Project-specific only.** General programming concepts (timeout, retry, error type) are not terms — even when used heavily.
-- **Source always.** `--source user | <code path> | <doc url> | experiment`. Confirmation date is filled by the tool.
+- **Source always.** Use the actual source: user, code path, documentation URL, experiment, or an attributed standing-approval decision. Confirmation date is filled by the tool.
 - Term → project-wide glossary only when used across multiple designs / bounded contexts. Local stays local.
 
 ## View — `CONTEXT.md` (generated)
@@ -85,9 +85,10 @@ Entry allowed only if ONE holds:
 
 - user explicitly confirmed; or
 - inspected fact w/ cited source, needs no user authority; or
-- direct derivation from confirmed entry, derivation shown.
+- direct derivation from confirmed entry, derivation shown; or
+- agent-selected design decision within explicit standing approval, attributed as described in [auto-approval.md](auto-approval.md).
 
-Agent inference alone → not eligible. No confident prose from guesses.
+Delegation permits design choices, not invented facts about the environment. Keep unresolved empirical claims explicit until inspected.
 
 User vs code disagree → surface conflict: "Your code cancels entire Orders, but you just said partial cancellation is possible — which is right?" Record resolution. Never both as true.
 
@@ -95,7 +96,7 @@ User term conflicts w/ existing entry → call out immediately: "Glossary define
 
 Vague / overloaded term → propose canonical: "'account' — Customer or User? Different things."
 
-Ambiguous boundary → scenario forcing it. Resolve iff active node's draft Contract carries a `?` for it; else `ambiguity <dir> "<claim>" "<conflict>" D-NNN` (the child that will own it) and include `deferred` in the proposal metadata JSON at approval. Entries exist only for resolved `?` — one per question asked, no more.
+Use a scenario to clarify ambiguous behavior. Resolve unknowns in the active node or batch; defer others with `ambiguity <dir> "<claim>" "<conflict>" D-NNN` naming the owner. Share one entry across nodes that use the same meaning. Entries may also record newly inspected facts; use `depends` when no `?` needs substitution.
 
 ## Change + Invalidation
 

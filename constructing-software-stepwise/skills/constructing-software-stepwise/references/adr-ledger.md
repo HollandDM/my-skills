@@ -1,6 +1,6 @@
 # ADR Ledger Format
 
-_Every field below is written in complete, self-explanatory sentences for a reader with no context — see Voice in SKILL.md. Caps bound how much is said, never how clearly._
+Write entries in self-contained sentences. Refer to shared definitions by name or ID.
 
 ADR = durable record that a consequential choice was made, and why. Backstop for refinement tree: future designs satisfy it or explicitly supersede.
 
@@ -27,7 +27,7 @@ Typical: persistent data formats, ownership boundaries, public protocols, consis
 
 ## Authority + Lifecycle
 
-Agent recommends. User approves accept / supersede.
+In interviewed mode, the user approves acceptance. Under standing approval, the agent may accept a new ADR within the delegated scope; record the source, date, rationale, and alternative in its prose because the CLI has no ADR approval-attribution flag. Superseding or conflicting with an accepted ADR requires explicit user resolution unless already authorized for that specific conflict.
 
 Status: `proposed` → `accepted` → `superseded by ADR-NNNN` | `deprecated`. Repo convention wins if present.
 

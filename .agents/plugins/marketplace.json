@@ -1,0 +1,20 @@
+{
+  "name": "HollandDM-Skills",
+  "interface": {
+    "displayName": "HollandDM Skills"
+  },
+  "plugins": [
+    {
+      "name": "constructing-software-stepwise",
+      "source": {
+        "source": "local",
+        "path": "./constructing-software-stepwise"
+      },
+      "policy": {
+        "installation": "AVAILABLE",
+        "authentication": "ON_INSTALL"
+      },
+      "category": "Productivity"
+    }
+  ]
+}

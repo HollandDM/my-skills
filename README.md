@@ -1,6 +1,6 @@
 # My Skills
 
-Custom Claude Code skills for the Stargazer codebase.
+Custom coding-agent skills for software design and the Stargazer codebase. Stepwise supports both Claude Code and Codex; the other plugins currently use the Claude Code marketplace.
 
 ## Skills
 
@@ -51,13 +51,34 @@ Batch-parallel plan execution for the Stargazer codebase. Lighter alternative to
 
 ### [constructing-software-stepwise](./constructing-software-stepwise/)
 
-Stepwise refinement for hard designs — interacting components, state machines, durable workflows, concurrency, correctness constraints. One abstract node per approval cycle: interview the user one question at a time (grill-with-docs style, recommendation per question, explore code instead of asking) until that node's meaning is on disk, propose one refinement — a pseudocode body of 2–7 child statements (Dijkstra-style, no language / framework / platform names until a node is terminal) with a composition argument that preserves the parent contract — substitute it into `DESIGN.md`'s assembled `Program` (approved nodes reused from several parents become procedures, defined once and called by reference), stop for explicit approval, persist, next node. Three dimensions — context, design nodes with their evidence, ADRs — under `docs/design/<topic>/`: a typed `ledger.json` (nodes with statement / contract / pseudocode body / evidence / history, terms / facts / scenarios, scope, ambiguities) written only by the bundled agent-agnostic CLI (`scripts/stepwise.py`, python stdlib, no regex), with `DESIGN.md` (assembled Program), `CONTEXT.md` and `nodes/*.md` rendered as read-only views; ADRs stay markdown. Verbs cover every write — `new`, `set`, `body`, `answer`, `terminal`, `approve`, `reopen`, `stale`, `supersede`, `evidence`, `entry`, `change`, `meta`, `ambiguity`, `adr`; `set` accepts one atomic JSON object for grouped node fields instead of requiring one command per field. Each write re-renders and lints status vocabulary, caps, calls, targets, staleness, ADRs, and generated views, so the agent spends its tokens on reasoning while structure, links, parents, frontier and status stay consistent by construction. Three independent node states (approved / implemented / verified), an ADR conflict protocol, and an observable terminal-node test keep agents from skipping rigor or over-ceremonializing trivial work. Trigger explicitly.
+Contract-based stepwise refinement for complex stateful designs. Interviewed mode reviews one node at a time; explicit auto-approval advances coherent batches of related nodes, records agent decisions, and continues to the agreed completion boundary. A Python CLI maintains the design ledger, generated views, dependency invalidation, and evidence records. The `html` command exports a standalone reader with a searchable tree, linked pseudocode and contracts, and an interactive diagram. Mode-specific procedures and ledger details load only when needed.
 
 ### [mixed-agent-sdd](./mixed-agent-sdd/)
 
 Claude Code plugin for executing a complete implementation plan through one controller and a mixed Claude/Codex/OpenCode roster. It requires OpenCode CLI and the OpenAI Codex Claude plugin, balances implementers across backends, reviews and repairs complete batches, and hands final cross-vendor findings to a human.
 
 ## Installation
+
+### Codex — Stepwise
+
+From a local checkout of this repository, register its marketplace and install Stepwise:
+
+```sh
+codex plugin marketplace add .
+codex plugin add constructing-software-stepwise@HollandDM-Skills
+```
+
+Start a new Codex session and ask it to use Stepwise, for example:
+
+```text
+Use Stepwise to design this system. Auto-approve your recommendations and refine in batches.
+```
+
+The Codex catalog is `.agents/plugins/marketplace.json`, and the plugin manifest is `constructing-software-stepwise/.codex-plugin/plugin.json`. Both Codex and Claude Code load the same skill, CLI, references, and HTML assets.
+
+Once these changes are published to GitHub, users without a local checkout can register the repository with `codex plugin marketplace add HollandDM/my-skills`, then run the same install command. See the [official plugin packaging documentation](https://developers.openai.com/plugins/build/plugins) for marketplace configuration.
+
+### Claude Code
 
 Add the marketplace, then install individual plugins:
 
