@@ -49,9 +49,9 @@ Batch-parallel plan execution for the Stargazer codebase. Lighter alternative to
 - Compile errors fed back to implementers — team lead never touches code
 - Reformat + batch-done commit after each clean compile
 
-### [constructing-software-stepwise](./constructing-software-stepwise/) `v1.1.0`
+### [constructing-software-stepwise](./constructing-software-stepwise/) `v1.1.1`
 
-Contract-based stepwise refinement for complex stateful designs. Interviewed mode reviews one node at a time; explicit auto-approval advances coherent batches of related nodes, records agent decisions, and continues to the agreed completion boundary. The adopt/reconcile workflows reconstruct existing behavior separately from intended contracts and track implementation changes through whole-file SHA-256 versions and Git context. The CLI commits validated batches atomically, protects approved revisions, and derives verification from current clause evidence. Refinement may stop at a bounded implementation-ready leaf. The `html` reader separates contract reading from a full-width design map, with state/sequence charts, review filters, and changes since the last review. Mode-specific procedures and ledger details load only when needed.
+Contract-based stepwise refinement for complex stateful designs. Interviewed mode reviews one node at a time; explicit auto-approval advances coherent batches of related nodes, records agent decisions, and continues to the agreed completion boundary. The adopt/reconcile workflows reconstruct existing behavior separately from intended contracts and track implementation changes through whole-file SHA-256 versions and Git context. The CLI commits validated batches atomically, protects approved revisions, and derives verification from current clause evidence. Refinement may stop at a bounded implementation-ready leaf. The dark-themed `html` reader separates contract reading from a full-width design map, with state/sequence charts, review filters, and changes since the last review. Mode-specific procedures and ledger details load only when needed.
 
 ### [mixed-agent-sdd](./mixed-agent-sdd/)
 

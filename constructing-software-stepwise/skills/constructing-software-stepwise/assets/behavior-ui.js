@@ -32,7 +32,9 @@ function behaviorCanvas(width, height) {
       markerHeight: 6,
       orient: "auto",
     });
-  marker.append(svgEl("path", { d: "M 0 0 L 10 5 L 0 10 z", fill: "#007c78" }));
+  marker.append(
+    svgEl("path", { d: "M 0 0 L 10 5 L 0 10 z", fill: "var(--teal)" }),
+  );
   defs.append(marker);
   svg.append(defs);
   return svg;
@@ -147,7 +149,9 @@ function drawBehavior() {
       if (row.terminal)
         g.append(svgEl("rect", { x: 4, y: 4, width: 152, height: 52, rx: 9 }));
       if (row.initial)
-        g.append(svgEl("circle", { cx: -12, cy: 30, r: 5, fill: "#007c78" }));
+        g.append(
+          svgEl("circle", { cx: -12, cy: 30, r: 5, fill: "var(--teal)" }),
+        );
       g.append(
         svgEl("text", { x: 80, y: 34, "text-anchor": "middle" }, row.label),
       );
