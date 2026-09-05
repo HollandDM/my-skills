@@ -94,7 +94,7 @@
       "name": "constructing-software-stepwise",
       "source": "./constructing-software-stepwise",
       "description": "Stepwise design and reconstruction of existing code, with whole-file source versions, incremental reconciliation, and an interactive design reader.",
-      "version": "1.1.1",
+      "version": "1.2.0",
       "author": {
         "name": "HollandDM"
       },

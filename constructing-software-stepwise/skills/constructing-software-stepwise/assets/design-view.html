@@ -518,6 +518,64 @@
         white-space: pre-wrap;
         overflow-wrap: anywhere;
       }
+      .algorithm-card {
+        border-radius: 3px;
+        border-top: 2px solid var(--teal);
+        border-bottom: 2px solid var(--line);
+      }
+      .algorithm-title {
+        padding: 14px 16px;
+        border-bottom: 1px solid var(--line);
+        font:
+          600 17px/1.5 Georgia,
+          "Times New Roman",
+          serif;
+      }
+      .algorithm-meta {
+        display: grid;
+        grid-template-columns: 80px minmax(0, 1fr);
+        gap: 5px 12px;
+        padding: 12px 16px;
+        margin: 0;
+        border-bottom: 1px solid var(--line);
+        font-size: 12px;
+        line-height: 1.7;
+      }
+      .algorithm-meta dt {
+        color: var(--teal);
+        font-weight: 650;
+      }
+      .algorithm-meta dd {
+        margin: 0;
+        white-space: pre-wrap;
+        overflow-wrap: anywhere;
+      }
+      .algorithm-card .code-line {
+        border-top: 0;
+        padding-block: 4px;
+      }
+      .algorithm-card .line-no {
+        width: 26px;
+        color: var(--muted);
+      }
+      .algorithm-card .line-content {
+        padding-left: var(--indent, 0px);
+      }
+      .algorithm-card .line-note {
+        padding-top: 0;
+      }
+      .algorithm-card .code-line:last-child {
+        padding-bottom: 16px;
+      }
+      .algorithm-keyword {
+        color: #b8caff;
+        font-weight: 750;
+      }
+      @media print {
+        .algorithm-keyword {
+          color: #344a76;
+        }
+      }
       .code-card {
         background: #182a35;
         color: #d6e3e9;
@@ -1421,11 +1479,7 @@
       const state = (n) => (stateNames.has(n.design) ? n.design : "unresolved");
       __STEPWISE_EXISTING_JS__;
       const name = (n) =>
-        (n.statement || "")
-          .split("<-")
-          .pop()
-          .trim()
-          .replace(/^->\s*/, "")
+        algorithmSignature(n.statement || "")
           .split("(")[0]
           .trim() || n.id;
       function addEdge(from, to, kind, code) {
@@ -1655,53 +1709,7 @@
         for (const item of items) ul.append(el("li", "", txt(item)));
         return ul;
       }
-      function renderCode(
-        n,
-        body = n.body || [],
-        historical = false,
-        caption = null,
-      ) {
-        const card = el("div", "card code-card"),
-          bar = el("div", "code-bar");
-        bar.append(
-          el("span", "", "PSEUDOCODE"),
-          el(
-            "span",
-            "",
-            caption ||
-              (historical
-                ? "Superseded body"
-                : state(n) === "approved"
-                  ? "Approved refinement"
-                  : "Unapproved refinement"),
-          ),
-        );
-        card.append(bar, el("div", "signature mono", n.statement || n.id));
-        body.forEach((line, i) => {
-          const row = el("div", "code-line"),
-            main = el("div", "line-content"),
-            code = el(
-              "code",
-              "",
-              " ".repeat(Math.min(Math.max(Number(line.indent) || 0, 0), 80)) +
-                (line.code || ""),
-            );
-          main.append(code);
-          const target = line.child || line.reuse;
-          const note =
-            line.gloss || (target && nodes.get(target)?.gloss) || line.note;
-          if (note) main.append(el("div", "line-note", txt(note)));
-          if (line.target)
-            main.append(el("div", "line-note", "↳ " + line.target));
-          row.append(el("span", "line-no", i + 1), main);
-          if (target && nodes.has(target))
-            row.append(
-              linkTo(target, (line.reuse ? "↗ " : "") + target, "code-ref"),
-            );
-          card.append(row);
-        });
-        return card;
-      }
+      __STEPWISE_PSEUDOCODE_JS__;
       function overview(n, into) {
         if (n.implementation_plan)
           into.append(
@@ -1733,12 +1741,15 @@
                   : "No contract has been recorded.",
             ),
           );
-        into.append(section("Contract", contract, clauses.length + " clauses"));
+        if (!n.body?.length)
+          into.append(
+            section("Contract", contract, clauses.length + " clauses"),
+          );
         for (const text of n.walkthrough || [])
           into.append(el("p", "lead", text));
         if (n.body?.length)
           into.append(
-            section("Refinement", renderCode(n), n.body.length + " lines"),
+            section("Refinement", renderCode(n), n.body.length + 2 + " lines"),
           );
         if (n.target) {
           const t = el("div", "card code-card");

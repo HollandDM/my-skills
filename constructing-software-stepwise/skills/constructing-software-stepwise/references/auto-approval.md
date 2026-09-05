@@ -10,7 +10,7 @@ The result contains agent-chosen design decisions. Record newly chosen meanings 
 
 Select several ready frontier nodes that form a useful design slice: siblings sharing context, a short dependency chain, or a bounded subtree. Choose the size from coupling and uncertainty rather than a fixed count. When several nodes are ready, advance multiple nodes in the same batch; a single uncertain root may first need refinement to expose that frontier.
 
-Draft contracts across the slice, resolve shared questions once, and reason about how the nodes compose. Keep separate contracts, composition arguments, and decision provenance for every node, plus adaptation or an implementation plan at leaves. Batching changes the unit of planning and reporting; it does not collapse all reasoning into a batch summary.
+Use the algorithm structure in [pseudocode.md](pseudocode.md) for pseudocode. Draft contracts across the slice, resolve shared questions once, and reason about how the nodes compose. Keep separate contracts, composition arguments, and decision provenance for every node, plus adaptation or an implementation plan at leaves. Batching changes the unit of planning and reporting; it does not collapse all reasoning into a batch summary.
 
 Persist in an order supported by the ledger:
 

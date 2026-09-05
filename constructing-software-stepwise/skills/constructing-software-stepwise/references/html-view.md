@@ -79,3 +79,7 @@ uv run --with playwright python <skill>/scripts/test_stepwise_html_browser.py
 ```
 
 If no system browser is available, install Playwright's Chromium with `uv run --with playwright python -m playwright install chromium`, then run the browser checks. These dependencies are for renderer development only.
+
+## Algorithm presentation
+
+Code cards use the paper-style notation in [pseudocode.md](pseudocode.md), with an algorithm caption, Require/Ensure headers from the recorded contract, numbered procedure lines, emphasized keywords, and clickable refinement references. Source text remains inert. Historical and observed code cards do not borrow the current intended contract. Regenerate existing HTML snapshots to apply the new presentation; the dark theme and separate Design map tab remain available.

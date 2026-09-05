@@ -41,19 +41,22 @@ Use a composite when separate operations or obligations need separate reasoning.
 
 ## Body notation
 
+Follow [pseudocode.md](pseudocode.md) for paper-style algorithms, mathematical notation, and state/event rules.
+
 ```pseudo
-run_job(key):
-  item <- validate(key)       -- D-001: Validate the caller's identity.
-  { item is valid }
-  result <- execute(item)     -- D-002: Produce the requested result.
-  -> result
+procedure RunJob(key)
+  item ← Validate(key)       ▷ D-001: Validate the caller's identity.
+  assert item is valid
+  result ← Execute(item)     ▷ D-002: Produce the requested result.
+  return result
+end procedure
 ```
 
-One statement per line; indentation represents nesting. An optional first signature line is removed by the parser. Abstract assignment is `<-`; return is `->`; conditions and loops use ordinary pseudocode. Assertions use `{ ... }`.
+One logical action per line; indentation represents nesting. Use explicit `if … then` / `end if` and `for each … do` / `end for` blocks. The optional matching procedure wrapper is removed on input and generated on output. Store contract headers in `contract`, not the body; line numbers are generated. Existing ASCII arrows and `--` tags remain accepted.
 
-Tags: `-- D-NNN: explanation` defines a child; `-- ↗ D-NNN -- explanation` reuses an approved node; `-- ⇒ target: identifier -- explanation` maps an operation to a concrete construct. An existing child's gloss can supply its explanation. Calls with one unambiguous existing signature may be auto-tagged.
+Tags: `▷ D-NNN: explanation` defines a child; `▷ ↗ D-NNN -- explanation` reuses an approved node; `▷ ⇒ target: identifier -- explanation` maps a concrete operation. An existing child's gloss can supply its explanation. Calls with one unambiguous existing signature may be auto-tagged.
 
-`Program` expands approved composite bodies and hoists shared procedures. Implementation-ready leaves display `◇ implementation-ready`. The HTML reader retains draft and historical content with visible state labels.
+`Program` presents root algorithms and separate named helper procedures. A call does not inline another procedure's local variables or returns. Approved and stale bodies display their actual state; draft bodies remain in node views, and retired/superseded bodies remain historical records. The HTML reader uses the same procedure boundaries and keeps graph references clickable.
 
 ## Approval and changes
 

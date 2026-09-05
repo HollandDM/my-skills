@@ -7,7 +7,7 @@ Draft the active node's gloss, effect, and contract before asking about its unkn
 Once the contract is settled, present a proposal containing:
 
 - The node ID, statement, and a plain explanation of what it does.
-- Its contract and proposed pseudocode body, terminal target with clause-by-clause adaptation, or bounded implementation approach and validation plan.
+- Its contract and proposed paper-style algorithm (see [pseudocode.md](pseudocode.md)), terminal target with clause-by-clause adaptation, or bounded implementation approach and validation plan.
 - The composition argument, consequential decisions, and any deferred questions with their owning nodes.
 - Any applicable ADR conflict or pending decision.
 

@@ -39,7 +39,7 @@ For reconstruction, source bindings, implementation versions, and inspection pay
 | `reconcile <dir> [--repo ROOT]` | Persist implementation changes without overwriting observations or intended contracts. |
 | `new <dir> D-NNN ["statement"]` | Create a root or frontier node. |
 | `set <dir> D-NNN '{...}'` | Replace supplied fields atomically; see [design-ledger.md](design-ledger.md). |
-| `body <dir> D-NNN --text "..."` or `--file FILE` | Set pseudocode on a draft node; stdin is also supported outside a batch. |
+| `body <dir> D-NNN --text "..."` or `--file FILE` | Set a paper-style procedure on a draft node; see [pseudocode.md](pseudocode.md). Stdin is also supported outside a batch. |
 | `terminal <dir> D-NNN "target: identifier"` | Map a draft leaf to a named construct, including unwritten application code. |
 | `ready <dir> D-NNN --approach TEXT --validation TEXT` | Record a bounded implementation leaf. |
 | `approve <dir> D-NNN [--by WHO]` | Accept a draft's complete design revision; auto-approval uses `standing approval`. |
