@@ -191,6 +191,20 @@ class HtmlBrowserTests(unittest.TestCase):
             self.page.get_by_role("button", name="Save review file").click()
         self.assertEqual(download.value.suggested_filename, "stepwise-review.json")
 
+    def test_evidence_scope_and_withdrawal_are_visible(self):
+        data=fixture()
+        data['source_coverage']={'active':4,'bound':3,'observed':3,'current':2,'unbound':['D-003'],'complete':False}
+        data['nodes']['D-000']['evidence']=[{'date':'2026-09-06','kind':'e2e','ref':'run-12','result':'pass','clauses':['post'],
+            'scope':'implementation','scenario':'LOW effort run','assessment':'The run did not exercise review.',
+            'withdrawn':{'date':'2026-09-06','by':'agent correction','reason':'The claimed review path did not run.'}}]
+        self.open(data)
+        self.assertEqual(self.page.locator('#summary .stat').filter(has_text='source current').locator('strong').inner_text(),'2')
+        self.page.get_by_role('tab',name='Evidence & history').click()
+        text=self.page.locator('#detail-content').inner_text()
+        self.assertIn('e2e · withdrawn',text)
+        self.assertIn('Scenario: LOW effort run',text)
+        self.assertIn('The claimed review path did not run.',text)
+
     def test_explicit_state_and_sequence_charts(self):
         data = fixture()
         data["nodes"]["D-000"]["behavior"] = {

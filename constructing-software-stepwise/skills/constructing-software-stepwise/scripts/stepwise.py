@@ -13,7 +13,7 @@ Read-only orientation and HTML export do not mutate the ledger; HTML is an expli
   new       <dir> D-NNN ["stmt"]                      draft node (frontier id, or the root with its statement)
   set       <dir> D-NNN '{"gloss":"...","effect":"...","contract":{"pre":"..."}}'
                                                        atomically replace the supplied node fields from one JSON object
-  set       <dir> D-NNN gloss|effect "text"           targeted single-field correction
+  set       <dir> D-NNN statement|gloss|effect "text" targeted draft correction; rename parent calls in same batch
   set       <dir> D-NNN pre|post|failure|invariant|<label> "clause"   contract clause, any lowercase label (unknowns as ?slug)
   set       <dir> D-NNN walkthrough "l1" ["l2" "l3"]  what the function does (above the body)
   set       <dir> D-NNN composition|decisions|deferred|adaptation "b1" "b2" ...    bullet lists (replace)
@@ -31,11 +31,13 @@ Read-only orientation and HTML export do not mutate the ledger; HTML is an expli
   stale     <dir> D-NNN "reason"                      a change invalidated it; the entries that changed are recorded with it
   retire    <dir> D-NNN "reason"                      the design dropped it; nothing calls it any more
   supersede <dir> D-OLD D-NEW "reason"
-  evidence  <dir> D-NNN --kind K --ref R --result pass|fail --clause LABEL [--resolves EV-N] [--note N]
+  evidence  <dir> D-NNN --kind K --ref R --result pass|fail --clause LABEL --scope S --assessment TEXT [--scenario TEXT]
+  withdraw-evidence <dir> D-NNN EV-N --reason TEXT [--by WHO]
   ready     <dir> D-NNN --approach TEXT --validation TEXT   bounded implementation leaf
   adopt     <dir> D-NNN ["statement"] [--parent D-NNN]   reconstruct an observational hierarchy
   bind      <dir> D-NNN PATH [--repo ROOT] [--binding S01] [--symbol NAME] [--lines START:END]
   observe   <dir> D-NNN JSON [--file FILE] --at TOKEN    record inspected behavior, preserving intended contracts
+  observation <dir> D-NNN                              export a round-trippable observation payload
   scan      <dir> [--repo ROOT] [--json]                source versions and inspection notifications, read-only
   reconcile <dir> [--output DIR] [--repo ROOT]         initialize a fresh reconstruction; agent must inspect and rebuild
   batch     <dir> [--file FILE]                       validate and commit JSON operations together
@@ -75,7 +77,7 @@ LEDGER = "ledger.json"
 LOG = ".stepwise.log"
 CODE_COL = 58
 CONTRACT_KEYS = ("pre", "post", "failure", "cancellation", "invariant", "progress")
-TEXT_FIELDS = ("gloss", "effect")
+TEXT_FIELDS = ("gloss", "effect", "statement")
 LIST_FIELDS = ("walkthrough", "composition", "decisions", "deferred", "adaptation")
 JSON_SET_FIELDS = TEXT_FIELDS + ("contract",) + LIST_FIELDS + ("depends", "realization", "verification", "implementation_plan", "behavior")
 DESIGN_CONTENT_FIELDS = CONTENT_FIELDS
@@ -682,7 +684,15 @@ def render_node(led: Ledger, nid: str) -> str:
     if n.get("evidence"):
         L += ["", "## Evidence", ""]
         for i, ev in enumerate(n["evidence"], 1):
-            L += [f"### EV-{i} {ev['kind']} — {ev['result']}", f"{ev['date']} · {ev['ref']} · Covers: {', '.join(ev.get('clauses') or ev.get('covers', []))} · revision {ev.get('revision', 'legacy')}" + (f" · Resolves: {', '.join(ev['resolves'])}" if ev.get("resolves") else "") + (f" · {ev['note']}" if ev.get("note") else "")]
+            result = "withdrawn" if ev.get("withdrawn") else ev["result"]
+            detail = f"{ev['date']} · {ev['ref']} · Covers: {', '.join(ev.get('clauses') or ev.get('covers', []))} · revision {ev.get('revision', 'legacy')}"
+            if ev.get('scope'): detail += f" · Scope: {ev['scope']}"
+            if ev.get('scenario'): detail += f" · Scenario: {ev['scenario']}"
+            if ev.get('assessment'): detail += f" · Assessment: {ev['assessment']}"
+            if ev.get("resolves"): detail += f" · Resolves: {', '.join(ev['resolves'])}"
+            if ev.get("note"): detail += f" · {ev['note']}"
+            if ev.get("withdrawn"): detail += f" · Withdrawn {ev['withdrawn']['date']} by {ev['withdrawn']['by']}: {ev['withdrawn']['reason']}"
+            L += [f"### EV-{i} {ev['kind']} — {result}", detail]
     if n.get("history"):
         L += ["", "## History", "", *[f"- {h['date']} — {h['event']}" + (f": {h['reason']}" if h.get("reason") else "") for h in n["history"]]]
     return "\n".join(L) + "\n"
@@ -1041,6 +1051,58 @@ def content_edit_error(nid: str, n: dict) -> str:
     return f"{nid} is {state}; its historical content cannot be edited"
 
 
+def replace_call_name(code: str, old: str, new: str) -> str:
+    """Replace an abstract direct call while ignoring strings and member calls."""
+    out, i, quote, escaped = [], 0, '', False
+    while i < len(code):
+        ch = code[i]
+        if quote:
+            out.append(ch)
+            if escaped:
+                escaped = False
+            elif ch == '\\':
+                escaped = True
+            elif ch == quote:
+                quote = ''
+            i += 1
+            continue
+        if ch in ('"', "'"):
+            quote = ch
+            out.append(ch)
+            i += 1
+            continue
+        if code.startswith(old, i) and (i == 0 or not (code[i - 1].isalnum() or code[i - 1] in '_.')):
+            end = i + len(old)
+            after = end
+            while after < len(code) and code[after] == ' ':
+                after += 1
+            if (end == len(code) or not (code[end].isalnum() or code[end] == '_')) and after < len(code) and code[after] == '(':
+                out.append(new)
+                i = end
+                continue
+        out.append(ch)
+        i += 1
+    return ''.join(out)
+
+
+def rename_statement(led: Ledger, nid: str, value: str) -> str:
+    n = led.nodes[nid]
+    old, new = fn_of(n['statement']), fn_of(value)
+    changes = []
+    if old != new:
+        for pid in led.parents(nid):
+            parent = led.nodes[pid]
+            rows = [line for line in parent.get('body', [])
+                    if (line.get('child') or line.get('reuse')) == nid and old in call_names(line['code'])]
+            if rows and parent['design'] != 'draft':
+                return f"reopen parent {pid} in the same batch before renaming {nid}; its tagged call still uses {old}(...)"
+            changes.extend(rows)
+        for line in changes:
+            line['code'] = replace_call_name(line['code'], old, new)
+    n['statement'] = value
+    return ''
+
+
 def v_set_json(led: Ledger, nid: str, n: dict, raw: str) -> int:
     try:
         payload = json.loads(raw)
@@ -1059,6 +1121,8 @@ def v_set_json(led: Ledger, nid: str, n: dict, raw: str) -> int:
         if f in TEXT_FIELDS:
             if not isinstance(value, str):
                 return fail(f"{nid}: JSON field {f!r} must be a string")
+            if f == "statement" and not fn_of(value.strip()):
+                return fail(f"{nid}: statement {value!r} has no call `f(...)`")
             updates[f] = value.strip()
         elif f == "contract":
             if not isinstance(value, dict):
@@ -1109,6 +1173,9 @@ def v_set_json(led: Ledger, nid: str, n: dict, raw: str) -> int:
     )
     if (semantic_changed or historical_content_changed) and (why := content_edit_error(nid, n)):
         return fail(why)
+    if 'statement' in updates:
+        if why := rename_statement(led, nid, updates.pop('statement')):
+            return fail(why)
     n.update(updates)
     fields = ", ".join(payload)
     return finish(led, f"{nid} set from JSON: {fields}" + (f"; open ?: {node_unknowns(n)}" if node_unknowns(n) else ""))
@@ -1131,7 +1198,13 @@ def v_set(led: Ledger, a) -> int:
     if (f in DESIGN_CONTENT_FIELDS or contract_field) and (why := content_edit_error(a.id, n)):
         return fail(why)
     if f in TEXT_FIELDS:
-        n[f] = " ".join(vals).strip()
+        if f == "statement" and not fn_of(" ".join(vals).strip()):
+            return fail(f"{a.id}: statement has no call `f(...)`")
+        if f == "statement":
+            if why := rename_statement(led, a.id, " ".join(vals).strip()):
+                return fail(why)
+        else:
+            n[f] = " ".join(vals).strip()
     elif contract_field:
         # any lowercase word is a contract clause label: pre, post, failure, invariant, budget, determinism, boundary, ...
         n.setdefault("contract", {})[f] = " ".join(vals).strip()
@@ -1435,6 +1508,12 @@ def v_evidence(led: Ledger, a) -> int:
     n = need(led, a.id)
     if n is None:
         return 1
+    if a.result == "pass" and (a.note.strip().lower().startswith(("withdrawn", "retracted")) or a.assessment.strip().lower().startswith(("withdrawn", "retracted"))):
+        return fail("withdrawn evidence cannot be passing evidence; use withdraw-evidence")
+    if a.scope == "unspecified" or not a.assessment.strip():
+        return fail("evidence requires --scope implementation|composition|correspondence and --assessment explaining what it establishes and its limits")
+    if any(word in a.kind.lower() for word in ("test", "e2e", "integration", "property")) and not a.scenario.strip():
+        return fail("test evidence requires --scenario naming the exercised path and configuration")
     clauses = comma_values([*a.clause, *a.covers])
     if not clauses:
         return fail("evidence requires --clause LABEL or --covers LABEL[,LABEL]")
@@ -1451,15 +1530,45 @@ def v_evidence(led: Ledger, a) -> int:
     current = dict(current_evidence(n))
     for ref in resolves:
         ev = current.get(ref)
-        if not ev or ev.get("result") != "fail":
+        if not ev or ev.get("withdrawn") or ev.get("result") != "fail":
             return fail(f"{ref} is not current failed evidence on {a.id}")
         if not set(ev.get("clauses", [])) <= set(clauses):
             return fail(f"resolving {ref} must cover every failed obligation")
     n.setdefault("evidence", []).append({"date": now(), "kind": a.kind, "ref": a.ref, "result": a.result,
         "clauses": clauses, "resolves": resolves, "revision": n.get("revision", 0), "content_hash": fingerprint(n), "dependency_hash": n["evidence_context"],
+        "scope": a.scope, "scenario": a.scenario, "assessment": a.assessment,
         **({"note": a.note} if a.note else {})})
     n["verification"] = coverage(n)["status"]
     return finish(led, f"{a.id} evidence EV-{len(n['evidence'])}; verification {n['verification']}; missing clauses {coverage(n)['missing']}")
+
+
+def v_withdraw_evidence(led: Ledger, a) -> int:
+    n = need(led, a.id)
+    if n is None:
+        return 1
+    if not a.evidence.startswith("EV-") or not a.evidence[3:].isdigit() or not 1 <= int(a.evidence[3:]) <= len(n.get("evidence", [])):
+        return fail("expected an existing EV-N evidence identifier")
+    if not a.reason.strip():
+        return fail("withdrawal requires a reason")
+    ev = n['evidence'][int(a.evidence[3:]) - 1]
+    if ev.get('withdrawn'):
+        return fail("evidence is already withdrawn")
+    ev['withdrawn'] = {'date': now(), 'by': a.by, 'reason': a.reason}
+    hist(n, 'evidence withdrawn', a.evidence + ': ' + a.reason)
+    return finish(led, a.id + ' withdrew ' + a.evidence)
+
+
+def v_observation(led: Ledger, a) -> int:
+    n = need(led, a.id)
+    if n is None:
+        return 1
+    obs = n.get('observation')
+    if not obs:
+        return fail('no observation recorded')
+    payload = {k: copy.deepcopy(obs[k]) for k in ('effect', 'claims', 'unknowns', 'behavior', 'comparisons') if k in obs}
+    payload['pseudocode'] = '\n'.join(body_text(obs.get('body', []), indent=0))
+    print(json.dumps(payload, indent=2, ensure_ascii=False))
+    return 0
 
 
 def v_ready(led: Ledger, a) -> int:
@@ -1677,6 +1786,8 @@ def scan_text(report: dict) -> str:
     lines = []
     for nid, row in report['nodes'].items():
         lines.append(f"{nid} {row['state']} · conformance {row['conformance']['status']} · implementation {(row['implementation_version'] or 'unbound')[:12]} — {row['reason']}")
+    c = report.get('coverage', {})
+    lines.append(f"Source coverage: {c.get('current', 0)}/{c.get('active', 0)} active current; bound {c.get('bound', 0)}; observed {c.get('observed', 0)}; unbound {', '.join(c.get('unbound', [])) or 'none'}")
     lines.append(f"Inspection pending: {', '.join(report['pending']) or 'none'}; assessment pending: {', '.join(report['assessment_pending']) or 'none'}; recorded differences: {', '.join(report['differences']) or 'none'}")
     return "\n".join(lines)
 
@@ -1790,6 +1901,7 @@ def v_html(led: Ledger, a) -> int:
     try:
         adrs = [{"id": adr["id"], "text": "\n".join(adr["lines"])} for adr in led.adrs()]
         snapshot = copy.deepcopy(led.data)
+        snapshot["source_coverage"] = copy.deepcopy(led.source_scan.get("coverage", {}))
         for nid, row in led.source_scan["nodes"].items():
             snapshot["nodes"][nid]["source_report"] = {**row, "commit": led.source_scan.get("commit")}
         for n in snapshot["nodes"].values():
@@ -1831,6 +1943,8 @@ def parser() -> argparse.ArgumentParser:
     add("bind", "id", "path", repo={"default": None}, binding={"default": None}, symbol={"default": ""}, lines={"default": None})
     add("unbind", "id", "binding", reason={"required": True})
     add("observe", "id", ("payload", {"nargs": "?"}), file={"default": ""}, at={"required": True}, by={"default": "agent inspection"})
+    add("observation", "id")
+    add("withdraw-evidence", "id", "evidence", reason={"required": True}, by={"default": "agent inspection"})
     add("scan", repo={"default": None}, json={"action": "store_true"})
     add("reconcile", repo={"default": None}, output={"default": ""})
     add("set", "id", "field", ("value", {"nargs": "*"}))
@@ -1842,7 +1956,7 @@ def parser() -> argparse.ArgumentParser:
     add("approve", "id", by={"default": "user"}, actor={"default": ""}, proposal_hash={"default": ""})
     add("reaffirm", "id", by={"default": ""}, actor={"default": ""})
     add("reopen", "id", "reason"); add("stale", "id", "reason"); add("retire", "id", "reason"); add("supersede", "id", "new_id", "reason")
-    add("evidence", "id", kind={"required": True}, ref={"required": True}, result={"required": True, "choices": ["pass", "fail"]}, note={"default": ""}, clause={"action": "append", "default": []}, covers={"action": "append", "default": []}, resolves={"action": "append", "default": []})
+    add("evidence", "id", kind={"required": True}, ref={"required": True}, result={"required": True, "choices": ["pass", "fail"]}, note={"default": ""}, clause={"action": "append", "default": []}, covers={"action": "append", "default": []}, resolves={"action": "append", "default": []}, scope={"default": "unspecified", "choices": ["unspecified", "implementation", "composition", "correspondence"]}, scenario={"default": ""}, assessment={"default": ""})
     add("entry", ("kind", {"choices": list(ENTRY_FILE)}), "heading", "definition",
         source={"default": ""}, avoid={"default": ""}, not_={"default": ""}, example={"default": ""},
         given={"default": ""}, when={"default": ""}, then={"default": ""}, excludes={"default": ""}, settles={"default": ""})
@@ -1854,7 +1968,7 @@ def parser() -> argparse.ArgumentParser:
 
 
 # Commands that leave the input ledger unchanged; html/reconcile write separate outputs.
-READ_ONLY = {"check", "show", "frontier", "status", "html", "scan", "proposal", "repair", "reconcile"}
+READ_ONLY = {"check", "show", "frontier", "status", "html", "scan", "proposal", "repair", "reconcile", "observation"}
 
 
 def dispatch(led: Ledger, a) -> int:
@@ -1870,7 +1984,7 @@ def dispatch(led: Ledger, a) -> int:
             except (ValueError, TypeError):
                 label += " " + a.field if not a.field.lstrip().startswith(("{", "[")) else " <invalid-json>"
         led.operations.append(label)
-    return globals()[f"v_{a.cmd}"](led, a)
+    return globals()["v_" + a.cmd.replace("-", "_")](led, a)
 
 
 def v_batch(led: Ledger, a) -> int:

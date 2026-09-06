@@ -79,18 +79,18 @@ rc, text = invoke(verified, "proposal", "D-000")
 proposal = text.strip().split()[-1]
 assert invoke(verified, "approve", "D-000", "--actor", "user:owner", "--proposal-hash", proposal)[0] == 0
 
-rc, text = invoke(verified, "evidence", "D-000", "--kind", "test", "--ref", "StoreSpec", "--result", "pass")
+rc, text = invoke(verified, "evidence", "D-000", "--kind", "test", "--ref", "StoreSpec", "--result", "pass", "--scope", "implementation", "--scenario", "valid key", "--assessment", "Exercises storage behavior.")
 assert rc == 1 and "--covers" in text, text
-assert invoke(verified, "evidence", "D-000", "--kind", "test", "--ref", "StoreSpec#pre", "--result", "pass", "--covers", "pre")[0] == 0
+assert invoke(verified, "evidence", "D-000", "--kind", "test", "--ref", "StoreSpec#pre", "--result", "pass", "--covers", "pre", "--scope", "implementation", "--scenario", "valid key", "--assessment", "Exercises precondition acceptance.")[0] == 0
 node = json.loads((verified / "ledger.json").read_text())["nodes"]["D-000"]
 assert node["verification"] == "partial" and node["realization"] == "not-started", node
 
 assert invoke(verified, "set", "D-000", "realization", "implemented")[0] == 0
-assert invoke(verified, "evidence", "D-000", "--kind", "review", "--ref", "review-1", "--result", "fail", "--covers", "post")[0] == 0
+assert invoke(verified, "evidence", "D-000", "--kind", "review", "--ref", "review-1", "--result", "fail", "--covers", "post", "--scope", "correspondence", "--assessment", "Review found the implementation does not establish post.")[0] == 0
 assert json.loads((verified / "ledger.json").read_text())["nodes"]["D-000"]["verification"] == "failed"
-assert invoke(verified, "evidence", "D-000", "--kind", "test", "--ref", "StoreSpec#post", "--result", "pass", "--covers", "post")[0] == 0
+assert invoke(verified, "evidence", "D-000", "--kind", "test", "--ref", "StoreSpec#post", "--result", "pass", "--covers", "post", "--scope", "implementation", "--scenario", "successful store", "--assessment", "A different check passes post without resolving review-1.")[0] == 0
 assert json.loads((verified / "ledger.json").read_text())["nodes"]["D-000"]["verification"] == "failed"
-assert invoke(verified, "evidence", "D-000", "--kind", "review", "--ref", "review-2", "--result", "pass", "--covers", "post", "--resolves", "EV-2")[0] == 0
+assert invoke(verified, "evidence", "D-000", "--kind", "review", "--ref", "review-2", "--result", "pass", "--covers", "post", "--resolves", "EV-2", "--scope", "correspondence", "--assessment", "Follow-up review confirms the postcondition and resolves EV-2.")[0] == 0
 node = json.loads((verified / "ledger.json").read_text())["nodes"]["D-000"]
 assert node["verification"] == "verified", node
 
@@ -183,7 +183,7 @@ assert invoke(verified, "batch", stdin=json.dumps([
     ["set", "D-000", json.dumps({"depends":["Storage Key"]})],
     ["approve", "D-000", "--by", "user:test"]
 ]))[0] == 0
-assert invoke(verified, "evidence", "D-000", "--kind", "test", "--ref", "KeySpec", "--result", "pass", "--covers", "pre,post")[0] == 0
+assert invoke(verified, "evidence", "D-000", "--kind", "test", "--ref", "KeySpec", "--result", "pass", "--covers", "pre,post", "--scope", "implementation", "--scenario", "key lifecycle", "--assessment", "Exercises both obligations for a durable key.")[0] == 0
 assert invoke(verified, "change", "Storage Key", "--definition", "An identity across retries.", "--reason", "Clarified lifetime")[0] == 0
 rc, text = invoke(verified, "repair")
 assert rc == 0 and "reaffirm" in text, text

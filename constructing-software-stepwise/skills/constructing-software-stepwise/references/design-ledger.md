@@ -24,6 +24,8 @@ The ledger records how child operations satisfy parent contracts, what was appro
 
 JSON `set` accepts the prose fields, contract, metadata arrays, dependencies, implementation plan, behavior, and realization. Supplied arrays and nested objects replace their whole field. Approval content includes the statement, contract, body, target, adaptation, decisions, dependencies, plans, and behavior. Changes require `reopen`; historical retired or superseded content cannot be silently edited. Reopening a retired node explicitly revives it.
 
+`statement` may be changed only while the node is draft. If its callable name changes, reopen every intended parent whose tagged body line calls the old name in the same `batch`; the CLI rewrites those exact direct calls while ignoring strings, member calls, and semantic relationships with different names. Re-approve the revised parents and child together. Update the statement, contract, body, and walkthrough as one coherent revision. Renaming should not require a replacement node when the responsibility retains its identity.
+
 ## Observed implementations
 
 A node may additionally contain `bindings`, `observed_children`, `observation`, `observation_history`, `binding_history`, and implementation-version history. These are descriptive records, outside the approved intended-content fingerprint. They are maintained by `adopt`, `bind`, `observe`, and `sync`, not ordinary `set`.
@@ -71,14 +73,18 @@ Re-approval after a contract change invalidates dependent designs transitively. 
 ## Evidence coverage
 
 ```sh
-evidence <dir> D-001 --kind property-test --ref tests/test_normalize.py --result pass --clause pre --clause post --note "Covers finite strings, including whitespace-only inputs."
+evidence <dir> D-001 --kind property-test --ref tests/test_normalize.py --result pass --clause pre --clause post --scope implementation --scenario "empty, padded, and normalized finite strings" --assessment "Exercises normalization and output shape; does not cover non-string input."
 ```
 
-Use one or more `--clause` labels (or the compatible `--covers pre,post` form) from the node's contract. Evidence records the current approval revision, full design fingerprint, and dependency context. Describe scope and limits in `--note`; record only checks actually performed or arguments actually established.
+Use one or more `--clause` labels (or `--covers pre,post`) from the contract. Every new record states whether it supports the implementation, the pseudocode composition argument, or implementation-to-design correspondence through `--scope`, and explains its result and limits through `--assessment`. Test-like evidence also names the executed inputs, mode, and path through `--scenario`. `--ref` identifies the artifact. `--note` holds supplementary provenance.
+
+Do not renew evidence by copying an older record to a new revision. Re-open the artifact, confirm the exact configuration and path it exercised, and reassess each named clause. Keep evidence historical when that has not happened. A helper test supports a composed clause only when an accompanying composition/correspondence argument establishes the missing wiring. A passing test for storage alone does not prove that failure cleanup invokes it.
 
 For each `(clause, kind, ref)` check, the latest result in the current revision applies. Any current failing check produces `failed`, including a current legacy unscoped failure. Rerun the same check and record its passing result to resolve it. A different passing check may explicitly resolve it using `--resolves EV-N`, covering every failed clause; otherwise it does not erase that failure. All clauses need current passing evidence before `verified`; incomplete coverage is `partial`. Evidence from an older design or dependency context is `stale`. Legacy unscoped records are retained but cannot establish clause coverage; new records must name clauses.
 
 Verification is derived and cannot be manually promoted with `set`. Evidence never sets realization to implemented. A design argument may establish a contract while implementation is still outstanding; the two statuses remain separate. The tool verifies coverage bookkeeping, not the truth or adequacy of the supplied evidence.
+
+If later inspection shows that evidence did not exercise the claimed behavior, use `withdraw-evidence`. Withdrawal keeps the original record and correction reason while removing its contribution to coverage. Do not encode withdrawal in a passing record's prose; the CLI rejects `pass` records described as withdrawn or retracted.
 
 ## Existing ledgers
 

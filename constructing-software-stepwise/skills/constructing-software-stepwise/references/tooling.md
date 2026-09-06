@@ -35,10 +35,11 @@ For reconstruction, source bindings, implementation versions, and inspection pay
 | `bind <dir> D-NNN PATH [--repo ROOT] [--binding S01] [--symbol NAME] [--lines START:END]` | Bind a whole-file source fingerprint; locators are navigation hints. |
 | `unbind <dir> D-NNN S01 --reason TEXT` | Remove a binding while preserving its history. |
 | `observe <dir> D-NNN JSON --at TOKEN` or `--file FILE` | Record inspected claims and optional comparisons against an exact source scope. |
-| `scan <dir> [--repo ROOT] [--json]` | Read current implementation versions and notifications. |
+| `observation <dir> D-NNN` | Export the current observation as a valid editable `observe` payload, including pseudocode. |
+| `scan <dir> [--repo ROOT] [--json]` | Read versions, notifications, and current/bound/observed coverage over every active node in a source-backed model. |
 | `reconcile <dir> [--output DIR] [--repo ROOT]` | Initialize a fresh ledger for a source-first rebuild. Continue with inspection and adopt/bind/observe; the old ledger remains intact. Cannot run inside a batch. |
 | `new <dir> D-NNN ["statement"]` | Create a root or frontier node. |
-| `set <dir> D-NNN '{...}'` | Replace supplied fields atomically; see [design-ledger.md](design-ledger.md). |
+| `set <dir> D-NNN '{...}'` | Replace supplied fields atomically, including `statement` on a draft. Reopen matching parent callsites in the batch so the guarded rename can update them; see [design-ledger.md](design-ledger.md). |
 | `body <dir> D-NNN --text "..."` or `--file FILE` | Set a paper-style procedure on a draft node; see [pseudocode.md](pseudocode.md). Stdin is also supported outside a batch. |
 | `terminal <dir> D-NNN "target: identifier"` | Map a draft leaf to a named construct, including unwritten application code. |
 | `ready <dir> D-NNN --approach TEXT --validation TEXT` | Record a bounded implementation leaf. |
@@ -48,7 +49,8 @@ For reconstruction, source bindings, implementation versions, and inspection pay
 | `repair <dir>` | List pending design repairs in dependency order; group related changes in a batch. |
 | `reopen` / `stale` / `retire <dir> D-NNN "reason"` | Revise, invalidate, or drop a node. |
 | `supersede <dir> D-OLD D-NEW "reason"` | Record a replacement. |
-| `evidence <dir> D-NNN --kind K --ref R --result pass\|fail --clause LABEL [--resolves EV-N] [--note TEXT]` | Record actual checks and derive current coverage; `--covers pre,post` is also accepted. |
+| `evidence <dir> D-NNN --kind K --ref R --result pass\|fail --clause LABEL --scope implementation\|composition\|correspondence --assessment TEXT [--scenario TEXT]` | Record an assessed check and derive coverage. Test/e2e kinds require the exercised scenario. `--covers pre,post` and `--resolves EV-N` are supported. |
+| `withdraw-evidence <dir> D-NNN EV-N --reason TEXT [--by WHO]` | Retract evidence without calling the implementation failed; the audit record remains and its coverage is removed. |
 | `entry <dir> term\|fact\|scenario "Name" "definition" [--source TEXT ...]` | Record shared meaning; see [context-ledger.md](context-ledger.md). |
 | `answer <dir> D-NNN slug "Name"` | Resolve a draft unknown using an existing entry. |
 | `change <dir> REF --definition TEXT --reason TEXT [--minor]` | Update context and invalidate affected designs. |

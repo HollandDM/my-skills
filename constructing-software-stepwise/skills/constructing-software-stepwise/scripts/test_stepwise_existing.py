@@ -85,12 +85,35 @@ class ExistingCodeTests(unittest.TestCase):
         self.observe()
         self.assertEqual(self.scan()['nodes']['D-001']['state'],'current')
 
+    def test_observation_round_trip_preserves_omitted_pseudocode_only_when_sources_match(self):
+        self.adopt(); token=self.scan()['nodes']['D-001']['inspection_token']
+        payload={'effect':'Trim whitespace.','claims':[{'text':'Uses strip.','basis':'observed','sources':['S01']}],
+                 'unknowns':[],'pseudocode':'return value.strip() -- ⇒ python: str.strip -- Trim whitespace.'}
+        self.run_cli('observe','D-001',json.dumps(payload),'--at',token)
+        body=self.data()['nodes']['D-001']['observation']['body']
+        exported=json.loads(self.run_cli('observation','D-001'))
+        self.assertIn('str.strip',exported['pseudocode'])
+        update={'effect':'Return a trimmed value.','claims':payload['claims']}
+        self.run_cli('observe','D-001',json.dumps(update),'--at',token)
+        self.assertEqual(self.data()['nodes']['D-001']['observation']['body'],body)
+        before=self.data();(self.repo/'normalize.py').write_text('def normalize(value):\n    return value.upper()\n')
+        fresh=self.scan()['nodes']['D-001']['inspection_token']
+        self.run_cli('observe','D-001',json.dumps(update),'--at',fresh,ok=False)
+        self.assertEqual(self.data(),before)
+        update['pseudocode']='return value.upper() -- ⇒ python: str.upper -- Uppercase the value.'
+        self.run_cli('observe','D-001',json.dumps(update),'--at',fresh)
+        self.assertIn('upper',self.data()['nodes']['D-001']['observation']['body'][0]['code'])
+        update['pseudocode']=''
+        self.run_cli('observe','D-001',json.dumps(update),'--at',fresh)
+        self.assertEqual(self.data()['nodes']['D-001']['observation']['body'],[])
+
     def test_conformance_is_separate_and_code_changes_invalidate_evidence(self):
         self.adopt()
         self.run_cli('set','D-001',json.dumps({'gloss':'Normalize a string.','effect':'Trim whitespace.','contract':{'post':'Whitespace is stripped.'}}))
         self.run_cli('terminal','D-001','python: str.strip')
         self.run_cli('approve','D-001','--by','user')
-        self.run_cli('evidence','D-001','--kind','test','--ref','fixture','--result','pass','--clause','post')
+        self.run_cli('evidence','D-001','--kind','test','--ref','fixture','--result','pass','--clause','post',
+                     '--scope','implementation','--scenario','padded input','--assessment','The implementation strips whitespace for the fixture input.')
         before=self.data()['nodes']['D-001'];self.observe(comparisons={'post':{'status':'matches','reason':'The inspected implementation calls str.strip.'}})
         after=self.data()['nodes']['D-001']
         self.assertEqual(after['approved_content_hash'],before['approved_content_hash'])
@@ -133,6 +156,21 @@ class ExistingCodeTests(unittest.TestCase):
         changed=self.scan()['nodes']['D-001']
         self.assertNotEqual(changed['implementation_version'],before['implementation_version'])
         self.assertEqual(changed['state'],'stale')
+
+    def test_scan_counts_every_active_node_in_a_source_backed_model(self):
+        self.adopt();self.observe();self.observe('D-000')
+        self.run_cli('unbind','D-001','S01','--reason','Binding needs reconstruction.')
+        report=self.scan()
+        self.assertEqual(report['coverage']['active'],2)
+        self.assertEqual(report['coverage']['bound'],1)
+        self.assertEqual(report['coverage']['unbound'],['D-001'])
+        self.assertFalse(report['coverage']['complete'])
+        self.assertIn('D-001',report['pending'])
+        self.run_cli('bind','D-001','normalize.py','--binding','S01','--symbol','normalize')
+        self.observe()
+        complete=self.scan()['coverage']
+        self.assertEqual(complete['current'],complete['active'])
+        self.assertTrue(complete['complete'])
 
     def test_observed_hierarchy_and_claims_are_validated_transactionally(self):
         self.adopt();before=self.data()

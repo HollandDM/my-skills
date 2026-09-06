@@ -1,5 +1,8 @@
 {
   "name": "constructing-software-stepwise",
   "description": "Stepwise design and reconstruction of existing code, with whole-file source versions, incremental sync, and an interactive design reader.",
-  "version": "2.0.1"
+  "version": "3.0.0",
+  "author": {
+    "name": "HollandDM"
+  }
 }

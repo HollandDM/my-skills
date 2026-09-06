@@ -1612,6 +1612,9 @@
             live.filter((n) => n.verification === "verified").length,
             "verified",
           ],
+          ...(ledger.source_coverage?.active
+            ? [[ledger.source_coverage.current, "source current"]]
+            : []),
         ];
         for (const [count, label] of counts) {
           const d = el("div", "stat");
@@ -1925,8 +1928,9 @@
           );
         records.forEach((ev, i) => {
           const r = el("div", "record");
+          if (ev.withdrawn) r.classList.add("withdrawn");
           r.append(
-            el("h4", "", "EV-" + (i + 1) + " · " + ev.kind + " · " + ev.result),
+            el("h4", "", "EV-" + (i + 1) + " · " + ev.kind + " · " + (ev.withdrawn ? "withdrawn" : ev.result)),
             el("p", "", ev.ref || ""),
             el("small", "", ev.date || ""),
           );
@@ -1940,7 +1944,11 @@
                 (ev.revision ?? "legacy"),
             ),
           );
+          if (ev.scope || ev.scenario || ev.assessment)
+            r.append(el("p", "", [ev.scope && "Scope: " + ev.scope, ev.scenario && "Scenario: " + ev.scenario, ev.assessment && "Assessment: " + ev.assessment].filter(Boolean).join(" · ")));
           if (ev.note) r.append(el("p", "", ev.note));
+          if (ev.withdrawn)
+            r.append(el("div", "notice", "Withdrawn " + ev.withdrawn.date + " by " + ev.withdrawn.by + ": " + ev.withdrawn.reason));
           card.append(r);
         });
         into.append(section("Evidence", card));

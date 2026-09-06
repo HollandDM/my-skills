@@ -26,9 +26,11 @@ def coverage(node: dict) -> dict:
     clauses = set(node.get('contract', {}))
     records = node.get('evidence', [])
     evidence = current_evidence(node)
-    resolved = {ref for _, ev in evidence if ev.get('result') == 'pass' for ref in ev.get('resolves', [])}
+    resolved = {ref for _, ev in evidence if ev.get('result') == 'pass' and not ev.get('withdrawn') for ref in ev.get('resolves', [])}
     latest = {}
     for eid, ev in evidence:
+        if ev.get('withdrawn'):
+            continue
         if ev.get('result') == 'fail' and eid in resolved:
             continue
         for clause in ev.get('clauses', []) or ['']:

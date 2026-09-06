@@ -123,6 +123,7 @@ def record_version(node: dict, row: dict, commit: str | None) -> None:
 
 def scan(led, override=None) -> dict:
     root = repository(led, override)
+    track_scope = bool(root or led.data.get('reconstruction'))
     commit = git_commit(root)
     cache = {}
     for n in led.nodes.values():
@@ -133,7 +134,7 @@ def scan(led, override=None) -> dict:
     report = {}
     for nid, node in led.nodes.items():
         bindings = node.get('bindings', {})
-        if not bindings and not node.get('observation') and not node.get('observed_children') and node.get('origin') != 'existing-code':
+        if not track_scope and not bindings and not node.get('observation') and not node.get('observed_children') and node.get('origin') != 'existing-code':
             continue
         visited, pending, files = set(), [nid], {}
         while pending:
@@ -177,10 +178,16 @@ def scan(led, override=None) -> dict:
                           and led.nodes[nid].get('contract') and (led.nodes[nid].get('observation', {}).get('design_hash') != fingerprint(led.nodes[nid])
                           or led.nodes[nid].get('observation', {}).get('design_context') != led.nodes[nid].get('evidence_context')
                           or set(led.nodes[nid]['contract']) - set(led.nodes[nid].get('observation', {}).get('comparisons', {})))]
-    notifications = [{'node': nid, 'kind': 'implementation_changed' if report[nid]['implementation_version'] != report[nid]['observed_version'] else 'inspection_stale',
+    notifications = [{'node': nid, 'kind': 'source_unbound' if report[nid]['state'] == 'unbound' else 'implementation_changed' if report[nid]['implementation_version'] != report[nid]['observed_version'] else 'inspection_stale',
                       'previous': report[nid]['observed_version'], 'current': report[nid]['implementation_version'], 'reason': report[nid]['reason']} for nid in pending]
     notifications.extend({'node': nid, 'kind': 'assessment_required', 'reason': report[nid]['conformance']['reason']} for nid in assessment_pending if nid not in pending)
-    return {'repository': str(root) if root else None, 'commit': commit, 'assessment_pending': assessment_pending, 'nodes': report, 'pending': pending, 'notifications': notifications,
+    active = [nid for nid in report if led.nodes[nid]['design'] not in ('retired', 'superseded')]
+    coverage = {'active': len(active), 'bound': sum(bool(led.nodes[nid].get('bindings')) for nid in active),
+                'observed': sum(bool(led.nodes[nid].get('observation')) for nid in active),
+                'current': sum(report[nid]['state'] == 'current' for nid in active),
+                'unbound': [nid for nid in active if report[nid]['state'] == 'unbound']}
+    coverage['complete'] = bool(active) and coverage['active'] == coverage['current']
+    return {'repository': str(root) if root else None, 'commit': commit, 'coverage': coverage, 'assessment_pending': assessment_pending, 'nodes': report, 'pending': pending, 'notifications': notifications,
             'current': [nid for nid, row in report.items() if row['state'] == 'current'],
             'differences': [nid for nid, row in report.items() if row['conformance']['status'] == 'differs']}
 
@@ -292,6 +299,17 @@ def observe(led, nid: str, payload: dict, token: str, *, by: str, parse_body, fn
     allowed = {'effect', 'claims', 'unknowns', 'pseudocode', 'behavior', 'comparisons'}
     if not isinstance(payload, dict) or set(payload) - allowed:
         raise ValueError('observation fields: effect, claims, unknowns, pseudocode, behavior, comparisons')
+    payload = copy.deepcopy(payload)
+    previous = node.get('observation')
+    if previous:
+        unchanged = previous.get('scope_hash') == token
+        for field in ('unknowns', 'behavior', 'comparisons'):
+            if field not in payload and previous.get(field):
+                if not unchanged or (field == 'comparisons' and previous.get('design_hash') != fingerprint(node)):
+                    raise ValueError(f'reassess {field} explicitly after source/design changes; export with observation first')
+                payload[field] = copy.deepcopy(previous[field])
+        if 'pseudocode' not in payload and previous.get('body') and not unchanged:
+            raise ValueError('reinspect and supply pseudocode explicitly after source changes; export with observation first')
     if not isinstance(payload.get('effect'), str) or not payload['effect'].strip():
         raise ValueError('observation needs a nonempty effect')
     claims = payload.get('claims')
@@ -317,7 +335,7 @@ def observe(led, nid: str, payload: dict, token: str, *, by: str, parse_body, fn
             raise ValueError('each comparison needs status matches|differs|unknown and a reason')
     if 'behavior' in payload and (why := validate_behavior(payload['behavior'])):
         raise ValueError(why)
-    body = []
+    body = copy.deepcopy(previous.get('body', [])) if previous and 'pseudocode' not in payload else []
     if 'pseudocode' in payload:
         if not isinstance(payload['pseudocode'], str):
             raise ValueError('pseudocode must be a string')

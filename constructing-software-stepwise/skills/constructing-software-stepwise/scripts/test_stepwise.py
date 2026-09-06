@@ -39,7 +39,8 @@ class LedgerTests(unittest.TestCase):
             {'verb':'approve','id':'D-000','by':'standing approval'}])
 
     def evidence(self, result, *clauses):
-        args = ['evidence','D-000','--kind','test','--ref','test_normalize','--result',result]
+        args = ['evidence','D-000','--kind','test','--ref','test_normalize','--result',result,
+                '--scope','implementation','--scenario','normalize padded and empty strings','--assessment','The check exercises the named clauses for these inputs.']
         for clause in clauses: args += ['--clause',clause]
         self.run_cli(*args)
 
@@ -52,7 +53,8 @@ class LedgerTests(unittest.TestCase):
         self.assertEqual((n['verification'],n['realization']),('verified','not-started'))
         self.evidence('fail','post')
         self.assertEqual(self.data()['nodes']['D-000']['verification'],'failed')
-        self.run_cli('evidence','D-000','--kind','other-test','--ref','other','--result','pass','--clause','post')
+        self.run_cli('evidence','D-000','--kind','other-test','--ref','other','--result','pass','--clause','post',
+                     '--scope','implementation','--scenario','other normalization path','--assessment','A different check passes the postcondition but does not resolve the first failure.')
         self.assertEqual(self.data()['nodes']['D-000']['verification'],'failed')
         self.evidence('pass','post')
         self.assertEqual(self.data()['nodes']['D-000']['verification'],'verified')
@@ -60,6 +62,48 @@ class LedgerTests(unittest.TestCase):
         self.run_cli('approve','D-000')
         self.assertEqual(self.data()['nodes']['D-000']['verification'],'stale')
         self.assertEqual(len(self.data()['nodes']['D-000']['revisions']),1)
+
+    def test_evidence_needs_assessment_and_can_be_withdrawn(self):
+        self.root()
+        before=self.data()
+        self.run_cli('evidence','D-000','--kind','test','--ref','fixture','--result','pass','--clause','post',ok=False)
+        self.assertEqual(self.data(),before)
+        self.run_cli('evidence','D-000','--kind','test','--ref','fixture','--result','pass','--clause','post',
+                     '--scope','implementation','--scenario','padded input','--assessment','Exercises post for padded input.')
+        self.assertEqual(self.data()['nodes']['D-000']['verification'],'partial')
+        self.run_cli('withdraw-evidence','D-000','EV-1','--reason','The fixture did not execute this implementation.','--by','agent correction')
+        n=self.data()['nodes']['D-000']
+        self.assertEqual(n['verification'],'stale')
+        self.assertEqual(n['evidence'][0]['withdrawn']['by'],'agent correction')
+        view=(self.d/'nodes/D-000.md').read_text()
+        self.assertIn('EV-1 test — withdrawn',view)
+        self.assertIn('Scope: implementation',view)
+        self.assertIn('Scenario: padded input',view)
+        self.run_cli('evidence','D-000','--kind','review','--ref','bad','--result','pass','--clause','post',
+                     '--scope','correspondence','--assessment','This was later retracted.','--note','Withdrawn: wrong path',ok=False)
+
+    def test_statement_revision_requires_parent_callsite_in_same_batch(self):
+        self.batch([
+            {'verb':'new','id':'D-000','statement':'result <- run(value)'},
+            {'verb':'set','id':'D-000','fields':{'gloss':'Run.','effect':'Return a value.','contract':{'post':'A value is returned.'},'walkthrough':['Delegate.'],'composition':['The child establishes post.']}},
+            {'verb':'body','id':'D-000','text':'result <- normalize(value) -- D-001: Normalize.'},
+            {'verb':'approve','id':'D-000'},
+            {'verb':'new','id':'D-001'},
+            {'verb':'set','id':'D-001','fields':{'gloss':'Normalize.','effect':'Normalize a value.','contract':{'post':'The value is normalized.'}}},
+            {'verb':'ready','id':'D-001','approach':'Canonicalize the value.','validation':'Check canonical output.'},
+            {'verb':'approve','id':'D-001'}])
+        before=self.data()
+        self.batch([{'verb':'reopen','id':'D-001','reason':'Rename operation'},
+                    {'verb':'set','id':'D-001','fields':{'statement':'result <- canonicalize(value)'}},
+                    {'verb':'approve','id':'D-001'}],ok=False)
+        self.assertEqual(self.data(),before)
+        self.batch([{'verb':'reopen','id':'D-000','reason':'Rename child call'},
+                    {'verb':'reopen','id':'D-001','reason':'Rename operation'},
+                    {'verb':'set','id':'D-001','fields':{'statement':'result <- canonicalize(value)'}},
+                    {'verb':'approve','id':'D-001'},
+                    {'verb':'approve','id':'D-000'}])
+        self.assertIn('canonicalize(value)',self.data()['nodes']['D-001']['statement'])
+        self.assertIn('canonicalize(value)',self.data()['nodes']['D-000']['body'][0]['code'])
 
     def test_approved_content_is_frozen(self):
         self.root()
