@@ -26,7 +26,7 @@ JSON `set` accepts the prose fields, contract, metadata arrays, dependencies, im
 
 ## Observed implementations
 
-A node may additionally contain `bindings`, `observed_children`, `observation`, `observation_history`, `binding_history`, and implementation-version history. These are descriptive records, outside the approved intended-content fingerprint. They are maintained by `adopt`, `bind`, `observe`, and `reconcile`, not ordinary `set`.
+A node may additionally contain `bindings`, `observed_children`, `observation`, `observation_history`, `binding_history`, and implementation-version history. These are descriptive records, outside the approved intended-content fingerprint. They are maintained by `adopt`, `bind`, `observe`, and `sync`, not ordinary `set`.
 
 Whole-file source fingerprints feed the evidence dependency context. A source change can invalidate verification without rewriting an approved contract. `implementation_version` and `implementation_revision` record recognized code versions; `current_implementation_version` and `source_state` are refreshed when inspecting the ledger. The observation keeps the exact inspected version. `conformance` compares current observations with intended clauses and never promotes verification. See [existing-work.md](existing-work.md) for these workflows and their completion rules.
 

@@ -519,17 +519,69 @@
         overflow-wrap: anywhere;
       }
       .algorithm-card {
+        min-width: 0;
         border-radius: 3px;
         border-top: 2px solid var(--teal);
         border-bottom: 2px solid var(--line);
       }
       .algorithm-title {
+        overflow-wrap: anywhere;
         padding: 14px 16px;
         border-bottom: 1px solid var(--line);
         font:
           600 17px/1.5 Georgia,
           "Times New Roman",
           serif;
+      }
+      .pseudocode-controls {
+        display: flex;
+        gap: 8px;
+        flex-wrap: wrap;
+        margin-bottom: 12px;
+      }
+      .pseudocode-controls select {
+        background: var(--paper);
+        color: var(--ink);
+        border: 1px solid var(--line);
+        border-radius: 6px;
+        padding: 7px;
+      }
+      .pseudocode-tree {
+        margin-top: 16px;
+        min-width: 0;
+        overflow: auto;
+        padding-bottom: 8px;
+      }
+      .pseudocode-tree .algorithm-card {
+        min-width: 480px;
+        overflow: visible;
+      }
+      .expand-procedure {
+        display: block;
+        margin: 5px 0 10px;
+        max-width: 100%;
+        text-align: left;
+        overflow-wrap: anywhere;
+        font-size: 11px;
+      }
+      .algorithm-card .algorithm-card {
+        margin-top: 8px;
+        box-shadow: none;
+      }
+      .algorithm-card .algorithm-card .algorithm-title {
+        font-size: 14px;
+      }
+      @media (max-width: 700px) {
+        .algorithm-card .algorithm-card .code-line {
+          padding-inline: 4px;
+          gap: 4px;
+        }
+        .algorithm-card .algorithm-card .line-content {
+          padding-left: 0;
+        }
+        .algorithm-card .algorithm-card .algorithm-meta {
+          grid-template-columns: 1fr;
+        }
       }
       .algorithm-meta {
         display: grid;
@@ -1741,16 +1793,9 @@
                   : "No contract has been recorded.",
             ),
           );
-        if (!n.body?.length)
-          into.append(
-            section("Contract", contract, clauses.length + " clauses"),
-          );
+        into.append(section("Contract", contract, clauses.length + " clauses"));
         for (const text of n.walkthrough || [])
           into.append(el("p", "lead", text));
-        if (n.body?.length)
-          into.append(
-            section("Refinement", renderCode(n), n.body.length + 2 + " lines"),
-          );
         if (n.target) {
           const t = el("div", "card code-card");
           t.append(
@@ -2114,7 +2159,8 @@
             el("div", "notice", "Invalidated by: " + n.stale_by.join(", ")),
           );
         const detailTabs = [
-          ["overview", "Contract & code"],
+          ["overview", "Contract"],
+          ["pseudocode", "Pseudocode"],
           ...(hasObserved(n) ? [["observed", "Observed code"]] : []),
           ["context", "Context"],
           ["evidence", "Evidence & history"],
@@ -2157,7 +2203,10 @@
         content.id = "detail-content";
         content.setAttribute("role", "tabpanel");
         content.setAttribute("aria-labelledby", "tab-" + tab);
-        ({ overview, observed, context, evidence, review })[tab](n, content);
+        ({ overview, pseudocode, observed, context, evidence, review })[tab](
+          n,
+          content,
+        );
         reader.append(content);
         const parents = [...new Set(incoming.get(n.id).map((e) => e.from))];
         if (parents.length) {

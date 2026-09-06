@@ -1,6 +1,6 @@
 ---
 name: constructing-software-stepwise
-description: Stepwise software design, reconstruction of existing code, source-change reconciliation, and interactive design review.
+description: Stepwise software design, reconstruction of existing code, fresh reconstruction, incremental sync, and interactive design review.
 ---
 
 # Constructing Software Stepwise
@@ -10,7 +10,8 @@ Refine an abstract operation into smaller operations whose contracts compose, un
 ## Choose the workflow
 
 - **Design new or changed behavior:** use the design discipline below.
-- **Adopt existing implementation or reconcile code changes:** read [existing-work.md](references/existing-work.md). Recover observed behavior before choosing intended contracts. Whole-file SHA-256 versions signal affected nodes, including uncommitted changes.
+- **Reconcile:** rebuild the model from current implementation in a fresh ledger. Derive responsibilities and relationships independently of the previous node tree; read [existing-work.md](references/existing-work.md).
+- **Sync:** update an existing model incrementally, preserving node identities and reinspecting changed sources. Whole-file SHA-256 versions signal affected nodes, including uncommitted changes; read [existing-work.md](references/existing-work.md).
 - **Browse a model:** read [html-view.md](references/html-view.md).
 
 ## Approval mode

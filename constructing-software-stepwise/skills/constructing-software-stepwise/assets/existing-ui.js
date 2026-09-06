@@ -113,9 +113,10 @@ function observed(n, into) {
     into.append(section("Source-backed claims", claims));
     if (obs.body?.length)
       into.append(
-        section(
-          "Observed pseudocode",
-          renderCode(n, obs.body, false, "Observed implementation"),
+        el(
+          "p",
+          "muted",
+          "Read the inspected algorithm in the Pseudocode tab; select Observed implementation.",
         ),
       );
     if (obs.unknowns?.length)

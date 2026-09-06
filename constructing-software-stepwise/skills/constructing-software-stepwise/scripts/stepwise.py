@@ -37,7 +37,7 @@ Read-only orientation and HTML export do not mutate the ledger; HTML is an expli
   bind      <dir> D-NNN PATH [--repo ROOT] [--binding S01] [--symbol NAME] [--lines START:END]
   observe   <dir> D-NNN JSON [--file FILE] --at TOKEN    record inspected behavior, preserving intended contracts
   scan      <dir> [--repo ROOT] [--json]                source versions and inspection notifications, read-only
-  reconcile <dir> [--repo ROOT]                        persist source-change signals; observations stay unchanged
+  reconcile <dir> [--output DIR] [--repo ROOT]         initialize a fresh reconstruction; agent must inspect and rebuild
   batch     <dir> [--file FILE]                       validate and commit JSON operations together
   entry     <dir> term|fact|scenario "Heading" "definition" [--source S] [--avoid a,b] [--not T] [--example E]
                                                       [--given G --when W --then T --excludes X --settles T]
@@ -46,7 +46,7 @@ Read-only orientation and HTML export do not mutate the ledger; HTML is an expli
   ambiguity <dir> "claim" "conflict" D-NNN | ambiguity <dir> "claim" --drop
   adr       <dir> new "Title" --constrains D-NNN[,D-MMM] | adr <dir> accept ADR-NNNN | adr <dir> supersede ADR-OLD ADR-NEW
                                                       adr <dir> constrains ADR-NNNN --constrains D-NNN[,D-MMM]   rewrite the constrained set
-  sync      <dir>                                     render + lint (after hand-editing an ADR paragraph)
+  sync      <dir> [--repo ROOT]                        track source changes, preserve nodes, render + lint
   status    <dir> [--all]                             every node, its design state, and the one move that advances it
   check     <dir>                                     lint only, no writes
   html      <dir> [--output FILE]                     standalone HTML reader (default: <dir>/DESIGN.html)
@@ -465,6 +465,8 @@ class Ledger:
         return parse_adrs(self.adr_dir(), self.files)
 
     def adr_dir(self) -> Path | None:
+        if self.data.get("reconstruction"):
+            return self.dir / "adr"
         staged = next((p.parent for p in self.files if p.parent.name == "adr"), None)
         return staged or next((p / "adr" for p in [self.dir, *self.dir.parents][:5] if (p / "adr").is_dir()), None)
 
@@ -1686,6 +1688,29 @@ def v_scan(led: Ledger, a) -> int:
 
 
 def v_reconcile(led: Ledger, a) -> int:
+    destination = Path(a.output).expanduser().resolve() if a.output else led.dir.with_name(led.dir.name + "-rebuild-" + now().replace(":", "-"))
+    if destination == led.dir or destination in led.dir.parents or led.dir in destination.parents:
+        return fail("reconcile needs a separate output directory, outside the previous ledger")
+    with locked(destination):
+        if any(p.name != ".stepwise.lock" for p in destination.iterdir()):
+            return fail("reconcile output must be empty; resume an existing rebuild with adopt/observe and sync")
+        fresh = Ledger.create(destination, led.title)
+        fresh.data["scope"] = led.data.get("scope", "")
+        fresh.data["nongoals"] = copy.deepcopy(led.data.get("nongoals", []))
+        fresh.data["reconstruction"] = {
+            "previous_ledger": os.path.relpath(led.path, destination),
+            "previous_sha256": hashlib.sha256(led.path.read_bytes()).hexdigest(),
+            "started_at": now(),
+        }
+        repository = a.repo or (str((led.dir / led.data["source_root"]).resolve()) if led.data.get("source_root") else None)
+        if repository:
+            existing.set_repository(fresh, repository)
+        fresh.operations.append("reconcile: initialize independent reconstruction")
+        finish(fresh, f"Fresh reconstruction: {destination}. No nodes or approvals copied. Inspect source, then adopt/bind/observe the new hierarchy; initialization is not completion.")
+        return finalize(fresh, "reconcile")
+
+
+def v_sync(led: Ledger, a) -> int:
     if a.repo:
         existing.set_repository(led, a.repo)
     report = existing.refresh_sources(led)
@@ -1694,8 +1719,6 @@ def v_reconcile(led: Ledger, a) -> int:
     return finish(led, scan_text(report))
 
 
-def v_sync(led: Ledger, a) -> int:
-    return finish(led)
 
 
 def v_repair(led: Ledger, a) -> int:
@@ -1802,14 +1825,14 @@ def parser() -> argparse.ArgumentParser:
         return s
 
     add("html", output={"default": "", "metavar": "FILE", "help": "HTML destination (default: <dir>/DESIGN.html)"})
-    add("proposal", "id"); add("repair"); add("frontier"); add("sync"); add("check"); add("show", "id"); add("status", all={"action": "store_true"})
+    add("proposal", "id"); add("repair"); add("frontier"); add("sync", repo={"default": None}); add("check"); add("show", "id"); add("status", all={"action": "store_true"})
     add("new", "id", ("statement", {"nargs": "?"}))
     add("adopt", "id", ("statement", {"nargs": "?"}), parent={"default": None})
     add("bind", "id", "path", repo={"default": None}, binding={"default": None}, symbol={"default": ""}, lines={"default": None})
     add("unbind", "id", "binding", reason={"required": True})
     add("observe", "id", ("payload", {"nargs": "?"}), file={"default": ""}, at={"required": True}, by={"default": "agent inspection"})
     add("scan", repo={"default": None}, json={"action": "store_true"})
-    add("reconcile", repo={"default": None})
+    add("reconcile", repo={"default": None}, output={"default": ""})
     add("set", "id", "field", ("value", {"nargs": "*"}))
     add("body", "id", file={"default": ""}, text={"default": None})
     add("batch", file={"default": ""})
@@ -1830,7 +1853,8 @@ def parser() -> argparse.ArgumentParser:
     return ap
 
 
-READ_ONLY = {"check", "show", "frontier", "status", "html", "scan", "proposal", "repair"}
+# Commands that leave the input ledger unchanged; html/reconcile write separate outputs.
+READ_ONLY = {"check", "show", "frontier", "status", "html", "scan", "proposal", "repair", "reconcile"}
 
 
 def dispatch(led: Ledger, a) -> int:

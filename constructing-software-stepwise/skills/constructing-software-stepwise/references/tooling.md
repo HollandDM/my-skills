@@ -36,7 +36,7 @@ For reconstruction, source bindings, implementation versions, and inspection pay
 | `unbind <dir> D-NNN S01 --reason TEXT` | Remove a binding while preserving its history. |
 | `observe <dir> D-NNN JSON --at TOKEN` or `--file FILE` | Record inspected claims and optional comparisons against an exact source scope. |
 | `scan <dir> [--repo ROOT] [--json]` | Read current implementation versions and notifications. |
-| `reconcile <dir> [--repo ROOT]` | Persist implementation changes without overwriting observations or intended contracts. |
+| `reconcile <dir> [--output DIR] [--repo ROOT]` | Initialize a fresh ledger for a source-first rebuild. Continue with inspection and adopt/bind/observe; the old ledger remains intact. Cannot run inside a batch. |
 | `new <dir> D-NNN ["statement"]` | Create a root or frontier node. |
 | `set <dir> D-NNN '{...}'` | Replace supplied fields atomically; see [design-ledger.md](design-ledger.md). |
 | `body <dir> D-NNN --text "..."` or `--file FILE` | Set a paper-style procedure on a draft node; see [pseudocode.md](pseudocode.md). Stdin is also supported outside a batch. |
@@ -56,7 +56,7 @@ For reconstruction, source bindings, implementation versions, and inspection pay
 | `meta <dir> scope\|title TEXT` / `meta <dir> nongoals TEXT ...` | Set design boundaries. |
 | `adr <dir> new\|accept\|supersede\|constrains ...` | Maintain consequential decisions; see [adr-ledger.md](adr-ledger.md). |
 | `status <dir> [--all]` / `frontier <dir>` / `show <dir> D-NNN` | Inspect state and next work. |
-| `check <dir>` / `sync <dir>` | Validate, or refresh derived statuses and Markdown. |
+| `check <dir>` / `sync <dir> [--repo ROOT]` | Validate, or incrementally persist source versions and refresh derived statuses/Markdown while preserving node identities. Reinspect changed nodes with observe. |
 | `html <dir> [--output FILE]` | Export the reader and review charts; see [html-view.md](html-view.md). |
 
 Use `--help` on the command for flags. An error should be resolved in the design or operation payload, not silenced by invented calls or claims. Evidence sufficiency, actual target guarantees, and architectural correctness remain reasoning obligations.

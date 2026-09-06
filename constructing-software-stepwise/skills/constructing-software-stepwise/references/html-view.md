@@ -82,4 +82,8 @@ If no system browser is available, install Playwright's Chromium with `uv run --
 
 ## Algorithm presentation
 
+The node reader has separate Contract and Pseudocode tabs. In Pseudocode, expand a call at its own line or choose Expand all descendants. Expansion substitutes a nested procedure view at each call site, including grandchildren. Shared procedures repeat at every occurrence; this is a reading expansion, with each procedure's local variables and returns still scoped to that procedure. Cycles are marked as recursive references. Large expansions pause at 800 procedure views with an explicit notice; open the referenced node to continue. Collapse all calls returns to the selected procedure.
+
+Choose Intended design or Observed implementation independently. Observed expansion uses only observed pseudocode; missing observations never fall back to intended bodies. Historical bodies stay under Evidence & history and are not expanded against today's descendants.
+
 Code cards use the paper-style notation in [pseudocode.md](pseudocode.md), with an algorithm caption, Require/Ensure headers from the recorded contract, numbered procedure lines, emphasized keywords, and clickable refinement references. Source text remains inert. Historical and observed code cards do not borrow the current intended contract. Regenerate existing HTML snapshots to apply the new presentation; the dark theme and separate Design map tab remain available.

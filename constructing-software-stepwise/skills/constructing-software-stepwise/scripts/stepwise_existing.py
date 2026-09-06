@@ -247,7 +247,7 @@ def bind(led, nid: str, path: str, *, root=None, binding_id=None, symbol='', lin
     if root:
         proposed = Path(root).expanduser().resolve()
         if existing_root and existing_root != proposed:
-            raise ValueError('this ledger uses another repository; use reconcile --repo to relocate it explicitly')
+            raise ValueError('this ledger uses another repository; use sync --repo to relocate it explicitly')
         existing_root = set_repository(led, root)
     if existing_root is None:
         raise ValueError('the first bind needs --repo pointing at the inspected repository')

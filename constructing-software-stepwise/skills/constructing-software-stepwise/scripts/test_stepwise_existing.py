@@ -68,7 +68,7 @@ class ExistingCodeTests(unittest.TestCase):
         self.assertNotEqual(current['nodes']['D-001']['implementation_version'],old['nodes']['D-001']['implementation_version'])
         self.assertEqual(set(current['pending']),{'D-000','D-001'})
         self.assertEqual(self.data(),before)
-        self.run_cli('reconcile')
+        self.run_cli('sync')
         n=self.data()['nodes']['D-001']
         self.assertEqual(n['observation'],before['nodes']['D-001']['observation'])
         self.assertEqual(n['implementation_revision'],2)
@@ -98,7 +98,7 @@ class ExistingCodeTests(unittest.TestCase):
         self.assertEqual(after['verification'],'verified')
         self.assertEqual(self.scan()['nodes']['D-001']['conformance']['status'],'matches')
         (self.repo/'normalize.py').write_text('def normalize(value):\n    return value.upper()\n')
-        self.run_cli('reconcile')
+        self.run_cli('sync')
         changed=self.data()['nodes']['D-001']
         self.assertEqual(changed['verification'],'stale')
         self.assertEqual(changed['design'],'approved')
@@ -142,6 +142,22 @@ class ExistingCodeTests(unittest.TestCase):
         payload={'effect':'Normalize.','claims':[{'text':'A guess','basis':'certain','sources':['S01']}]}
         self.run_cli('batch',stdin=json.dumps([{'verb':'observe','id':'D-001','payload':payload,'at':token}]),ok=False)
         self.assertEqual(self.data(),before)
+
+    def test_reconcile_starts_an_independent_model_and_never_overwrites(self):
+        self.adopt(); self.observe()
+        before = {p.relative_to(self.d):p.read_bytes() for p in self.d.rglob('*') if p.is_file()}
+        destination = self.d.with_name('rebuilt')
+        self.run_cli('reconcile', '--output', str(destination))
+        fresh = json.loads((destination/'ledger.json').read_text())
+        self.assertEqual(fresh['nodes'], {})
+        self.assertEqual(fresh['terms'], {})
+        self.assertEqual((destination/fresh['source_root']).resolve(), self.repo)
+        self.assertEqual((destination/fresh['reconstruction']['previous_ledger']).resolve(), self.d/'ledger.json')
+        self.assertEqual({p.relative_to(self.d):p.read_bytes() for p in self.d.rglob('*') if p.is_file()}, before)
+        self.run_cli('reconcile', '--output', str(destination), ok=False)
+        self.run_cli('reconcile', '--output', str(self.d), ok=False)
+        self.run_cli('batch', stdin=json.dumps([['reconcile','--output',str(self.d.with_name('bad'))]]), ok=False)
+        self.assertFalse(self.d.with_name('bad').exists())
 
 
 if __name__=='__main__':unittest.main()

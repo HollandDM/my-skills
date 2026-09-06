@@ -69,6 +69,7 @@ class HtmlBrowserTests(unittest.TestCase):
         self.selected("D-002")
         self.page.get_by_role("button", name="Read selected node").click()
         self.assertIn("Stale", self.page.locator("#reader .notice").first.inner_text())
+        self.page.get_by_role("tab", name="Pseudocode", exact=True).click()
         self.page.locator('#reader .code-ref[href="#D-001"]').click()
         self.selected("D-001")
         self.page.go_back()
@@ -106,9 +107,9 @@ class HtmlBrowserTests(unittest.TestCase):
         self.page.get_by_role("button", name="Fit", exact=True).click()
         self.page.get_by_role("button", name="Focus selected").click()
         self.read_view()
-        self.page.get_by_role("tab", name="Contract & code").focus()
+        self.page.get_by_role("tab", name="Contract").focus()
         self.page.keyboard.press("ArrowRight")
-        self.assertEqual(self.page.get_by_role("tab", name="Context", exact=True).get_attribute("aria-selected"), "true")
+        self.assertEqual(self.page.get_by_role("tab", name="Pseudocode", exact=True).get_attribute("aria-selected"), "true")
         self.page.set_viewport_size({"width": 390, "height": 844})
         self.map_view()
         self.assertTrue(self.page.locator("#graph-viewport").is_visible())
@@ -227,7 +228,7 @@ class HtmlBrowserTests(unittest.TestCase):
         self.assertIn("No intended contract",self.page.locator("#detail-content").inner_text())
         self.page.locator("#review-filter").select_option("sources")
         self.assertEqual(self.page.locator("#node-count").inner_text(),"1 matches")
-        self.page.get_by_role("tab",name="Contract & code").click()
+        self.page.get_by_role("tab",name="Contract").click()
         self.assertIn("No intended contract is recorded",self.page.locator("#detail-content").inner_text())
         self.map_view()
         self.assertEqual(self.page.locator("#chart-basis").input_value(),"observed")
@@ -243,6 +244,31 @@ class HtmlBrowserTests(unittest.TestCase):
         self.open(data)
         self.assertEqual(self.page.locator("#reader h2").inner_text(), "Your design starts here")
         self.assertIn("No design nodes yet", self.page.locator("#graph").text_content())
+
+    def test_inline_expansion_duplicates_shared_calls_and_stops_cycles(self):
+        data = fixture()
+        data['nodes']['D-000']['body'] = [
+            {'indent':0, 'code':'first <- validate(key)', 'child':'D-001'},
+            {'indent':0, 'code':'second <- validate(key)', 'reuse':'D-001'}]
+        child = data['nodes']['D-001']
+        child.pop('target', None)
+        child['body'] = [{'indent':0, 'code':'persist(key)', 'child':'D-002'}]
+        self.open(data)
+        self.assertEqual(self.page.locator('.algorithm-card').count(), 0)
+        self.page.get_by_role('tab', name='Pseudocode', exact=True).click()
+        self.assertEqual(self.page.locator('.algorithm-card').count(), 1)
+        self.page.get_by_role('button', name='Expand all descendants', exact=True).click()
+        self.assertEqual(self.page.locator('.algorithm-card').count(), 5)
+        self.assertEqual(self.page.locator('.algorithm-title').filter(has_text='Algorithm D-001').count(), 2)
+        self.assertEqual(self.page.locator('.algorithm-title').filter(has_text='Algorithm D-002').count(), 2)
+        self.assertIn('Recursive reference to D-001', self.page.locator('#detail-content').inner_text())
+        self.page.locator('[data-expand-path="D-000/2"]').click()
+        self.assertEqual(self.page.locator('.algorithm-card').count(), 3)
+        self.page.get_by_role('button', name='Collapse all calls', exact=True).click()
+        self.assertEqual(self.page.locator('.algorithm-card').count(), 1)
+        self.page.get_by_label('Pseudocode source', exact=True).select_option('observed')
+        self.assertEqual(self.page.locator('.algorithm-card').count(), 0)
+        self.assertIn('No observed pseudocode', self.page.locator('#detail-content').inner_text())
 
 
 if __name__ == "__main__":
