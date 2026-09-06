@@ -1,4 +1,4 @@
-// All source text is inserted as text nodes, including highlighted keywords.
+// Source content always enters the document as inert text.
 function algorithmSignature(statement) {
   return snapshot.pseudocode?.signatures[statement] || statement;
 }
@@ -8,12 +8,12 @@ function algorithmCode(raw) {
   const keyword = value.match(
     /^(end (?:procedure|function|if|while|for|upon|atomic|parallel)|else if|for each|parallel for each|procedure|function|return|if|else|while|for|repeat|until|assert|invariant|upon|atomic|await|raise|break|continue)\b/i,
   );
-  if (keyword) {
+  if (keyword)
     code.append(
       el("strong", "algorithm-keyword", keyword[0]),
       document.createTextNode(value.slice(keyword[0].length)),
     );
-  } else code.textContent = value;
+  else code.textContent = value;
   return code;
 }
 function renderCode(
@@ -21,7 +21,7 @@ function renderCode(
   body = n.body || [],
   historical = false,
   caption = null,
-  expansion = null,
+  onReference = null,
 ) {
   const card = el("div", "card code-card algorithm-card"),
     bar = el("div", "code-bar");
@@ -42,7 +42,6 @@ function renderCode(
     bar,
     el("div", "algorithm-title", `Algorithm ${n.id} · ${n.gloss || name(n)}`),
   );
-  // Observed and superseded bodies must never inherit today's intended contract.
   if (!historical && !caption && n.contract && Object.keys(n.contract).length) {
     const meta = el("dl", "algorithm-meta");
     for (const [key, value] of Object.entries(n.contract)) {
@@ -67,77 +66,20 @@ function renderCode(
       line.gloss || (target && nodes.get(target)?.gloss) || line.note;
     if (note) main.append(el("div", "line-note", "▷ " + txt(note)));
     if (line.target) main.append(el("div", "line-note", "▷ " + line.target));
-    if (expansion && target && nodes.has(target)) {
-      const child = nodes.get(target),
-        path = expansion.path + "/" + index;
-      const childBody = expansion.observed
-        ? child.observation?.body || []
-        : child.body || [];
-      if (expansion.ancestors.has(target)) {
-        main.append(
-          el(
-            "div",
-            "notice",
-            "Recursive reference to " + target + "; expansion stops here.",
-          ),
-        );
-      } else if (childBody.length) {
-        const opened = expansion.choices.get(path) ?? expansion.all;
-        const toggle = el(
-          "button",
-          "expand-procedure",
-          (opened ? "Collapse " : "Expand ") + target + " · " + raw,
-        );
-        toggle.dataset.expandPath = path;
-        toggle.setAttribute("aria-expanded", String(opened));
-        toggle.onclick = () => {
-          expansion.choices.set(path, !opened);
-          expansion.redraw(path);
-        };
-        if (opened) main.replaceChildren(toggle);
-        else main.append(toggle);
-        if (opened) {
-          if (++expansion.budget.count > 800) {
-            main.append(
-              el(
-                "div",
-                "notice",
-                "Large expansion paused at 800 procedures. Open this node to continue.",
-              ),
-            );
-          } else {
-            const ancestors = new Set(expansion.ancestors);
-            ancestors.add(target);
-            main.append(
-              renderCode(
-                child,
-                childBody,
-                false,
-                expansion.observed ? "Observed implementation" : null,
-                { ...expansion, path, ancestors },
-              ),
-            );
-          }
-        }
-      } else {
-        const detail =
-          child.target ||
-          child.implementation_plan?.approach ||
-          "No pseudocode recorded";
-        main.append(
-          el(
-            "div",
-            "line-note",
-            target +
-              ": " +
-              (expansion.observed ? "No observed pseudocode recorded" : detail),
-          ),
-        );
-      }
-    }
     row.append(el("span", "line-no", index), main);
-    if (target && nodes.has(target))
-      row.append(linkTo(target, (line.reuse ? "↗ " : "") + target, "code-ref"));
+    if (target && nodes.has(target)) {
+      const link = linkTo(
+        target,
+        (line.reuse ? "↗ " : "") + target,
+        "code-ref",
+      );
+      if (onReference)
+        link.onclick = (event) => {
+          event.preventDefault();
+          onReference(target);
+        };
+      row.append(link);
+    }
     card.append(row);
   };
   appendLine("procedure " + algorithmSignature(n.statement || n.id), 1);
@@ -148,10 +90,29 @@ function renderCode(
   return card;
 }
 
+function reachableProcedures(root, observed) {
+  const visited = new Set(),
+    result = [],
+    pending = [root.id];
+  while (pending.length) {
+    const id = pending.pop();
+    if (visited.has(id) || !nodes.has(id)) continue;
+    visited.add(id);
+    const node = nodes.get(id);
+    result.push(node);
+    const body = observed ? node.observation?.body || [] : node.body || [];
+    const refs = body
+      .flatMap((line) => [line.child, line.reuse])
+      .filter(Boolean);
+    if (observed) refs.push(...(node.observed_children || []));
+    else refs.push(...(node.depends || []).filter((ref) => nodes.has(ref)));
+    pending.push(...refs.reverse());
+  }
+  return result;
+}
+
 function pseudocode(n, into) {
-  let all = false,
-    observed = observedOnly(n);
-  const choices = new Map();
+  let observed = observedOnly(n);
   const controls = el("div", "pseudocode-controls");
   const basis = el("select");
   basis.setAttribute("aria-label", "Pseudocode source");
@@ -164,72 +125,92 @@ function pseudocode(n, into) {
     basis.append(option);
   }
   basis.value = observed ? "observed" : "intended";
-  const expand = el("button", "", "Expand all descendants");
-  const collapse = el("button", "", "Collapse all calls");
+  const count = el("span", "muted");
+  const navigation = el("div", "chips pseudocode-index");
   const algorithms = el("div", "pseudocode-tree");
-  const redraw = (focusPath) => {
+  const redraw = () => {
     algorithms.replaceChildren();
-    const body = observed ? n.observation?.body || [] : n.body || [];
-    if (body.length)
-      algorithms.append(
-        renderCode(
-          n,
+    navigation.replaceChildren();
+    const procedures = reachableProcedures(n, observed),
+      cards = new Map();
+    count.textContent = procedures.length + " reachable procedures";
+    const jump = (id) => {
+      const card = cards.get(id);
+      if (card) {
+        card.scrollIntoView({ block: "start" });
+        card.focus({ preventScroll: true });
+      }
+    };
+    for (const node of procedures) {
+      const body = observed ? node.observation?.body || [] : node.body || [];
+      let card;
+      if (body.length)
+        card = renderCode(
+          node,
           body,
           false,
           observed ? "Observed implementation" : null,
-          {
-            all,
-            observed,
-            choices,
-            redraw,
-            path: n.id,
-            ancestors: new Set([n.id]),
-            budget: { count: 1 },
-          },
-        ),
-      );
-    else
-      algorithms.append(
-        el(
-          "div",
-          "empty",
-          observed
-            ? "No observed pseudocode recorded for this node."
-            : n.target
-              ? "Implementation target: " + n.target
-              : n.implementation_plan
-                ? "Implementation approach: " + n.implementation_plan.approach
-                : "No pseudocode recorded for this node.",
-        ),
-      );
-    if (focusPath)
-      [...algorithms.querySelectorAll("[data-expand-path]")]
-        .find((b) => b.dataset.expandPath === focusPath)
-        ?.focus();
+          jump,
+        );
+      else {
+        card = el("div", "card code-card algorithm-card");
+        card.append(
+          el(
+            "div",
+            "code-bar",
+            observed ? "Observed implementation" : state(node),
+          ),
+          el(
+            "div",
+            "algorithm-title",
+            `Algorithm ${node.id} · ${node.gloss || name(node)}`,
+          ),
+        );
+        card.append(
+          el(
+            "div",
+            "empty",
+            observed
+              ? "No observed pseudocode recorded for this node."
+              : node.target
+                ? "Implementation target: " + node.target
+                : node.implementation_plan
+                  ? "Implementation approach: " +
+                    node.implementation_plan.approach
+                  : "No pseudocode recorded for this node.",
+          ),
+        );
+        if (!observed && node.implementation_plan)
+          card.append(
+            el(
+              "div",
+              "empty",
+              "Validation: " + node.implementation_plan.validation,
+            ),
+          );
+      }
+      card.dataset.procedure = node.id;
+      card.tabIndex = -1;
+      cards.set(node.id, card);
+      algorithms.append(card);
+      const link = el("button", "chip", node.id + " · " + name(node));
+      link.onclick = () => jump(node.id);
+      navigation.append(link);
+    }
   };
   basis.onchange = () => {
     observed = basis.value === "observed";
-    choices.clear();
     redraw();
   };
-  expand.onclick = () => {
-    all = true;
-    choices.clear();
-    redraw();
-  };
-  collapse.onclick = () => {
-    all = false;
-    choices.clear();
-    redraw();
-  };
-  controls.append(basis, expand, collapse);
+  controls.append(basis, count);
   into.append(
     controls,
     el(
       "p",
       "muted",
-      "Expand calls in place. Shared procedures repeat at each call site; each procedure keeps its own locals and returns.",
+      "Selected procedure and everything reachable below it, each shown once. Follow a call to jump to its procedure.",
     ),
+    navigation,
     algorithms,
   );
   redraw();

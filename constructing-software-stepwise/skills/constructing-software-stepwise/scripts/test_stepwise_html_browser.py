@@ -71,6 +71,9 @@ class HtmlBrowserTests(unittest.TestCase):
         self.assertIn("Stale", self.page.locator("#reader .notice").first.inner_text())
         self.page.get_by_role("tab", name="Pseudocode", exact=True).click()
         self.page.locator('#reader .code-ref[href="#D-001"]').click()
+        self.selected("D-002")
+        self.assertEqual(self.page.locator('[data-procedure="D-001"]').evaluate('e => e === document.activeElement'), True)
+        self.page.locator('#tree a[href="#D-001"]').first.click()
         self.selected("D-001")
         self.page.go_back()
         self.selected("D-002")
@@ -245,7 +248,7 @@ class HtmlBrowserTests(unittest.TestCase):
         self.assertEqual(self.page.locator("#reader h2").inner_text(), "Your design starts here")
         self.assertIn("No design nodes yet", self.page.locator("#graph").text_content())
 
-    def test_inline_expansion_duplicates_shared_calls_and_stops_cycles(self):
+    def test_reachable_procedures_are_separate_deduplicated_and_cycle_safe(self):
         data = fixture()
         data['nodes']['D-000']['body'] = [
             {'indent':0, 'code':'first <- validate(key)', 'child':'D-001'},
@@ -256,18 +259,18 @@ class HtmlBrowserTests(unittest.TestCase):
         self.open(data)
         self.assertEqual(self.page.locator('.algorithm-card').count(), 0)
         self.page.get_by_role('tab', name='Pseudocode', exact=True).click()
-        self.assertEqual(self.page.locator('.algorithm-card').count(), 1)
-        self.page.get_by_role('button', name='Expand all descendants', exact=True).click()
-        self.assertEqual(self.page.locator('.algorithm-card').count(), 5)
-        self.assertEqual(self.page.locator('.algorithm-title').filter(has_text='Algorithm D-001').count(), 2)
-        self.assertEqual(self.page.locator('.algorithm-title').filter(has_text='Algorithm D-002').count(), 2)
-        self.assertIn('Recursive reference to D-001', self.page.locator('#detail-content').inner_text())
-        self.page.locator('[data-expand-path="D-000/2"]').click()
         self.assertEqual(self.page.locator('.algorithm-card').count(), 3)
-        self.page.get_by_role('button', name='Collapse all calls', exact=True).click()
-        self.assertEqual(self.page.locator('.algorithm-card').count(), 1)
+        self.assertEqual(self.page.locator('.algorithm-card .algorithm-card').count(), 0)
+        self.assertEqual(self.page.locator('.algorithm-title').filter(has_text='Algorithm D-001').count(), 1)
+        self.assertEqual(self.page.locator('.algorithm-title').filter(has_text='Algorithm D-002').count(), 1)
+        self.assertIn('first ← validate(key)', self.page.locator('[data-procedure="D-000"]').inner_text())
+        self.assertIn('second ← validate(key)', self.page.locator('[data-procedure="D-000"]').inner_text())
+        self.page.locator('[data-procedure="D-000"] .code-ref').first.click()
+        self.selected('D-000')
+        self.assertTrue(self.page.locator('[data-procedure="D-001"]').evaluate('e => e === document.activeElement'))
         self.page.get_by_label('Pseudocode source', exact=True).select_option('observed')
-        self.assertEqual(self.page.locator('.algorithm-card').count(), 0)
+        self.assertEqual(self.page.locator('.algorithm-card').count(), 1)
+        self.assertEqual(self.page.locator('.code-line').count(), 0)
         self.assertIn('No observed pseudocode', self.page.locator('#detail-content').inner_text())
 
 
