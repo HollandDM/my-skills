@@ -49,9 +49,9 @@ Batch-parallel plan execution for the Stargazer codebase. Lighter alternative to
 - Compile errors fed back to implementers — team lead never touches code
 - Reformat + batch-done commit after each clean compile
 
-### [constructing-software-stepwise](./constructing-software-stepwise/) `v3.0.0`
+### [constructing-software-stepwise](./constructing-software-stepwise/) `v4.0.0`
 
-Contract-based stepwise refinement for complex stateful designs. Interviewed mode reviews one node at a time; explicit auto-approval advances coherent batches of related nodes, records agent decisions, and continues to the agreed completion boundary. Reconcile rebuilds a model from current implementation in a fresh ledger; sync incrementally updates the existing model using whole-file SHA-256 versions and Git context. Source inspection reports coverage over every active node, and observations can be exported, edited, and round-tripped without silently losing pseudocode. The CLI commits validated batches atomically, protects approved revisions, keeps renamed statements and parent calls coherent, and derives verification from assessed evidence that can be explicitly withdrawn. Refinement may stop at a bounded implementation-ready leaf. Pseudocode follows a research-paper algorithm structure with named procedures, Require/Ensure headers, numbered steps, and explicit blocks. The dark-themed `html` reader has separate Contract and Pseudocode tabs, with all reachable descendant procedures shown separately, plus a full-width design map, state/sequence charts, review filters, and changes since the last review. Mode-specific procedures and ledger details load only when needed.
+Contract-based stepwise refinement for complex stateful designs. Interviewed mode reviews one node at a time; explicit auto-approval advances coherent batches of related nodes, records agent decisions, and continues to the agreed completion boundary. Reconcile rebuilds a model from current implementation in a fresh ledger; sync incrementally updates the existing model using whole-file SHA-256 versions and Git context. Source inspection reports coverage over every active node, and observations can be exported, edited, and round-tripped without silently losing pseudocode. The CLI commits validated batches atomically, protects approved revisions, keeps renamed statements and parent calls coherent, and derives verification from assessed evidence that can be explicitly withdrawn. Refinement may stop at a bounded implementation-ready leaf. Pseudocode follows a research-paper algorithm structure with named procedures, Require/Ensure headers, numbered steps, and explicit blocks. The dark-themed `html` reader has separate Contract and Pseudocode tabs, with all reachable descendant procedures shown separately, plus a full-width design map, state/sequence charts, review filters, and changes since the last review. Mode-specific procedures and ledger details load only when needed. The CLI is TypeScript on Effect, bundled to a single `dist/stepwise.mjs` that runs on Node.js 22+ without installation; the reader is a SolidJS 2 application built into one HTML template.
 
 ### [mixed-agent-sdd](./mixed-agent-sdd/)
 
@@ -74,7 +74,7 @@ Start a new Codex session and ask it to use Stepwise, for example:
 Use Stepwise to design this system. Auto-approve your recommendations and refine in batches.
 ```
 
-The Codex catalog is `.agents/plugins/marketplace.json`, and the plugin manifest is `constructing-software-stepwise/.codex-plugin/plugin.json`. Both Codex and Claude Code load the same skill, CLI, references, and HTML assets.
+The Codex catalog is `.agents/plugins/marketplace.json`, and the plugin manifest is `constructing-software-stepwise/.codex-plugin/plugin.json`. Both Codex and Claude Code load the same skill, CLI bundle, references, and HTML template.
 
 For local development, use `codex plugin marketplace add .` from this checkout, then run the same install command. See the [official plugin packaging documentation](https://developers.openai.com/plugins/build/plugins) for marketplace configuration.
 

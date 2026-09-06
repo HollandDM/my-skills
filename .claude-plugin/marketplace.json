@@ -93,8 +93,8 @@
     {
       "name": "constructing-software-stepwise",
       "source": "./constructing-software-stepwise",
-      "description": "Stepwise design and reconstruction of existing code, with whole-file source versions, incremental sync, and an interactive design reader.",
-      "version": "3.0.0",
+      "description": "Stepwise design and reconstruction of existing code, with whole-file source versions, incremental sync, and an interactive design reader. Zero-install Node.js CLI (Effect) and SolidJS reader; no Python required.",
+      "version": "4.0.0",
       "author": {
         "name": "HollandDM"
       },

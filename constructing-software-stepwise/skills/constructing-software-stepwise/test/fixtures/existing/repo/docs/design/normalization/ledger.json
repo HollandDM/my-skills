@@ -1,0 +1,289 @@
+{
+ "schema": 1,
+ "title": "Normalization",
+ "scope": "",
+ "nongoals": [],
+ "ambiguities": [],
+ "nodes": {
+  "D-000": {
+   "statement": "result <- run(value)",
+   "gloss": "",
+   "effect": "",
+   "contract": {},
+   "depends": [],
+   "design": "draft",
+   "realization": "not-started",
+   "verification": "unverified",
+   "approved": "",
+   "origin": "existing-code",
+   "observed_children": [
+    "D-001"
+   ],
+   "bindings": {
+    "S01": {
+     "path": "run.py",
+     "baseline_sha256": "15f2a9d06acee9c4dd6a2b2c13c2e8ce7b3766d476d92170b79777d2c50adb2e",
+     "bound_at": "2026-09-06T22:45:23.549167",
+     "symbol": "run",
+     "commit": "b6a311446653f0f6de1ef4e0d68033971ab60036"
+    }
+   },
+   "current_implementation_version": "1941aa698cb1b49413240188e7c0526643a5938f7dea8bee102431f6e2b5ed5c",
+   "source_state": "stale",
+   "source_scope_hash": "74204c3ad43fb63c0d902ba811026e10d74b1ea84b2e4ad5a56dd4728f61dc89",
+   "conformance": {
+    "status": "unassessed",
+    "reason": "No intended contract is recorded."
+   },
+   "evidence_context": "12d09c0f9fd6f2d5709323e7857c527f1c6edf455c12ce74cba91f5905b54ca2",
+   "implementation_revision": 2,
+   "implementation_history": [
+    {
+     "date": "2026-09-06T22:45:23.556406",
+     "revision": 1,
+     "previous": null,
+     "version": "45a4964bfab279eddb8dc78c1157a2790d41ff11c2f7b54142e75ab352dc71fb",
+     "commit": "b6a311446653f0f6de1ef4e0d68033971ab60036",
+     "reason": "Sources are bound but behavior has not been recorded."
+    },
+    {
+     "date": "2026-09-06T22:45:24.337422",
+     "revision": 2,
+     "previous": "45a4964bfab279eddb8dc78c1157a2790d41ff11c2f7b54142e75ab352dc71fb",
+     "version": "1941aa698cb1b49413240188e7c0526643a5938f7dea8bee102431f6e2b5ed5c",
+     "commit": "b6a311446653f0f6de1ef4e0d68033971ab60036",
+     "reason": "A dependency or source binding changed."
+    }
+   ],
+   "implementation_version": "1941aa698cb1b49413240188e7c0526643a5938f7dea8bee102431f6e2b5ed5c",
+   "implementation_commit": "b6a311446653f0f6de1ef4e0d68033971ab60036",
+   "observation": {
+    "effect": "Run normalization.",
+    "claims": [
+     {
+      "text": "Delegates to normalize.",
+      "basis": "observed",
+      "sources": [
+       "S01"
+      ]
+     }
+    ],
+    "body": [
+     {
+      "indent": 0,
+      "code": "result <- normalize(value)",
+      "child": "D-001",
+      "gloss": "Normalize"
+     },
+     {
+      "indent": 0,
+      "code": "-> result"
+     }
+    ],
+    "bindings": {
+     "S01": {
+      "path": "run.py",
+      "baseline_sha256": "15f2a9d06acee9c4dd6a2b2c13c2e8ce7b3766d476d92170b79777d2c50adb2e",
+      "bound_at": "2026-09-06T22:45:23.549167",
+      "symbol": "run",
+      "commit": "b6a311446653f0f6de1ef4e0d68033971ab60036"
+     }
+    },
+    "date": "2026-09-06T22:45:24.248083",
+    "by": "reviewer",
+    "revision": 1,
+    "scope_hash": "814dcd3f7e2d80d3ed36ee2e56fd2e74349226fbfedbd9a44704682d1a53da5c",
+    "inspected_files": {
+     "run.py": {
+      "state": "available",
+      "sha256": "15f2a9d06acee9c4dd6a2b2c13c2e8ce7b3766d476d92170b79777d2c50adb2e"
+     },
+     "normalize.py": {
+      "state": "available",
+      "sha256": "9dddc7b60600c6f6e45190da9fe055d16883d9d13c3ec00479245255c2978459"
+     }
+    },
+    "design_hash": "b6727ad0107d7a3b797f1cb7627babc04575ab0f54090b8c798f86684b743f8d",
+    "implementation_version": "45a4964bfab279eddb8dc78c1157a2790d41ff11c2f7b54142e75ab352dc71fb",
+    "implementation_commit": "b6a311446653f0f6de1ef4e0d68033971ab60036",
+    "design_context": "83138a44a43d869dc18d929f752413082404cd4bff00da0ef4dd707ec4fab005"
+   }
+  },
+  "D-001": {
+   "statement": "result <- normalize(value)",
+   "gloss": "Normalize a string.",
+   "effect": "Trim whitespace.",
+   "contract": {
+    "post": "Whitespace is stripped."
+   },
+   "depends": [],
+   "design": "approved",
+   "realization": "not-started",
+   "verification": "unverified",
+   "approved": "2026-09-06 by user",
+   "origin": "existing-code",
+   "bindings": {
+    "S01": {
+     "path": "normalize.py",
+     "baseline_sha256": "9dddc7b60600c6f6e45190da9fe055d16883d9d13c3ec00479245255c2978459",
+     "bound_at": "2026-09-06T22:45:23.553943",
+     "symbol": "normalize",
+     "lines": [
+      1,
+      2
+     ],
+     "commit": "b6a311446653f0f6de1ef4e0d68033971ab60036"
+    }
+   },
+   "current_implementation_version": "ba41e733aade08724d345ac841856c8a1154581d34bf2db17d88caa2a721a964",
+   "source_state": "stale",
+   "source_scope_hash": "30e0c46a30adb24cb91097baeac6b827c041347ed2b1a971152543f4a9f3a23a",
+   "conformance": {
+    "status": "unknown",
+    "reason": "Current source inspection is required."
+   },
+   "evidence_context": "fb1320db27f444728d66ffcd9ab68daaac5b8f0b6f9d36161ae1a1aa559e5411",
+   "implementation_revision": 2,
+   "implementation_history": [
+    {
+     "date": "2026-09-06T22:45:23.556414",
+     "revision": 1,
+     "previous": null,
+     "version": "9dddc7b60600c6f6e45190da9fe055d16883d9d13c3ec00479245255c2978459",
+     "commit": "b6a311446653f0f6de1ef4e0d68033971ab60036",
+     "reason": "Sources are bound but behavior has not been recorded."
+    },
+    {
+     "date": "2026-09-06T22:45:24.337440",
+     "revision": 2,
+     "previous": "9dddc7b60600c6f6e45190da9fe055d16883d9d13c3ec00479245255c2978459",
+     "version": "ba41e733aade08724d345ac841856c8a1154581d34bf2db17d88caa2a721a964",
+     "commit": "b6a311446653f0f6de1ef4e0d68033971ab60036",
+     "reason": "Bound sources changed."
+    }
+   ],
+   "implementation_version": "ba41e733aade08724d345ac841856c8a1154581d34bf2db17d88caa2a721a964",
+   "implementation_commit": "b6a311446653f0f6de1ef4e0d68033971ab60036",
+   "observation": {
+    "effect": "Return a normalized string.",
+    "claims": [
+     {
+      "text": "Whitespace is stripped.",
+      "basis": "observed",
+      "sources": [
+       "S01"
+      ]
+     }
+    ],
+    "comparisons": {
+     "post": {
+      "status": "matches",
+      "reason": "The implementation calls str.strip."
+     }
+    },
+    "unknowns": [
+     "Unicode whitespace handling"
+    ],
+    "body": [
+     {
+      "indent": 0,
+      "code": "return value.strip()",
+      "gloss": "Trim whitespace.",
+      "target": "python: str.strip"
+     }
+    ],
+    "bindings": {
+     "S01": {
+      "path": "normalize.py",
+      "baseline_sha256": "9dddc7b60600c6f6e45190da9fe055d16883d9d13c3ec00479245255c2978459",
+      "bound_at": "2026-09-06T22:45:23.553943",
+      "symbol": "normalize",
+      "lines": [
+       1,
+       2
+      ],
+      "commit": "b6a311446653f0f6de1ef4e0d68033971ab60036"
+     }
+    },
+    "date": "2026-09-06T22:45:24.091199",
+    "by": "agent inspection",
+    "revision": 2,
+    "scope_hash": "f5b943da35f3e5e18b4ddd8e326b871d52a0ddeb0db4b020991eb3c80b5d54b8",
+    "inspected_files": {
+     "normalize.py": {
+      "state": "available",
+      "sha256": "9dddc7b60600c6f6e45190da9fe055d16883d9d13c3ec00479245255c2978459"
+     }
+    },
+    "design_hash": "77ce2a382a88b39f270d2ee1b4504cfc5dfef4186c25a0adcbc0b0ea97cc20b6",
+    "implementation_version": "9dddc7b60600c6f6e45190da9fe055d16883d9d13c3ec00479245255c2978459",
+    "implementation_commit": "b6a311446653f0f6de1ef4e0d68033971ab60036",
+    "design_context": "ee367846811f2e4a36efaa26ae9c2c1f4957bab6c7cb04aef53cad517e27ee4c"
+   },
+   "target": "python: str.strip",
+   "approved_by": "user",
+   "proposal_hash": "77ce2a382a88b39f270d2ee1b4504cfc5dfef4186c25a0adcbc0b0ea97cc20b6",
+   "approved_at": "2026-09-06T22:45:23.939275",
+   "revision": 1,
+   "approved_content_hash": "77ce2a382a88b39f270d2ee1b4504cfc5dfef4186c25a0adcbc0b0ea97cc20b6",
+   "approved_hash": "97d170e1550e",
+   "contract_hash": "9ed0f8720210",
+   "observation_history": [
+    {
+     "effect": "Return a normalized string.",
+     "claims": [
+      {
+       "text": "Whitespace is stripped.",
+       "basis": "observed",
+       "sources": [
+        "S01"
+       ]
+      }
+     ],
+     "unknowns": [
+      "Unicode whitespace handling"
+     ],
+     "body": [
+      {
+       "indent": 0,
+       "code": "return value.strip()",
+       "gloss": "Trim whitespace.",
+       "target": "python: str.strip"
+      }
+     ],
+     "bindings": {
+      "S01": {
+       "path": "normalize.py",
+       "baseline_sha256": "9dddc7b60600c6f6e45190da9fe055d16883d9d13c3ec00479245255c2978459",
+       "bound_at": "2026-09-06T22:45:23.553943",
+       "symbol": "normalize",
+       "lines": [
+        1,
+        2
+       ],
+       "commit": "b6a311446653f0f6de1ef4e0d68033971ab60036"
+      }
+     },
+     "date": "2026-09-06T22:45:23.709012",
+     "by": "agent inspection",
+     "revision": 1,
+     "scope_hash": "f5b943da35f3e5e18b4ddd8e326b871d52a0ddeb0db4b020991eb3c80b5d54b8",
+     "inspected_files": {
+      "normalize.py": {
+       "state": "available",
+       "sha256": "9dddc7b60600c6f6e45190da9fe055d16883d9d13c3ec00479245255c2978459"
+      }
+     },
+     "design_hash": "a9c31c4c9cee079d057e146e4a226d019a996e8af9b145e82edd32ca55715114",
+     "implementation_version": "9dddc7b60600c6f6e45190da9fe055d16883d9d13c3ec00479245255c2978459",
+     "implementation_commit": "b6a311446653f0f6de1ef4e0d68033971ab60036",
+     "design_context": "ee367846811f2e4a36efaa26ae9c2c1f4957bab6c7cb04aef53cad517e27ee4c"
+    }
+   ]
+  }
+ },
+ "terms": {},
+ "facts": {},
+ "scenarios": {},
+ "source_root": "../../.."
+}

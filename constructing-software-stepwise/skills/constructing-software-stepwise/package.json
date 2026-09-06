@@ -1,0 +1,39 @@
+{
+  "name": "constructing-software-stepwise",
+  "version": "4.0.0",
+  "private": true,
+  "description": "Stepwise design ledger CLI (Effect) and interactive design reader (SolidJS).",
+  "type": "module",
+  "bin": {
+    "stepwise": "dist/stepwise.mjs"
+  },
+  "scripts": {
+    "build": "pnpm run build:cli && pnpm run build:viewer",
+    "build:cli": "node scripts/build-cli.mjs",
+    "build:viewer": "vite build --config viewer/vite.config.ts",
+    "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p viewer/tsconfig.json --noEmit && tsc -p test/browser/tsconfig.json --noEmit",
+    "test": "vitest run",
+    "test:browser": "playwright test",
+    "check": "pnpm run typecheck && pnpm run build && pnpm test && pnpm run test:browser"
+  },
+  "dependencies": {
+    "@effect/platform-node": "4.0.0-rc.112",
+    "effect": "4.0.0-rc.112"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.63.0",
+    "@solidjs/vite-plugin": "3.0.0-next.39",
+    "@solidjs/web": "2.0.0-rc.6",
+    "@types/node": "26.4.1",
+    "esbuild": "0.28.2",
+    "solid-js": "2.0.0-rc.6",
+    "tsx": "4.23.13",
+    "typescript": "7.0.2",
+    "vite": "8.2.2",
+    "vitest": "5.0.0"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "packageManager": "pnpm@9.12.0"
+}

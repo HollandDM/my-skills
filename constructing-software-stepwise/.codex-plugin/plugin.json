@@ -1,7 +1,7 @@
 {
   "name": "constructing-software-stepwise",
-  "version": "3.0.0",
-  "description": "Stepwise design and reconstruction of existing code, with whole-file source versions, incremental sync, and an interactive design reader.",
+  "version": "4.0.0",
+  "description": "Stepwise design and reconstruction of existing code, with whole-file source versions, incremental sync, and an interactive design reader. Zero-install Node.js CLI (Effect) and SolidJS reader; no Python required.",
   "author": {
     "name": "HollandDM"
   },
@@ -9,7 +9,7 @@
   "interface": {
     "displayName": "Stepwise Software Design",
     "shortDescription": "Design software and track existing implementation changes.",
-    "longDescription": "Stepwise design and reconstruction of existing code, with whole-file source versions, incremental sync, and an interactive design reader.",
+    "longDescription": "Stepwise design and reconstruction of existing code, with whole-file source versions, incremental sync, and an interactive design reader. Zero-install Node.js CLI (Effect) and SolidJS reader; no Python required.",
     "developerName": "HollandDM",
     "category": "Productivity",
     "capabilities": [],

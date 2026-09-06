@@ -3,13 +3,13 @@
 Use when the user wants to browse or share a Stepwise design visually.
 
 ```sh
-python3 <skill>/scripts/stepwise.py html docs/design/<topic>
+node <skill>/dist/stepwise.mjs html docs/design/<topic>
 ```
 
 The command writes `docs/design/<topic>/DESIGN.html` and prints its absolute path. Link that file for the user to open in a browser. For another destination:
 
 ```sh
-python3 <skill>/scripts/stepwise.py html docs/design/<topic> --output /path/to/design-reader.html
+node <skill>/dist/stepwise.mjs html docs/design/<topic> --output /path/to/design-reader.html
 ```
 
 A relative `--output` is relative to the working directory. The output must end in `.html`; a previous export at that destination is replaced.
@@ -63,22 +63,19 @@ Choose models that expose the relevant ordering, ownership, failure, and progres
 
 ## Maintaining the renderer
 
-`scripts/stepwise_html.py` embeds a JSON snapshot in `assets/design-view.html`; the template and its `review-ui.js`, `behavior-ui.js`, and `existing-ui.js` assets are embedded into one HTML file. Keep them bundled with the CLI. Ledger content is inserted as DOM text, never executable HTML.
+The reader is a SolidJS 2 application under `viewer/`. `pnpm run build:viewer` compiles it into the single-file template `dist/design-view.html`; the CLI (`src/html.ts`) embeds a JSON snapshot by replacing the template's `__STEPWISE_DATA__` marker once. Both `dist/stepwise.mjs` and `dist/design-view.html` are committed so the skill works without installing dependencies. Ledger content is inserted as DOM text, never executable HTML.
 
-Core checks (standard library only):
-
-```sh
-python3 <skill>/scripts/test_stepwise_html.py
-python3 <skill>/scripts/test_stepwise.py
-```
-
-Optional browser checks use Playwright and an installed Chromium or Chrome. Set `STEPWISE_CHROMIUM` if the executable is elsewhere. With `uv` available:
+Renderer development needs Node.js 22+ and pnpm. From the skill directory:
 
 ```sh
-uv run --with playwright python <skill>/scripts/test_stepwise_html_browser.py
+pnpm install
+pnpm run typecheck      # backend and viewer
+pnpm run build          # dist/stepwise.mjs and dist/design-view.html
+pnpm test               # vitest: CLI, ledger, export, and Python-parity golden fixtures
+pnpm run test:browser   # Playwright against the built reader
 ```
 
-If no system browser is available, install Playwright's Chromium with `uv run --with playwright python -m playwright install chromium`, then run the browser checks. These dependencies are for renderer development only.
+Browser checks use an installed Chromium or Chrome. Set `STEPWISE_CHROMIUM` if the executable is not `/usr/sbin/chromium`. These dependencies are for development only; rebuild and commit `dist/` after changing `src/` or `viewer/`.
 
 ## Algorithm presentation
 

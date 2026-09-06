@@ -1,0 +1,636 @@
+{
+ "schema": 1,
+ "title": "Durable Job Runner",
+ "scope": "Run queued jobs exactly once with bounded retries — café-grade reliability.",
+ "nongoals": [
+  "Scheduling policy",
+  "Multi-region failover"
+ ],
+ "ambiguities": [],
+ "nodes": {
+  "D-000": {
+   "statement": "result <- run_job(job)",
+   "gloss": "Run a Job durably — with retries",
+   "effect": "Executes the Job on CTX-F01 and records the outcome.",
+   "contract": {
+    "pre": "Job is a valid job",
+    "post": "result records completion or a final failure after ≤ 3 retries",
+    "invariant": "at most one active run per Job"
+   },
+   "depends": [
+    "CTX-F01",
+    "Job",
+    "ADR-0001"
+   ],
+   "design": "stale",
+   "realization": "not-started",
+   "verification": "unverified",
+   "approved": "2026-09-06 by user; reaffirmed 2026-09-06 by user",
+   "evidence_context": "aa24040a9f2227f3d1549978964204dc8c01139060f3a9a7b8ae934324d462f0",
+   "body": [
+    {
+     "indent": 0,
+     "code": "claim <- acquire(job)",
+     "child": "D-001",
+     "gloss": "Lock the job row"
+    },
+    {
+     "indent": 0,
+     "code": "if claim.ok:"
+    },
+    {
+     "indent": 2,
+     "code": "outcome <- execute(job)",
+     "child": "D-002",
+     "gloss": "Execute with retries"
+    },
+    {
+     "indent": 2,
+     "code": "release(job)",
+     "gloss": "Release the lock",
+     "target": "postgres: UPDATE jobs SET lock = NULL WHERE id = $1"
+    },
+    {
+     "indent": 2,
+     "code": "-> outcome"
+    },
+    {
+     "indent": 0,
+     "code": "else:"
+    },
+    {
+     "indent": 2,
+     "code": "-> \"busy\""
+    }
+   ],
+   "walkthrough": [
+    "Acquire the row, run the job, release the row."
+   ],
+   "composition": [
+    "Acquire and release bracket execution.",
+    "Retries live entirely in D-002."
+   ],
+   "decisions": [
+    "Row locks rather than advisory locks"
+   ],
+   "approved_by": "user",
+   "proposal_hash": "13f9fe748ae65027adfbea7af60416b0a21adda3e370f06a163cfda0de27d5b5",
+   "approved_at": "2026-09-06T22:45:22.801071",
+   "revision": 2,
+   "approved_content_hash": "13f9fe748ae65027adfbea7af60416b0a21adda3e370f06a163cfda0de27d5b5",
+   "approved_hash": "03280d08eac7",
+   "contract_hash": "0cf2af9fd990",
+   "history": [
+    {
+     "date": "2026-09-06",
+     "event": "stale",
+     "reason": "Job changed: Deadlines were missing"
+    },
+    {
+     "date": "2026-09-06",
+     "event": "reaffirmed",
+     "reason": "Job"
+    },
+    {
+     "date": "2026-09-06",
+     "event": "stale",
+     "reason": "D-001 contract changed"
+    }
+   ],
+   "stale_by": [
+    "D-001 (contract changed 2026-09-06)"
+   ]
+  },
+  "D-001": {
+   "statement": "claim <- acquire(job)",
+   "gloss": "Claim the job row",
+   "effect": "Locks the job row for this worker.",
+   "contract": {
+    "pre": "job exists",
+    "post": "claim.ok ⇔ the row was locked by this worker before the deadline"
+   },
+   "depends": [],
+   "design": "approved",
+   "realization": "not-started",
+   "verification": "stale",
+   "approved": "2026-09-06 by user",
+   "evidence_context": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
+   "target": "postgres: SELECT id FROM jobs WHERE id = $1 FOR UPDATE SKIP LOCKED",
+   "adaptation": [
+    "post → SKIP LOCKED returns zero rows when another worker holds the lock"
+   ],
+   "approved_by": "user",
+   "proposal_hash": "3535a591eb487d8ba8b64fef79be526439adf0130fd57cc0854d564766ab9335",
+   "approved_at": "2026-09-06T22:45:23.049535",
+   "revision": 2,
+   "approved_content_hash": "3535a591eb487d8ba8b64fef79be526439adf0130fd57cc0854d564766ab9335",
+   "approved_hash": "97d170e1550e",
+   "contract_hash": "94879a6b9106",
+   "evidence": [
+    {
+     "date": "2026-09-06T22:45:21.143419",
+     "kind": "test",
+     "ref": "tests/acquire_test.py::test_lock",
+     "result": "pass",
+     "clauses": [
+      "pre",
+      "post"
+     ],
+     "resolves": [],
+     "revision": 1,
+     "content_hash": "785556b5ed17f32bfa577400a247613807b508ddc01ad562f80b7750f7b763c4",
+     "dependency_hash": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
+     "scope": "implementation",
+     "scenario": "two workers contend for one job",
+     "assessment": "The second worker receives zero rows; the first holds the lock.",
+     "withdrawn": {
+      "date": "2026-09-06T22:45:22.303115",
+      "by": "reviewer",
+      "reason": "Fixture was mocked"
+     }
+    }
+   ],
+   "history": [
+    {
+     "date": "2026-09-06",
+     "event": "evidence withdrawn",
+     "reason": "EV-1: Fixture was mocked"
+    },
+    {
+     "date": "2026-09-06",
+     "event": "reopened",
+     "reason": "Tighten the lock contract"
+    },
+    {
+     "date": "2026-09-06",
+     "event": "re-approved"
+    }
+   ],
+   "revisions": [
+    {
+     "date": "2026-09-06T22:45:22.897531",
+     "reason": "Tighten the lock contract",
+     "approved": "2026-09-06 by user",
+     "revision": 1,
+     "content": {
+      "statement": "claim <- acquire(job)",
+      "gloss": "Claim the job row",
+      "effect": "Locks the job row for this worker.",
+      "contract": {
+       "pre": "job exists",
+       "post": "claim.ok ⇔ the row was locked by this worker"
+      },
+      "target": "postgres: SELECT id FROM jobs WHERE id = $1 FOR UPDATE SKIP LOCKED",
+      "adaptation": [
+       "post → SKIP LOCKED returns zero rows when another worker holds the lock"
+      ],
+      "depends": []
+     }
+    }
+   ]
+  },
+  "D-002": {
+   "statement": "outcome <- execute(job)",
+   "gloss": "Execute with bounded retries",
+   "effect": "Runs the job up to three times.",
+   "contract": {
+    "pre": "the job row is claimed",
+    "post": "outcome is ok after ≤ 3 attempts or failed",
+    "progress": "each attempt terminates"
+   },
+   "depends": [
+    "D-003"
+   ],
+   "design": "stale",
+   "realization": "not-started",
+   "verification": "stale",
+   "approved": "2026-09-06 by user",
+   "evidence_context": "86249b680409dd94bf14174d646506779bcb0f1a707210a0e38664ce49faefcb",
+   "body": [
+    {
+     "indent": 0,
+     "code": "for n in 1..3:"
+    },
+    {
+     "indent": 2,
+     "code": "ok <- attempt(job, n)",
+     "child": "D-003",
+     "gloss": "One attempt"
+    },
+    {
+     "indent": 2,
+     "code": "if ok:"
+    },
+    {
+     "indent": 4,
+     "code": "-> ok"
+    },
+    {
+     "indent": 0,
+     "code": "-> failed"
+    }
+   ],
+   "walkthrough": [
+    "Try up to three times.",
+    "Return the first success."
+   ],
+   "composition": [
+    "The loop bound gives progress."
+   ],
+   "approved_by": "user",
+   "proposal_hash": "93ba5edd2c2fccf700d23de3fa4077a96d0ff40fe8a51f7d195eda67dc8dc605",
+   "approved_at": "2026-09-06T22:45:23.152791",
+   "revision": 3,
+   "approved_content_hash": "93ba5edd2c2fccf700d23de3fa4077a96d0ff40fe8a51f7d195eda67dc8dc605",
+   "approved_hash": "8832d13ee08f",
+   "contract_hash": "2d1cac899a20",
+   "revisions": [
+    {
+     "date": "2026-09-06T22:45:22.057532",
+     "reason": "Add the state chart",
+     "approved": "2026-09-06 by agent",
+     "revision": 1,
+     "content": {
+      "statement": "outcome <- execute(job)",
+      "gloss": "Execute with bounded retries",
+      "effect": "Runs the job up to three times.",
+      "contract": {
+       "pre": "the job row is claimed",
+       "post": "outcome is ok after ≤ 3 attempts or failed",
+       "progress": "each attempt terminates"
+      },
+      "body": [
+       {
+        "indent": 0,
+        "code": "for n in 1..3:"
+       },
+       {
+        "indent": 2,
+        "code": "ok <- attempt(job, n)",
+        "child": "D-003",
+        "gloss": "One attempt"
+       },
+       {
+        "indent": 2,
+        "code": "log_attempt(job, n)",
+        "child": "D-004",
+        "gloss": "Record the attempt"
+       },
+       {
+        "indent": 2,
+        "code": "if ok:"
+       },
+       {
+        "indent": 4,
+        "code": "-> ok"
+       },
+       {
+        "indent": 0,
+        "code": "-> failed"
+       }
+      ],
+      "walkthrough": [
+       "Try up to three times.",
+       "Return the first success."
+      ],
+      "composition": [
+       "The loop bound gives progress."
+      ],
+      "depends": []
+     }
+    },
+    {
+     "date": "2026-09-06T22:45:23.145948",
+     "reason": "Logging moves to the handler",
+     "approved": "2026-09-06 by user",
+     "revision": 2,
+     "content": {
+      "statement": "outcome <- execute(job)",
+      "gloss": "Execute with bounded retries",
+      "effect": "Runs the job up to three times.",
+      "contract": {
+       "pre": "the job row is claimed",
+       "post": "outcome is ok after ≤ 3 attempts or failed",
+       "progress": "each attempt terminates"
+      },
+      "body": [
+       {
+        "indent": 0,
+        "code": "for n in 1..3:"
+       },
+       {
+        "indent": 2,
+        "code": "ok <- attempt(job, n)",
+        "child": "D-003",
+        "gloss": "One attempt"
+       },
+       {
+        "indent": 2,
+        "code": "log_attempt(job, n)",
+        "child": "D-004",
+        "gloss": "Record the attempt"
+       },
+       {
+        "indent": 2,
+        "code": "if ok:"
+       },
+       {
+        "indent": 4,
+        "code": "-> ok"
+       },
+       {
+        "indent": 0,
+        "code": "-> failed"
+       }
+      ],
+      "walkthrough": [
+       "Try up to three times.",
+       "Return the first success."
+      ],
+      "composition": [
+       "The loop bound gives progress."
+      ],
+      "depends": [
+       "D-003"
+      ],
+      "behavior": {
+       "states": [
+        {
+         "id": "idle",
+         "label": "Idle",
+         "initial": true
+        },
+        {
+         "id": "running",
+         "label": "Running",
+         "node": "D-003"
+        },
+        {
+         "id": "done",
+         "label": "Done",
+         "terminal": true
+        }
+       ],
+       "transitions": [
+        {
+         "from": "idle",
+         "to": "running",
+         "event": "attempt"
+        },
+        {
+         "from": "running",
+         "to": "done",
+         "event": "ok"
+        },
+        {
+         "from": "running",
+         "to": "running",
+         "event": "retry",
+         "guard": "n < 3"
+        }
+       ]
+      }
+     }
+    }
+   ],
+   "superseded": {
+    "date": "2026-09-06",
+    "reason": "Logging moves to the handler",
+    "body": [
+     {
+      "indent": 0,
+      "code": "for n in 1..3:"
+     },
+     {
+      "indent": 2,
+      "code": "ok <- attempt(job, n)",
+      "child": "D-003",
+      "gloss": "One attempt"
+     },
+     {
+      "indent": 2,
+      "code": "log_attempt(job, n)",
+      "child": "D-004",
+      "gloss": "Record the attempt"
+     },
+     {
+      "indent": 2,
+      "code": "if ok:"
+     },
+     {
+      "indent": 4,
+      "code": "-> ok"
+     },
+     {
+      "indent": 0,
+      "code": "-> failed"
+     }
+    ],
+    "composition": [
+     "The loop bound gives progress."
+    ]
+   },
+   "history": [
+    {
+     "date": "2026-09-06",
+     "event": "reopened",
+     "reason": "Add the state chart"
+    },
+    {
+     "date": "2026-09-06",
+     "event": "re-approved"
+    },
+    {
+     "date": "2026-09-06",
+     "event": "reopened",
+     "reason": "Logging moves to the handler"
+    },
+    {
+     "date": "2026-09-06",
+     "event": "re-approved"
+    },
+    {
+     "date": "2026-09-06",
+     "event": "stale",
+     "reason": "D-003 stale"
+    }
+   ],
+   "behavior": {
+    "states": [
+     {
+      "id": "idle",
+      "label": "Idle",
+      "initial": true
+     },
+     {
+      "id": "running",
+      "label": "Running",
+      "node": "D-003"
+     },
+     {
+      "id": "done",
+      "label": "Done",
+      "terminal": true
+     }
+    ],
+    "transitions": [
+     {
+      "from": "idle",
+      "to": "running",
+      "event": "attempt"
+     },
+     {
+      "from": "running",
+      "to": "done",
+      "event": "ok"
+     },
+     {
+      "from": "running",
+      "to": "running",
+      "event": "retry",
+      "guard": "n < 3"
+     }
+    ]
+   },
+   "evidence": [
+    {
+     "date": "2026-09-06T22:45:22.151161",
+     "kind": "test",
+     "ref": "tests/execute_test.py::test_retries",
+     "result": "fail",
+     "clauses": [
+      "post"
+     ],
+     "resolves": [],
+     "revision": 2,
+     "content_hash": "0844c6965e77128e6c43406bcdaae7e3d24f5d655c8abfae50b109997e7f5a19",
+     "dependency_hash": "291b68b20edbc68b0cbaaee620149d766e21362c52beab8fcf58f5fcff478c46",
+     "scope": "composition",
+     "scenario": "handler fails three times",
+     "assessment": "The loop returned ok on a failing handler."
+    },
+    {
+     "date": "2026-09-06T22:45:22.227015",
+     "kind": "test",
+     "ref": "tests/execute_test.py::test_retries_fixed",
+     "result": "pass",
+     "clauses": [
+      "post"
+     ],
+     "resolves": [
+      "EV-1"
+     ],
+     "revision": 2,
+     "content_hash": "0844c6965e77128e6c43406bcdaae7e3d24f5d655c8abfae50b109997e7f5a19",
+     "dependency_hash": "291b68b20edbc68b0cbaaee620149d766e21362c52beab8fcf58f5fcff478c46",
+     "scope": "composition",
+     "scenario": "handler fails three times",
+     "assessment": "The loop now returns failed after three attempts.",
+     "note": "Re-run after fix"
+    }
+   ],
+   "stale_by": [
+    "D-003 (stale 2026-09-06)"
+   ]
+  },
+  "D-003": {
+   "statement": "ok <- attempt(job, n)",
+   "gloss": "Run one attempt",
+   "effect": "Invokes the handler once.",
+   "contract": {
+    "post": "ok reports handler success"
+   },
+   "depends": [],
+   "design": "stale",
+   "realization": "not-started",
+   "verification": "unverified",
+   "approved": "2026-09-06 by standing approval",
+   "evidence_context": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
+   "implementation_plan": {
+    "approach": "Call the handler inside a transaction.",
+    "validation": "Unit test with a failing handler."
+   },
+   "approved_by": "standing approval",
+   "proposal_hash": "6701efca1e740008c1689b6ac6db525ebdc80f4dda23349b637b51eda655e199",
+   "approved_at": "2026-09-06T22:45:21.976855",
+   "revision": 1,
+   "approved_content_hash": "6701efca1e740008c1689b6ac6db525ebdc80f4dda23349b637b51eda655e199",
+   "approved_hash": "97d170e1550e",
+   "contract_hash": "8d20bbe4ed5d",
+   "stale_by": [],
+   "history": [
+    {
+     "date": "2026-09-06",
+     "event": "stale",
+     "reason": "Handler API changed"
+    }
+   ]
+  },
+  "D-004": {
+   "statement": "log_attempt(job, n)",
+   "gloss": "Record the attempt",
+   "effect": "Appends an audit row.",
+   "contract": {
+    "post": "a row exists for (job, n)"
+   },
+   "depends": [],
+   "design": "retired",
+   "realization": "not-started",
+   "verification": "unverified",
+   "approved": "2026-09-06 by user",
+   "evidence_context": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
+   "target": "postgres: INSERT INTO attempts (job_id, n) VALUES ($1, $2)",
+   "approved_by": "user",
+   "proposal_hash": "249075e325c8f23f41766bfa67e942d97b5b9ffaafeb8514a1c17475f1193e88",
+   "approved_at": "2026-09-06T22:45:22.652388",
+   "revision": 1,
+   "approved_content_hash": "249075e325c8f23f41766bfa67e942d97b5b9ffaafeb8514a1c17475f1193e88",
+   "approved_hash": "97d170e1550e",
+   "contract_hash": "9bba5b08219b",
+   "history": [
+    {
+     "date": "2026-09-06",
+     "event": "retired",
+     "reason": "Logging moved into the handler"
+    }
+   ]
+  }
+ },
+ "terms": {
+  "Job": {
+   "definition": "A unit of work with an id, a payload and a deadline. Runs at most once per claim.",
+   "confirmed": "2026-09-06",
+   "avoid": [
+    "task",
+    "work item"
+   ],
+   "example": "send-invoice#42",
+   "changed": [
+    {
+     "at": "2026-09-06T22:45:22.724478",
+     "reason": "Deadlines were missing"
+    }
+   ]
+  }
+ },
+ "facts": {
+  "CTX-F01": {
+   "name": "Postgres is the store",
+   "definition": "Jobs persist in Postgres. Row locks are available.",
+   "confirmed": "2026-09-06",
+   "status": "confirmed",
+   "source": "infra/README.md"
+  }
+ },
+ "scenarios": {
+  "CTX-S01": {
+   "name": "Retry after crash",
+   "definition": "A worker crashes mid-run and the job is retried.",
+   "confirmed": "2026-09-06",
+   "given": "a claimed Job",
+   "when": "the worker dies",
+   "then": "another worker retries within 3 attempts",
+   "settles": "Job"
+  }
+ }
+}

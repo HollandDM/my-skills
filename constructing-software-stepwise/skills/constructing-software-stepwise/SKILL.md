@@ -33,7 +33,7 @@ Refine until the remaining obligations and implementation risks are understood. 
 
 ## Durable state
 
-Use the bundled `scripts/stepwise.py` (Python 3, standard library) for all ledger mutations. `ledger.json` is canonical; `DESIGN.md`, `CONTEXT.md`, and `nodes/*.md` are generated views. Only ADR prose is edited by hand. Default location: `docs/design/<topic>/`; follow an established repository convention when present.
+Use the bundled CLI `node <skill>/dist/stepwise.mjs <verb> <dir> ...` (Node.js 22+, no installation) for all ledger mutations. `ledger.json` is canonical; `DESIGN.md`, `CONTEXT.md`, and `nodes/*.md` are generated views. Only ADR prose is edited by hand. Default location: `docs/design/<topic>/`; follow an established repository convention when present.
 
 Read only the reference needed for the current operation:
 

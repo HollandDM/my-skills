@@ -1,0 +1,60 @@
+{
+ "schema": 1,
+ "title": "Normalization",
+ "scope": "",
+ "nongoals": [],
+ "ambiguities": [],
+ "nodes": {
+  "D-000": {
+   "statement": "result <- run(value)",
+   "gloss": "",
+   "effect": "",
+   "contract": {},
+   "depends": [],
+   "design": "draft",
+   "realization": "not-started",
+   "verification": "unverified",
+   "approved": "",
+   "origin": "existing-code",
+   "current_implementation_version": "15f2a9d06acee9c4dd6a2b2c13c2e8ce7b3766d476d92170b79777d2c50adb2e",
+   "source_state": "unobserved",
+   "source_scope_hash": "02e4c33b45b7a7c46a147db23a817fbaf1c24c3ce11d384401a2493578189bf8",
+   "conformance": {
+    "status": "unassessed",
+    "reason": "No intended contract is recorded."
+   },
+   "evidence_context": "7f95f742a0add35da1f4b220200f6bf4f0ce6e97ce91456d6f260ef1e97a34f5",
+   "bindings": {
+    "S01": {
+     "path": "run.py",
+     "baseline_sha256": "15f2a9d06acee9c4dd6a2b2c13c2e8ce7b3766d476d92170b79777d2c50adb2e",
+     "bound_at": "2026-09-06T22:45:24.763888",
+     "symbol": "run",
+     "commit": "b6a311446653f0f6de1ef4e0d68033971ab60036"
+    }
+   },
+   "implementation_revision": 1,
+   "implementation_history": [
+    {
+     "date": "2026-09-06T22:45:24.767505",
+     "revision": 1,
+     "previous": null,
+     "version": "15f2a9d06acee9c4dd6a2b2c13c2e8ce7b3766d476d92170b79777d2c50adb2e",
+     "commit": "b6a311446653f0f6de1ef4e0d68033971ab60036",
+     "reason": "Sources are bound but behavior has not been recorded."
+    }
+   ],
+   "implementation_version": "15f2a9d06acee9c4dd6a2b2c13c2e8ce7b3766d476d92170b79777d2c50adb2e",
+   "implementation_commit": "b6a311446653f0f6de1ef4e0d68033971ab60036"
+  }
+ },
+ "terms": {},
+ "facts": {},
+ "scenarios": {},
+ "reconstruction": {
+  "previous_ledger": "../repo/docs/design/normalization/ledger.json",
+  "previous_sha256": "e1537018d11ca6f73d6fe4d4e578bc4052e92fc0d449fce59efaab50a2706267",
+  "started_at": "2026-09-06T22:45:24.576599"
+ },
+ "source_root": "../repo"
+}

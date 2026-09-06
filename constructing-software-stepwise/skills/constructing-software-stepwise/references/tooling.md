@@ -1,6 +1,6 @@
 # CLI operations
 
-Run `python3 <skill>/scripts/stepwise.py <verb> <dir> ...`. `<dir>` is the design directory. Python 3 and its standard library are sufficient.
+Run `node <skill>/dist/stepwise.mjs <verb> <dir> ...`. `<dir>` is the design directory. Node.js 22 or newer is sufficient; `dist/stepwise.mjs` is a self-contained bundle and needs no `npm install`.
 
 ## Transactional updates
 

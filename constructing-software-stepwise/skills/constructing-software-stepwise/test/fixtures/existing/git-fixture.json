@@ -1,0 +1,18 @@
+{
+ "env": {
+  "GIT_EDITOR": "true",
+  "GIT_AUTHOR_NAME": "Fixture",
+  "GIT_AUTHOR_EMAIL": "fixture@example.test",
+  "GIT_COMMITTER_NAME": "Fixture",
+  "GIT_COMMITTER_EMAIL": "fixture@example.test",
+  "GIT_AUTHOR_DATE": "2026-01-02T03:04:05Z",
+  "GIT_COMMITTER_DATE": "2026-01-02T03:04:05Z"
+ },
+ "files": [
+  "normalize.py",
+  "run.py"
+ ],
+ "message": "Initial implementation",
+ "commit": "b6a311446653f0f6de1ef4e0d68033971ab60036",
+ "original_normalize": "def normalize(value):\n    return value.strip()\n"
+}

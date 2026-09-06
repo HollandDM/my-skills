@@ -10,7 +10,7 @@ Repo glossary/context convention if it exists. Else scoped to design:
 
 ```text
 docs/design/<topic>/
-  ledger.json     terms · facts · scenarios · scope · nongoals · ambiguities — written ONLY by `stepwise.py`
+  ledger.json     terms · facts · scenarios · scope · nongoals · ambiguities — written ONLY by the Stepwise CLI
   CONTEXT.md      generated view: scope, three tables, open ambiguities, non-goals, then every entry in full
 ```
 

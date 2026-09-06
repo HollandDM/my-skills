@@ -1,0 +1,3414 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="dark" />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data:; base-uri 'none'; form-action 'none'"
+    />
+    <title>Stepwise · Design reader</title>
+    <style>
+      [hidden] {
+        display: none !important;
+      }
+      :root {
+        color-scheme: dark;
+        --ink: #e5edf5;
+        --muted: #a1b0bf;
+        --line: #314253;
+        --paper: #17222e;
+        --back: #0f1720;
+        --surface: #1d2b38;
+        --hover: #223443;
+        --teal: #70ddc4;
+        --pale: #183e38;
+        --accent-line: #36655e;
+        --amber: #f2c078;
+        --warning-back: #352a1b;
+        --warning-line: #6d5533;
+        --info: #b2c9ff;
+        --info-back: #232e4c;
+        --info-line: #485d85;
+        --chart-back: #111b25;
+        --grid: #283a48;
+        --edge: #7696a4;
+        --shadow: 0 8px 28px #00000024;
+        font-family: Inter, "Segoe UI", Arial, "Liberation Sans", sans-serif;
+        font-size: 14px;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        color: var(--ink);
+        background: var(--back);
+      }
+      button,
+      input,
+      select {
+        font: inherit;
+      }
+      button,
+      a,
+      input,
+      select {
+        touch-action: manipulation;
+      }
+      button {
+        cursor: pointer;
+        color: inherit;
+      }
+      button:disabled {
+        opacity: 0.45;
+        cursor: default;
+      }
+      button:focus-visible,
+      a:focus-visible,
+      input:focus-visible,
+      select:focus-visible,
+      [tabindex]:focus-visible {
+        outline: 3px solid var(--teal);
+        outline-offset: 3px;
+      }
+      ::selection {
+        color: var(--ink);
+        background: var(--accent-line);
+      }
+      input::placeholder {
+        color: var(--muted);
+        opacity: 1;
+      }
+      a {
+        color: var(--teal);
+        text-underline-offset: 3px;
+      }
+      button {
+        border: 1px solid var(--line);
+        border-radius: 7px;
+        background: var(--paper);
+        padding: 7px 10px;
+      }
+      button:hover {
+        background: var(--hover);
+      }
+      button.active {
+        color: var(--teal);
+        background: var(--pale);
+        border-color: var(--accent-line);
+      }
+      h1,
+      h2,
+      h3,
+      p {
+        margin: 0;
+      }
+      code,
+      pre,
+      .mono {
+        font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+      }
+      small,
+      .muted {
+        color: var(--muted);
+      }
+      .eyebrow {
+        text-transform: uppercase;
+        letter-spacing: 0.12em;
+        font-size: 10px;
+        font-weight: 750;
+        color: var(--muted);
+      }
+      .top {
+        height: 90px;
+        background: var(--paper);
+        border-bottom: 1px solid var(--line);
+        display: flex;
+        align-items: center;
+        gap: 18px;
+        padding: 18px 26px;
+      }
+      .mark {
+        width: 40px;
+        height: 40px;
+        flex: none;
+        border-radius: 11px;
+        display: grid;
+        place-content: center;
+        color: var(--back);
+        background: var(--teal);
+        font-size: 22px;
+        font-weight: 300;
+      }
+      .brand {
+        min-width: 0;
+        flex: 1;
+      }
+      .brand h1 {
+        font-size: 20px;
+        letter-spacing: -0.04em;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        margin-top: 3px;
+      }
+      .snapshot {
+        text-align: right;
+        max-width: 260px;
+        font-size: 11px;
+        line-height: 1.65;
+      }
+      .snapshot strong {
+        font-weight: 600;
+        color: var(--ink);
+      }
+      .summary {
+        height: 68px;
+        display: flex;
+        align-items: center;
+        gap: 24px;
+        padding: 12px 26px;
+        border-bottom: 1px solid var(--line);
+      }
+      .stat {
+        display: flex;
+        align-items: baseline;
+        gap: 7px;
+        white-space: nowrap;
+      }
+      .stat strong {
+        font-size: 22px;
+        font-weight: 650;
+        letter-spacing: -0.04em;
+      }
+      .stat span {
+        font-size: 11px;
+        color: var(--muted);
+      }
+      .progress-wrap {
+        margin-left: auto;
+        max-width: 240px;
+        width: 24%;
+        font-size: 11px;
+        color: var(--muted);
+      }
+      .progress-label {
+        display: flex;
+        justify-content: space-between;
+        margin-bottom: 7px;
+      }
+      .progress {
+        height: 5px;
+        background: var(--line);
+        border-radius: 4px;
+        overflow: hidden;
+      }
+      .progress span {
+        display: block;
+        background: var(--teal);
+        height: 100%;
+      }
+      .workspace {
+        display: grid;
+        grid-template-columns: 255px minmax(360px, 1fr) minmax(310px, 31vw);
+        height: calc(100vh - 158px);
+        min-height: 400px;
+      }
+      .outline {
+        background: var(--paper);
+        border-right: 1px solid var(--line);
+        display: flex;
+        flex-direction: column;
+        min-height: 0;
+      }
+      .panel-heading {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+        padding: 20px 18px 14px;
+      }
+      .panel-heading h2 {
+        font-size: 12px;
+        letter-spacing: 0.02em;
+      }
+      .panel-heading small {
+        font-size: 11px;
+      }
+      .search-wrap {
+        padding: 0 14px 12px;
+      }
+      .search-wrap input {
+        width: 100%;
+        background: var(--paper);
+        border: 1px solid var(--line);
+        border-radius: 7px;
+        padding: 10px 11px;
+        color: var(--ink);
+      }
+      .tree-controls {
+        display: flex;
+        gap: 6px;
+        padding: 0 14px 12px;
+      }
+      .tree-controls button {
+        font-size: 10px;
+        padding: 5px 8px;
+      }
+      .tree {
+        overflow: auto;
+        padding: 0 8px 16px;
+        flex: 1;
+      }
+      .tree ul {
+        padding: 0 0 0 14px;
+        margin: 0;
+        list-style: none;
+        border-left: 1px solid var(--line);
+        margin-left: 8px;
+      }
+      .tree > ul {
+        padding: 0;
+        margin: 0;
+        border: 0;
+      }
+      .tree-row {
+        display: flex;
+        align-items: center;
+        gap: 2px;
+        border-radius: 7px;
+        margin: 2px 0;
+        padding: 3px 2px;
+        min-width: 0;
+      }
+      .tree-row.selected {
+        background: var(--pale);
+      }
+      .tree-row .toggle {
+        border: 0;
+        background: transparent;
+        width: 22px;
+        padding: 5px 0;
+        flex: none;
+        color: var(--muted);
+      }
+      .tree-row .spacer {
+        width: 22px;
+        flex: none;
+      }
+      .node-link {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        color: var(--ink);
+        text-decoration: none;
+        min-width: 0;
+        flex: 1;
+        padding: 6px 4px;
+        border-radius: 4px;
+      }
+      .node-link:hover {
+        background: var(--hover);
+      }
+      .tree-copy {
+        min-width: 0;
+        display: grid;
+        gap: 3px;
+      }
+      .tree-copy strong {
+        font-size: 11px;
+        font-weight: 550;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .tree-copy small {
+        font-size: 10px;
+      }
+      .dot {
+        width: 7px;
+        height: 7px;
+        background: var(--muted);
+        border-radius: 50%;
+        flex: none;
+      }
+      .dot.approved {
+        background: var(--teal);
+      }
+      .dot.frontier,
+      .dot.unresolved {
+        background: var(--paper);
+        border: 1.5px dashed var(--amber);
+      }
+      .dot.stale {
+        background: var(--amber);
+      }
+      .dot.retired,
+      .dot.superseded {
+        background: var(--muted);
+      }
+      .outline-footer {
+        font-size: 10px;
+        border-top: 1px solid var(--line);
+        padding: 12px 18px;
+        color: var(--muted);
+        line-height: 1.6;
+      }
+      .reader {
+        overflow: auto;
+        padding: 26px 30px 60px;
+        scroll-behavior: smooth;
+        min-width: 0;
+      }
+      .crumbs {
+        display: flex;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 6px;
+        font-size: 11px;
+        margin-bottom: 22px;
+      }
+      .crumbs a {
+        text-decoration: none;
+      }
+      .crumbs span {
+        color: var(--muted);
+      }
+      .node-heading {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        flex-wrap: wrap;
+        margin-bottom: 12px;
+      }
+      .node-heading .mono {
+        font-size: 12px;
+        color: var(--muted);
+        margin-right: 4px;
+      }
+      .badge {
+        font-size: 10px;
+        border-radius: 5px;
+        padding: 4px 7px;
+        border: 1px solid var(--line);
+        background: var(--surface);
+        color: var(--muted);
+        font-weight: 600;
+      }
+      .badge.approved {
+        background: var(--pale);
+        color: var(--teal);
+        border-color: var(--accent-line);
+      }
+      .badge.stale {
+        background: var(--warning-back);
+        color: var(--amber);
+        border-color: var(--warning-line);
+      }
+      .badge.frontier,
+      .badge.unresolved {
+        background: var(--warning-back);
+        color: var(--amber);
+        border-style: dashed;
+      }
+      .badge.retired,
+      .badge.superseded {
+        color: var(--muted);
+        background: var(--surface);
+      }
+      .reader h2 {
+        font-size: 27px;
+        letter-spacing: -0.045em;
+        line-height: 1.25;
+        overflow-wrap: anywhere;
+      }
+      .lead {
+        font-size: 13px;
+        line-height: 1.75;
+        margin: 14px 0 18px;
+        color: var(--muted);
+        white-space: pre-wrap;
+      }
+      .status-line {
+        display: flex;
+        gap: 14px;
+        flex-wrap: wrap;
+        font-size: 10px;
+        color: var(--muted);
+        line-height: 1.7;
+        margin-bottom: 18px;
+      }
+      .status-line strong {
+        font-weight: 550;
+        color: var(--ink);
+      }
+      .notice {
+        border-left: 3px solid var(--amber);
+        background: var(--warning-back);
+        padding: 12px 14px;
+        line-height: 1.6;
+        font-size: 12px;
+        border-radius: 0 6px 6px 0;
+        margin: 14px 0;
+      }
+      .tabs {
+        display: flex;
+        gap: 20px;
+        border-bottom: 1px solid var(--line);
+        margin: 20px 0 22px;
+      }
+      .tabs button {
+        border: 0;
+        border-bottom: 2px solid transparent;
+        background: none;
+        border-radius: 0;
+        padding: 10px 0;
+        font-size: 12px;
+        color: var(--muted);
+      }
+      .tabs button[aria-selected="true"] {
+        border-color: var(--teal);
+        color: var(--teal);
+        font-weight: 600;
+      }
+      .section {
+        margin: 0 0 24px;
+      }
+      .section-title {
+        display: flex;
+        gap: 8px;
+        align-items: center;
+        justify-content: space-between;
+        margin-bottom: 11px;
+      }
+      .section-title h3 {
+        font-size: 12px;
+        font-weight: 650;
+      }
+      .section-title small {
+        font-size: 10px;
+      }
+      .card {
+        background: var(--paper);
+        border: 1px solid var(--line);
+        border-radius: 10px;
+        box-shadow: var(--shadow);
+        overflow: hidden;
+      }
+      .clause {
+        padding: 14px 16px;
+        border-bottom: 1px solid var(--line);
+      }
+      .clause:last-child {
+        border: 0;
+      }
+      .clause-label {
+        font-size: 9px;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: var(--teal);
+        font-weight: 700;
+        margin-bottom: 5px;
+      }
+      .clause p {
+        font-size: 13px;
+        line-height: 1.75;
+        white-space: pre-wrap;
+        overflow-wrap: anywhere;
+      }
+      .algorithm-card {
+        min-width: 0;
+        border-radius: 3px;
+        border-top: 2px solid var(--teal);
+        border-bottom: 2px solid var(--line);
+      }
+      .algorithm-title {
+        overflow-wrap: anywhere;
+        padding: 14px 16px;
+        border-bottom: 1px solid var(--line);
+        font:
+          600 17px/1.5 Georgia,
+          "Times New Roman",
+          serif;
+      }
+      .pseudocode-controls {
+        display: flex;
+        gap: 8px;
+        flex-wrap: wrap;
+        margin-bottom: 12px;
+      }
+      .pseudocode-controls select {
+        background: var(--paper);
+        color: var(--ink);
+        border: 1px solid var(--line);
+        border-radius: 6px;
+        padding: 7px;
+      }
+      .pseudocode-tree {
+        margin-top: 16px;
+        min-width: 0;
+        overflow: auto;
+        padding-bottom: 8px;
+      }
+      .pseudocode-tree .algorithm-card {
+        margin-bottom: 24px;
+      }
+      .pseudocode-index {
+        margin-top: 12px;
+      }
+      .algorithm-meta {
+        display: grid;
+        grid-template-columns: 80px minmax(0, 1fr);
+        gap: 5px 12px;
+        padding: 12px 16px;
+        margin: 0;
+        border-bottom: 1px solid var(--line);
+        font-size: 12px;
+        line-height: 1.7;
+      }
+      .algorithm-meta dt {
+        color: var(--teal);
+        font-weight: 650;
+      }
+      .algorithm-meta dd {
+        margin: 0;
+        white-space: pre-wrap;
+        overflow-wrap: anywhere;
+      }
+      .algorithm-card .code-line {
+        border-top: 0;
+        padding-block: 4px;
+      }
+      .algorithm-card .line-no {
+        width: 26px;
+        color: var(--muted);
+      }
+      .algorithm-card .line-content {
+        padding-left: var(--indent, 0px);
+      }
+      .algorithm-card .line-note {
+        padding-top: 0;
+      }
+      .algorithm-card .code-line:last-child {
+        padding-bottom: 16px;
+      }
+      .algorithm-keyword {
+        color: #b8caff;
+        font-weight: 750;
+      }
+      @media print {
+        .algorithm-keyword {
+          color: #344a76;
+        }
+      }
+      .code-card {
+        background: #182a35;
+        color: #d6e3e9;
+        border-color: #182a35;
+      }
+      .code-bar {
+        padding: 11px 15px;
+        color: #98b8c4;
+        font-size: 10px;
+        border-bottom: 1px solid #34454f;
+        display: flex;
+        justify-content: space-between;
+      }
+      .signature {
+        padding: 15px 16px 10px;
+        color: #8cdbc3;
+        font-size: 12px;
+        white-space: pre-wrap;
+        overflow-wrap: anywhere;
+      }
+      .code-line {
+        display: flex;
+        gap: 10px;
+        align-items: flex-start;
+        padding: 7px 13px;
+        border-top: 1px solid #ffffff06;
+      }
+      .line-no {
+        font:
+          10px/1.8 ui-monospace,
+          monospace;
+        color: #72909c;
+        width: 16px;
+        text-align: right;
+        flex: none;
+      }
+      .line-content {
+        flex: 1;
+        min-width: 0;
+      }
+      .line-content code {
+        font-size: 12px;
+        white-space: pre-wrap;
+        line-height: 1.9;
+        display: block;
+        overflow-wrap: anywhere;
+      }
+      .line-content a {
+        color: #8ce0c5;
+      }
+      .line-note {
+        color: #9ab3bd;
+        font-size: 11px;
+        line-height: 1.7;
+        padding-top: 3px;
+        overflow-wrap: anywhere;
+      }
+      .code-ref {
+        font:
+          9px ui-monospace,
+          monospace;
+        color: #8ce0c5;
+        white-space: nowrap;
+        padding: 5px 6px;
+        border: 1px solid #386253;
+        border-radius: 4px;
+        text-decoration: none;
+      }
+      .prose-list {
+        padding: 0;
+        list-style: none;
+        margin: 0;
+      }
+      .prose-list li {
+        padding: 11px 15px;
+        font-size: 12px;
+        line-height: 1.75;
+        border-bottom: 1px solid var(--line);
+        white-space: pre-wrap;
+        overflow-wrap: anywhere;
+      }
+      .prose-list li:last-child {
+        border: 0;
+      }
+      .chips {
+        display: flex;
+        gap: 6px;
+        flex-wrap: wrap;
+      }
+      .chip {
+        font-size: 10px;
+        border: 1px solid var(--line);
+        border-radius: 5px;
+        padding: 5px 8px;
+        background: var(--paper);
+        text-decoration: none;
+        color: var(--muted);
+      }
+      .empty {
+        padding: 22px 15px;
+        color: var(--muted);
+        font-size: 12px;
+        line-height: 1.8;
+      }
+      .record {
+        padding: 15px;
+        border-bottom: 1px solid var(--line);
+      }
+      .record:last-child {
+        border: 0;
+      }
+      .record h4 {
+        margin: 0 0 7px;
+        font-size: 12px;
+      }
+      .record p,
+      .record pre {
+        margin: 6px 0;
+        font-size: 11px;
+        line-height: 1.75;
+        white-space: pre-wrap;
+        overflow-wrap: anywhere;
+      }
+      .record small {
+        font-size: 10px;
+      }
+      .record.related {
+        border-left: 3px solid var(--teal);
+      }
+      .chart {
+        border-left: 1px solid var(--line);
+        display: flex;
+        flex-direction: column;
+        min-height: 0;
+        background: var(--chart-back);
+        min-width: 0;
+      }
+      .chart .panel-heading {
+        padding-top: 20px;
+      }
+      .chart-note {
+        font-size: 11px;
+        color: var(--muted);
+        padding: 0 18px 14px;
+        line-height: 1.6;
+      }
+      .chart-tools {
+        display: flex;
+        align-items: center;
+        gap: 5px;
+        padding: 0 14px 12px;
+        flex-wrap: wrap;
+      }
+      .chart-tools button {
+        font-size: 11px;
+        padding: 5px 9px;
+      }
+      .chart-tools output {
+        font:
+          10px ui-monospace,
+          monospace;
+        color: var(--muted);
+        min-width: 36px;
+        text-align: center;
+      }
+      .graph-viewport {
+        flex: 1;
+        overflow: auto;
+        min-height: 220px;
+        background-image: radial-gradient(var(--grid) 1px, transparent 1px);
+        background-size: 16px 16px;
+        position: relative;
+      }
+      .graph-viewport svg {
+        display: block;
+      }
+      .graph-edge {
+        fill: none;
+        stroke: var(--edge);
+        stroke-width: 1.5;
+      }
+      .graph-edge.reuse {
+        stroke: var(--info);
+        stroke-dasharray: 5 4;
+      }
+      .graph-edge.dependency {
+        stroke: var(--amber);
+        stroke-dasharray: 2 5;
+      }
+      .graph-edge.related {
+        stroke: var(--teal);
+        stroke-width: 2;
+      }
+      .graph-node {
+        cursor: pointer;
+      }
+      .graph-node rect {
+        fill: var(--paper);
+        stroke: var(--line);
+        stroke-width: 1.3;
+        rx: 9;
+      }
+      .graph-node:hover rect {
+        fill: var(--hover);
+        stroke: var(--accent-line);
+      }
+      .graph-node.selected rect {
+        fill: var(--pale);
+        stroke: var(--teal);
+        stroke-width: 2;
+      }
+      .graph-node text {
+        font-family: Inter, "Segoe UI", Arial, "Liberation Sans", sans-serif;
+        fill: var(--ink);
+        font-size: 11px;
+        pointer-events: none;
+      }
+      .graph-node .graph-id {
+        font-family: ui-monospace, monospace;
+        font-size: 10px;
+        fill: var(--muted);
+      }
+      .graph-node .graph-status {
+        font-size: 9px;
+        fill: var(--muted);
+      }
+      .graph-node .node-dot {
+        fill: var(--muted);
+      }
+      .graph-node .node-dot.approved {
+        fill: var(--teal);
+      }
+      .graph-node .node-dot.stale {
+        fill: var(--amber);
+      }
+      .graph-node .node-dot.frontier,
+      .graph-node .node-dot.unresolved {
+        fill: var(--amber);
+      }
+      .chart-footer {
+        border-top: 1px solid var(--line);
+        padding: 14px 18px;
+        font-size: 10px;
+        color: var(--muted);
+        line-height: 1.8;
+      }
+      .legend {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 12px;
+        margin-bottom: 7px;
+      }
+      .legend span {
+        display: flex;
+        align-items: center;
+        gap: 5px;
+      }
+      .legend i {
+        display: inline-block;
+        width: 15px;
+        border-top: 2px solid var(--edge);
+      }
+      .legend i.reuse {
+        border-top-style: dashed;
+        border-color: var(--info);
+      }
+      .legend i.dependency {
+        border-top-style: dotted;
+        border-color: var(--amber);
+      }
+      .mobile-tools {
+        display: none;
+      }
+      .reader:empty:before {
+        content: "Select an operation to explore its contract and refinement.";
+        color: var(--muted);
+      }
+      .sr-only {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        overflow: hidden;
+        clip: rect(0, 0, 0, 0);
+      }
+      @media (min-width: 1700px) {
+        .workspace {
+          grid-template-columns: 280px minmax(480px, 1fr) 500px;
+        }
+        .reader {
+          padding: 30px 44px 60px;
+        }
+      }
+      @media (max-width: 1150px) {
+        .workspace {
+          grid-template-columns: 225px minmax(340px, 1fr);
+        }
+        .chart {
+          grid-column: 2;
+          height: 470px;
+          border-top: 1px solid var(--line);
+        }
+        .workspace {
+          height: auto;
+          align-items: start;
+        }
+        .outline {
+          position: sticky;
+          top: 0;
+          height: calc(100vh - 158px);
+          grid-row: 1 / 3;
+        }
+        .reader {
+          min-height: 600px;
+          overflow: visible;
+          padding: 24px;
+        }
+        .summary {
+          gap: 16px;
+        }
+        .chart .graph-viewport {
+          min-height: 260px;
+        }
+      }
+      @media (max-width: 700px) {
+        .top {
+          height: auto;
+          min-height: 80px;
+          padding: 16px;
+          gap: 12px;
+        }
+        .brand h1 {
+          font-size: 18px;
+        }
+        .snapshot {
+          display: none;
+        }
+        .summary {
+          height: auto;
+          min-height: 64px;
+          padding: 12px 16px;
+          gap: 16px;
+          flex-wrap: wrap;
+        }
+        .stat strong {
+          font-size: 19px;
+        }
+        .progress-wrap {
+          display: none;
+        }
+        .workspace {
+          display: block;
+          min-height: 0;
+        }
+        .outline {
+          position: static;
+          height: auto;
+          max-height: 360px;
+          border-right: 0;
+          border-bottom: 1px solid var(--line);
+        }
+        .outline .tree {
+          max-height: 230px;
+        }
+        .outline-footer {
+          display: none;
+        }
+        .reader {
+          padding: 22px 16px;
+          min-height: 420px;
+        }
+        .reader h2 {
+          font-size: 25px;
+        }
+        .chart {
+          height: 440px;
+          border-left: 0;
+        }
+        .panel-heading {
+          padding-top: 14px;
+        }
+        .tabs {
+          gap: 22px;
+        }
+        .mobile-tools {
+          display: block;
+          margin-left: auto;
+          font-size: 10px;
+        }
+        .outline.hidden-mobile {
+          display: none;
+        }
+        .code-ref {
+          font-size: 8px;
+        }
+        .status-line {
+          gap: 9px;
+        }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        .reader {
+          scroll-behavior: auto;
+        }
+      }
+      @media print {
+        :root {
+          color-scheme: light;
+          --ink: #202d3b;
+          --muted: #536271;
+          --line: #dfe5e7;
+          --paper: #fff;
+          --back: #fff;
+          --surface: #f1f4f6;
+          --teal: #007c78;
+          --pale: #e6f4ef;
+          --amber: #825513;
+          --warning-back: #fff4df;
+          --info: #385782;
+          --info-back: #eaf0ff;
+          --chart-back: #fff;
+        }
+        .outline,
+        .chart,
+        .summary,
+        .tabs,
+        .mobile-tools {
+          display: none;
+        }
+        .workspace {
+          display: block;
+          height: auto;
+        }
+        .reader {
+          overflow: visible;
+          padding: 20px;
+        }
+        .top {
+          height: auto;
+        }
+        .card {
+          box-shadow: none;
+          break-inside: avoid;
+        }
+        .code-card {
+          background: #f4f5f6;
+          color: #162e39;
+        }
+        .line-note,
+        .signature,
+        .code-bar {
+          color: #385565;
+        }
+      }
+      .review-tools {
+        padding: 0 14px 12px;
+        display: flex;
+        gap: 6px;
+        flex-wrap: wrap;
+      }
+      .review-tools button,
+      .review-tools label {
+        font-size: 10px;
+      }
+      .review-tools select {
+        width: 100%;
+        padding: 8px;
+        border: 1px solid var(--line);
+        border-radius: 6px;
+        background: var(--paper);
+        color: var(--ink);
+      }
+      .review-tools label.upload {
+        border: 1px solid var(--line);
+        border-radius: 6px;
+        padding: 7px;
+        background: var(--paper);
+        cursor: pointer;
+      }
+      .review-message {
+        font-size: 10px;
+        color: var(--muted);
+        padding: 0 14px 10px;
+        line-height: 1.5;
+      }
+      .change-record {
+        margin: 14px 0;
+        padding: 14px;
+      }
+      .change-record summary {
+        cursor: pointer;
+        font-size: 12px;
+        font-weight: 650;
+        margin-bottom: 8px;
+      }
+      .change-record pre {
+        font-size: 11px;
+        white-space: pre-wrap;
+        overflow-wrap: anywhere;
+        line-height: 1.7;
+      }
+      .badge.changed {
+        background: var(--info-back);
+        color: var(--info);
+      }
+      .behavior-edge {
+        fill: none;
+        stroke: var(--teal);
+        stroke-width: 1.6;
+      }
+      .behavior-edge.returning {
+        stroke-dasharray: 6 4;
+      }
+      .behavior-label {
+        fill: var(--ink);
+        font:
+          12px Arial,
+          sans-serif;
+        paint-order: stroke;
+        stroke: var(--chart-back);
+        stroke-width: 4px;
+      }
+      .behavior-state rect {
+        fill: var(--paper);
+        stroke: var(--teal);
+        stroke-width: 1.4;
+      }
+      .behavior-state text {
+        fill: var(--ink);
+        font:
+          12px Arial,
+          sans-serif;
+      }
+      .behavior-state {
+        cursor: pointer;
+      }
+      .lifeline {
+        fill: none;
+        stroke: var(--edge);
+        stroke-dasharray: 5 5;
+      }
+      .chart-tools select {
+        max-width: 100%;
+        border: 1px solid var(--line);
+        border-radius: 6px;
+        padding: 6px;
+        color: var(--ink);
+        background: var(--paper);
+      }
+      .coverage {
+        font-size: 11px;
+        line-height: 1.8;
+        padding: 12px;
+        border-left: 3px solid var(--teal);
+        background: var(--pale);
+        margin-bottom: 16px;
+      }
+      @media (max-width: 700px) {
+        .tabs {
+          gap: 10px;
+        }
+        .tabs button {
+          font-size: 11px;
+        }
+        .review-tools {
+          padding-bottom: 6px;
+        }
+      }
+
+      .workspace-tabs {
+        display: flex;
+        align-items: stretch;
+        gap: 20px;
+        padding: 0 26px;
+        height: 48px;
+        border-bottom: 1px solid var(--line);
+        background: var(--paper);
+      }
+      .workspace-tabs button {
+        border: 0;
+        border-bottom: 2px solid transparent;
+        border-radius: 0;
+        background: none;
+        color: var(--muted);
+        padding: 12px 2px;
+        font-size: 13px;
+      }
+      .workspace-tabs button[aria-selected="true"] {
+        color: var(--teal);
+        border-bottom-color: var(--teal);
+        font-weight: 650;
+      }
+      .workspace[data-view="read"] {
+        display: grid;
+        grid-template-columns: 255px minmax(0, 1fr);
+        height: calc(100vh - 206px);
+      }
+      .workspace[data-view="read"] .chart {
+        display: none;
+      }
+      .workspace[data-view="map"] {
+        display: block;
+        height: calc(100vh - 206px);
+        min-height: 420px;
+      }
+      .workspace[data-view="map"] .outline,
+      .workspace[data-view="map"] .reader {
+        display: none;
+      }
+      .workspace[data-view="map"] .chart {
+        display: flex;
+        height: 100%;
+        border-left: 0;
+        border-top: 0;
+        grid-column: auto;
+      }
+      .workspace[data-view="map"] .chart .panel-heading {
+        padding: 16px 26px 8px;
+      }
+      .workspace[data-view="map"] .chart-note {
+        padding: 0 26px 12px;
+      }
+      .workspace[data-view="map"] .chart-tools {
+        padding: 0 26px 14px;
+      }
+      .workspace[data-view="map"] .graph-viewport {
+        min-height: 180px;
+      }
+      .workspace[data-view="map"] #graph {
+        margin-inline: auto;
+      }
+      .workspace[data-view="read"] .reader {
+        max-width: 1250px;
+        width: 100%;
+        justify-self: center;
+      }
+      @media (max-width: 1150px) {
+        .workspace[data-view="read"] {
+          grid-template-columns: 225px minmax(0, 1fr);
+          height: calc(100vh - 206px);
+          align-items: stretch;
+        }
+        .workspace[data-view="read"] .outline {
+          position: static;
+          height: auto;
+          grid-row: auto;
+        }
+        .workspace[data-view="read"] .reader {
+          overflow: auto;
+          min-height: 0;
+        }
+      }
+      @media (max-width: 700px) {
+        .workspace-tabs {
+          padding-inline: 16px;
+        }
+        .workspace[data-view="read"] {
+          display: block;
+          height: auto;
+        }
+        .workspace[data-view="read"] .outline {
+          max-height: 360px;
+        }
+        .workspace[data-view="read"] .reader {
+          min-height: 420px;
+          overflow: visible;
+        }
+        .workspace[data-view="map"] {
+          height: calc(100dvh - 192px);
+          min-height: 440px;
+        }
+        .workspace[data-view="map"] .chart .panel-heading,
+        .workspace[data-view="map"] .chart-note,
+        .workspace[data-view="map"] .chart-tools {
+          padding-left: 16px;
+          padding-right: 16px;
+        }
+      }
+      @media print {
+        .workspace-tabs {
+          display: none;
+        }
+        .workspace[data-view="read"] {
+          display: block;
+          height: auto;
+        }
+        .workspace[data-view="map"] {
+          height: auto;
+        }
+        .workspace[data-view="map"] .chart {
+          height: auto;
+        }
+      }
+      .badge.observation {
+        background: var(--info-back);
+        border-color: var(--info-line);
+        color: var(--info);
+      }
+      .badge.inference {
+        background: var(--warning-back);
+        color: var(--amber);
+      }
+      .graph-edge.observed {
+        stroke: var(--info);
+        stroke-dasharray: 8 3;
+      }
+      .legend i.observed {
+        border-color: var(--info);
+        border-top-style: dashed;
+      }
+      .tabs {
+        overflow-x: auto;
+        white-space: nowrap;
+      }
+      .tabs button {
+        flex-shrink: 0;
+      }
+    </style>
+  </head>
+  <body>
+    <header class="top">
+      <div class="mark" aria-hidden="true">≋</div>
+      <div class="brand">
+        <div class="eyebrow">Stepwise / Design explorer</div>
+        <h1 id="design-title">Design</h1>
+      </div>
+      <div class="snapshot">
+        <strong>Local design snapshot</strong><br /><span
+          id="snapshot-date"
+        ></span>
+      </div>
+      <button class="mobile-tools" id="outline-toggle" aria-expanded="true">
+        Outline
+      </button>
+    </header>
+    <div class="summary" id="summary" aria-label="Design status summary"></div>
+    <nav class="workspace-tabs" role="tablist" aria-label="Preview workspace">
+      <button
+        id="view-read"
+        role="tab"
+        aria-selected="true"
+        aria-controls="workspace"
+      >
+        Read design
+      </button>
+      <button
+        id="view-map"
+        role="tab"
+        aria-selected="false"
+        aria-controls="workspace"
+        tabindex="-1"
+      >
+        Design map
+      </button>
+    </nav>
+    <main
+      class="workspace"
+      id="workspace"
+      data-view="read"
+      role="tabpanel"
+      aria-labelledby="view-read"
+    >
+      <aside class="outline" id="outline" aria-label="Design outline">
+        <div class="panel-heading">
+          <h2>OUTLINE</h2>
+          <small id="node-count"></small>
+        </div>
+        <div class="search-wrap">
+          <label class="sr-only" for="search"
+            >Search nodes, contracts, and code</label
+          ><input
+            id="search"
+            type="search"
+            placeholder="Search nodes, contracts, code…"
+            autocomplete="off"
+          />
+        </div>
+        <div class="tree-controls">
+          <button id="expand-all">Expand all</button
+          ><button id="collapse-all">Collapse all</button
+          ><button id="clear-search" hidden>Clear search</button>
+        </div>
+        <div class="review-tools">
+          <label class="sr-only" for="review-filter">Filter nodes</label
+          ><select id="review-filter">
+            <option value="all">All nodes</option>
+            <option value="changed">Changed / unreviewed</option>
+            <option value="stale">Stale or failed</option>
+            <option value="agent">Agent-chosen decisions</option>
+            <option value="open">Open design work</option>
+            <option value="sources">
+              Implementation changed / uninspected
+            </option>
+            <option value="differences">Contract differences</option></select
+          ><button id="review-all">Mark all reviewed</button
+          ><button id="review-download">Save review file</button
+          ><label class="upload"
+            >Load review file<input
+              id="review-upload"
+              type="file"
+              accept="application/json"
+              class="sr-only"
+          /></label>
+        </div>
+        <p id="review-message" class="review-message" aria-live="polite"></p>
+        <nav class="tree" id="tree" aria-label="Refinement tree"></nav>
+        <div class="outline-footer">
+          Select any operation to read its contract.<br />Shared references link
+          to the same node.
+        </div>
+      </aside>
+      <article
+        class="reader"
+        id="reader"
+        aria-label="Selected operation"
+      ></article>
+      <aside class="chart" aria-label="Design chart">
+        <div class="panel-heading">
+          <h2>DESIGN MAP</h2>
+          <small id="edge-count"></small>
+        </div>
+        <p class="chart-note">
+          Explore the relationships. Select a node to read its contract and
+          pseudocode.
+        </p>
+        <div class="chart-tools">
+          <label class="sr-only" for="chart-mode">Chart type</label
+          ><select id="chart-mode">
+            <option value="design">Refinement map</option>
+            <option value="states">State transitions</option>
+            <option value="sequence">Interaction sequence</option></select
+          ><label class="sr-only" for="chart-basis">Behavior model</label
+          ><select id="chart-basis">
+            <option value="intended">Intended behavior</option>
+            <option value="observed">Observed behavior</option></select
+          ><button id="zoom-out" aria-label="Zoom out">−</button
+          ><output id="zoom-label" aria-live="polite">100%</output
+          ><button id="zoom-in" aria-label="Zoom in">+</button
+          ><button id="fit-graph">Fit</button
+          ><button id="focus-node">Focus selected</button
+          ><button id="read-selected">Read selected node</button>
+        </div>
+        <div
+          class="graph-viewport"
+          id="graph-viewport"
+          tabindex="0"
+          aria-label="Scrollable design diagram"
+        >
+          <svg
+            id="graph"
+            xmlns="http://www.w3.org/2000/svg"
+            role="group"
+            aria-label="Node relationship diagram"
+          ></svg>
+        </div>
+        <div class="chart-footer">
+          <div class="legend">
+            <span><i></i>Refinement</span><span><i class="reuse"></i>Reuse</span
+            ><span><i class="dependency"></i>Dependency</span
+            ><span><i class="observed"></i>Observed relationship</span>
+          </div>
+          <div id="chart-selection">No node selected</div>
+          <div>Snapshot only · Regenerate with the html command.</div>
+        </div>
+      </aside>
+    </main>
+    <noscript
+      ><p class="empty">
+        Enable JavaScript to navigate this offline snapshot, or read the
+        generated DESIGN.md and node Markdown files.
+      </p></noscript
+    >
+    <script id="stepwise-data" type="application/json">
+      {"ledger": {"schema": 1, "title": "Durable Job Runner", "scope": "Run queued jobs exactly once with bounded retries \u2014 caf\u00e9-grade reliability.", "nongoals": ["Scheduling policy", "Multi-region failover"], "ambiguities": [], "nodes": {"D-000": {"statement": "result \u003c- run_job(job)", "gloss": "Run a Job durably \u2014 with retries", "effect": "Executes the Job on CTX-F01 and records the outcome.", "contract": {"pre": "Job is a valid job", "post": "result records completion or a final failure after \u2264 3 retries", "invariant": "at most one active run per Job"}, "depends": ["CTX-F01", "Job", "ADR-0001"], "design": "stale", "realization": "not-started", "verification": "unverified", "approved": "2026-09-06 by user; reaffirmed 2026-09-06 by user", "evidence_context": "aa24040a9f2227f3d1549978964204dc8c01139060f3a9a7b8ae934324d462f0", "body": [{"indent": 0, "code": "claim \u003c- acquire(job)", "child": "D-001", "gloss": "Lock the job row"}, {"indent": 0, "code": "if claim.ok:"}, {"indent": 2, "code": "outcome \u003c- execute(job)", "child": "D-002", "gloss": "Execute with retries"}, {"indent": 2, "code": "release(job)", "gloss": "Release the lock", "target": "postgres: UPDATE jobs SET lock = NULL WHERE id = $1"}, {"indent": 2, "code": "-\u003e outcome"}, {"indent": 0, "code": "else:"}, {"indent": 2, "code": "-\u003e \"busy\""}], "walkthrough": ["Acquire the row, run the job, release the row."], "composition": ["Acquire and release bracket execution.", "Retries live entirely in D-002."], "decisions": ["Row locks rather than advisory locks"], "approved_by": "user", "proposal_hash": "13f9fe748ae65027adfbea7af60416b0a21adda3e370f06a163cfda0de27d5b5", "approved_at": "2026-09-06T22:45:22.801071", "revision": 2, "approved_content_hash": "13f9fe748ae65027adfbea7af60416b0a21adda3e370f06a163cfda0de27d5b5", "approved_hash": "03280d08eac7", "contract_hash": "0cf2af9fd990", "history": [{"date": "2026-09-06", "event": "stale", "reason": "Job changed: Deadlines were missing"}, {"date": "2026-09-06", "event": "reaffirmed", "reason": "Job"}, {"date": "2026-09-06", "event": "stale", "reason": "D-001 contract changed"}], "stale_by": ["D-001 (contract changed 2026-09-06)"], "coverage": {"status": "unverified", "covered": [], "missing": ["invariant", "post", "pre"], "failed": []}}, "D-001": {"statement": "claim \u003c- acquire(job)", "gloss": "Claim the job row", "effect": "Locks the job row for this worker.", "contract": {"pre": "job exists", "post": "claim.ok \u21d4 the row was locked by this worker before the deadline"}, "depends": [], "design": "approved", "realization": "not-started", "verification": "stale", "approved": "2026-09-06 by user", "evidence_context": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a", "target": "postgres: SELECT id FROM jobs WHERE id = $1 FOR UPDATE SKIP LOCKED", "adaptation": ["post \u2192 SKIP LOCKED returns zero rows when another worker holds the lock"], "approved_by": "user", "proposal_hash": "3535a591eb487d8ba8b64fef79be526439adf0130fd57cc0854d564766ab9335", "approved_at": "2026-09-06T22:45:23.049535", "revision": 2, "approved_content_hash": "3535a591eb487d8ba8b64fef79be526439adf0130fd57cc0854d564766ab9335", "approved_hash": "97d170e1550e", "contract_hash": "94879a6b9106", "evidence": [{"date": "2026-09-06T22:45:21.143419", "kind": "test", "ref": "tests/acquire_test.py::test_lock", "result": "pass", "clauses": ["pre", "post"], "resolves": [], "revision": 1, "content_hash": "785556b5ed17f32bfa577400a247613807b508ddc01ad562f80b7750f7b763c4", "dependency_hash": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a", "scope": "implementation", "scenario": "two workers contend for one job", "assessment": "The second worker receives zero rows; the first holds the lock.", "withdrawn": {"date": "2026-09-06T22:45:22.303115", "by": "reviewer", "reason": "Fixture was mocked"}}], "history": [{"date": "2026-09-06", "event": "evidence withdrawn", "reason": "EV-1: Fixture was mocked"}, {"date": "2026-09-06", "event": "reopened", "reason": "Tighten the lock contract"}, {"date": "2026-09-06", "event": "re-approved"}], "revisions": [{"date": "2026-09-06T22:45:22.897531", "reason": "Tighten the lock contract", "approved": "2026-09-06 by user", "revision": 1, "content": {"statement": "claim \u003c- acquire(job)", "gloss": "Claim the job row", "effect": "Locks the job row for this worker.", "contract": {"pre": "job exists", "post": "claim.ok \u21d4 the row was locked by this worker"}, "target": "postgres: SELECT id FROM jobs WHERE id = $1 FOR UPDATE SKIP LOCKED", "adaptation": ["post \u2192 SKIP LOCKED returns zero rows when another worker holds the lock"], "depends": []}}], "coverage": {"status": "stale", "covered": [], "missing": ["post", "pre"], "failed": []}}, "D-002": {"statement": "outcome \u003c- execute(job)", "gloss": "Execute with bounded retries", "effect": "Runs the job up to three times.", "contract": {"pre": "the job row is claimed", "post": "outcome is ok after \u2264 3 attempts or failed", "progress": "each attempt terminates"}, "depends": ["D-003"], "design": "stale", "realization": "not-started", "verification": "stale", "approved": "2026-09-06 by user", "evidence_context": "86249b680409dd94bf14174d646506779bcb0f1a707210a0e38664ce49faefcb", "body": [{"indent": 0, "code": "for n in 1..3:"}, {"indent": 2, "code": "ok \u003c- attempt(job, n)", "child": "D-003", "gloss": "One attempt"}, {"indent": 2, "code": "if ok:"}, {"indent": 4, "code": "-\u003e ok"}, {"indent": 0, "code": "-\u003e failed"}], "walkthrough": ["Try up to three times.", "Return the first success."], "composition": ["The loop bound gives progress."], "approved_by": "user", "proposal_hash": "93ba5edd2c2fccf700d23de3fa4077a96d0ff40fe8a51f7d195eda67dc8dc605", "approved_at": "2026-09-06T22:45:23.152791", "revision": 3, "approved_content_hash": "93ba5edd2c2fccf700d23de3fa4077a96d0ff40fe8a51f7d195eda67dc8dc605", "approved_hash": "8832d13ee08f", "contract_hash": "2d1cac899a20", "revisions": [{"date": "2026-09-06T22:45:22.057532", "reason": "Add the state chart", "approved": "2026-09-06 by agent", "revision": 1, "content": {"statement": "outcome \u003c- execute(job)", "gloss": "Execute with bounded retries", "effect": "Runs the job up to three times.", "contract": {"pre": "the job row is claimed", "post": "outcome is ok after \u2264 3 attempts or failed", "progress": "each attempt terminates"}, "body": [{"indent": 0, "code": "for n in 1..3:"}, {"indent": 2, "code": "ok \u003c- attempt(job, n)", "child": "D-003", "gloss": "One attempt"}, {"indent": 2, "code": "log_attempt(job, n)", "child": "D-004", "gloss": "Record the attempt"}, {"indent": 2, "code": "if ok:"}, {"indent": 4, "code": "-\u003e ok"}, {"indent": 0, "code": "-\u003e failed"}], "walkthrough": ["Try up to three times.", "Return the first success."], "composition": ["The loop bound gives progress."], "depends": []}}, {"date": "2026-09-06T22:45:23.145948", "reason": "Logging moves to the handler", "approved": "2026-09-06 by user", "revision": 2, "content": {"statement": "outcome \u003c- execute(job)", "gloss": "Execute with bounded retries", "effect": "Runs the job up to three times.", "contract": {"pre": "the job row is claimed", "post": "outcome is ok after \u2264 3 attempts or failed", "progress": "each attempt terminates"}, "body": [{"indent": 0, "code": "for n in 1..3:"}, {"indent": 2, "code": "ok \u003c- attempt(job, n)", "child": "D-003", "gloss": "One attempt"}, {"indent": 2, "code": "log_attempt(job, n)", "child": "D-004", "gloss": "Record the attempt"}, {"indent": 2, "code": "if ok:"}, {"indent": 4, "code": "-\u003e ok"}, {"indent": 0, "code": "-\u003e failed"}], "walkthrough": ["Try up to three times.", "Return the first success."], "composition": ["The loop bound gives progress."], "depends": ["D-003"], "behavior": {"states": [{"id": "idle", "label": "Idle", "initial": true}, {"id": "running", "label": "Running", "node": "D-003"}, {"id": "done", "label": "Done", "terminal": true}], "transitions": [{"from": "idle", "to": "running", "event": "attempt"}, {"from": "running", "to": "done", "event": "ok"}, {"from": "running", "to": "running", "event": "retry", "guard": "n \u003c 3"}]}}}], "superseded": {"date": "2026-09-06", "reason": "Logging moves to the handler", "body": [{"indent": 0, "code": "for n in 1..3:"}, {"indent": 2, "code": "ok \u003c- attempt(job, n)", "child": "D-003", "gloss": "One attempt"}, {"indent": 2, "code": "log_attempt(job, n)", "child": "D-004", "gloss": "Record the attempt"}, {"indent": 2, "code": "if ok:"}, {"indent": 4, "code": "-\u003e ok"}, {"indent": 0, "code": "-\u003e failed"}], "composition": ["The loop bound gives progress."]}, "history": [{"date": "2026-09-06", "event": "reopened", "reason": "Add the state chart"}, {"date": "2026-09-06", "event": "re-approved"}, {"date": "2026-09-06", "event": "reopened", "reason": "Logging moves to the handler"}, {"date": "2026-09-06", "event": "re-approved"}, {"date": "2026-09-06", "event": "stale", "reason": "D-003 stale"}], "behavior": {"states": [{"id": "idle", "label": "Idle", "initial": true}, {"id": "running", "label": "Running", "node": "D-003"}, {"id": "done", "label": "Done", "terminal": true}], "transitions": [{"from": "idle", "to": "running", "event": "attempt"}, {"from": "running", "to": "done", "event": "ok"}, {"from": "running", "to": "running", "event": "retry", "guard": "n \u003c 3"}]}, "evidence": [{"date": "2026-09-06T22:45:22.151161", "kind": "test", "ref": "tests/execute_test.py::test_retries", "result": "fail", "clauses": ["post"], "resolves": [], "revision": 2, "content_hash": "0844c6965e77128e6c43406bcdaae7e3d24f5d655c8abfae50b109997e7f5a19", "dependency_hash": "291b68b20edbc68b0cbaaee620149d766e21362c52beab8fcf58f5fcff478c46", "scope": "composition", "scenario": "handler fails three times", "assessment": "The loop returned ok on a failing handler."}, {"date": "2026-09-06T22:45:22.227015", "kind": "test", "ref": "tests/execute_test.py::test_retries_fixed", "result": "pass", "clauses": ["post"], "resolves": ["EV-1"], "revision": 2, "content_hash": "0844c6965e77128e6c43406bcdaae7e3d24f5d655c8abfae50b109997e7f5a19", "dependency_hash": "291b68b20edbc68b0cbaaee620149d766e21362c52beab8fcf58f5fcff478c46", "scope": "composition", "scenario": "handler fails three times", "assessment": "The loop now returns failed after three attempts.", "note": "Re-run after fix"}], "stale_by": ["D-003 (stale 2026-09-06)"], "coverage": {"status": "stale", "covered": [], "missing": ["post", "pre", "progress"], "failed": []}}, "D-003": {"statement": "ok \u003c- attempt(job, n)", "gloss": "Run one attempt", "effect": "Invokes the handler once.", "contract": {"post": "ok reports handler success"}, "depends": [], "design": "stale", "realization": "not-started", "verification": "unverified", "approved": "2026-09-06 by standing approval", "evidence_context": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a", "implementation_plan": {"approach": "Call the handler inside a transaction.", "validation": "Unit test with a failing handler."}, "approved_by": "standing approval", "proposal_hash": "6701efca1e740008c1689b6ac6db525ebdc80f4dda23349b637b51eda655e199", "approved_at": "2026-09-06T22:45:21.976855", "revision": 1, "approved_content_hash": "6701efca1e740008c1689b6ac6db525ebdc80f4dda23349b637b51eda655e199", "approved_hash": "97d170e1550e", "contract_hash": "8d20bbe4ed5d", "stale_by": [], "history": [{"date": "2026-09-06", "event": "stale", "reason": "Handler API changed"}], "coverage": {"status": "unverified", "covered": [], "missing": ["post"], "failed": []}}, "D-004": {"statement": "log_attempt(job, n)", "gloss": "Record the attempt", "effect": "Appends an audit row.", "contract": {"post": "a row exists for (job, n)"}, "depends": [], "design": "retired", "realization": "not-started", "verification": "unverified", "approved": "2026-09-06 by user", "evidence_context": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a", "target": "postgres: INSERT INTO attempts (job_id, n) VALUES ($1, $2)", "approved_by": "user", "proposal_hash": "249075e325c8f23f41766bfa67e942d97b5b9ffaafeb8514a1c17475f1193e88", "approved_at": "2026-09-06T22:45:22.652388", "revision": 1, "approved_content_hash": "249075e325c8f23f41766bfa67e942d97b5b9ffaafeb8514a1c17475f1193e88", "approved_hash": "97d170e1550e", "contract_hash": "9bba5b08219b", "history": [{"date": "2026-09-06", "event": "retired", "reason": "Logging moved into the handler"}], "coverage": {"status": "unverified", "covered": [], "missing": ["post"], "failed": []}}}, "terms": {"Job": {"definition": "A unit of work with an id, a payload and a deadline. Runs at most once per claim.", "confirmed": "2026-09-06", "avoid": ["task", "work item"], "example": "send-invoice#42", "changed": [{"at": "2026-09-06T22:45:22.724478", "reason": "Deadlines were missing"}]}}, "facts": {"CTX-F01": {"name": "Postgres is the store", "definition": "Jobs persist in Postgres. Row locks are available.", "confirmed": "2026-09-06", "status": "confirmed", "source": "infra/README.md"}}, "scenarios": {"CTX-S01": {"name": "Retry after crash", "definition": "A worker crashes mid-run and the job is retried.", "confirmed": "2026-09-06", "given": "a claimed Job", "when": "the worker dies", "then": "another worker retries within 3 attempts", "settles": "Job"}}, "source_coverage": {"active": 0, "bound": 0, "observed": 0, "current": 0, "unbound": [], "complete": false}}, "title": "Durable Job Runner", "exported_at": "2026-09-06T22:45:23.467079", "adrs": [{"id": "ADR-0001", "text": "# ADR-0001 \u2014 Row locks for job claims\n\nKind: adr \u00b7 Status: accepted \u00b7 Date: 2026-09-06\nConstrains: D-000\nSupersedes: \u2014 \u00b7 Superseded by: \u2014\n\n\u003c1\u20133 sentences: what's the context, what did we decide, and why.\u003e\n\n## Invariants imposed\n\n- \u003cone line: property every constrained refinement must preserve\u003e"}], "review_key": "4214225bea6afc110907e8ee0d04dc4e66e5177892dff81a7ce172e7eff53824", "pseudocode": {"signatures": {"result \u003c- run_job(job)": "run_job(job)", "claim \u003c- acquire(job)": "acquire(job)", "if claim.ok:": "if claim.ok", "outcome \u003c- execute(job)": "execute(job)", "release(job)": "release(job)", "-\u003e outcome": "outcome", "else:": "else", "-\u003e \"busy\"": "\"busy\"", "for n in 1..3:": "for n in 1..3", "ok \u003c- attempt(job, n)": "attempt(job, n)", "if ok:": "if ok", "-\u003e ok": "ok", "-\u003e failed": "failed", "log_attempt(job, n)": "log_attempt(job, n)"}, "code": {"result \u003c- run_job(job)": "result \u2190 run_job(job)", "claim \u003c- acquire(job)": "claim \u2190 acquire(job)", "if claim.ok:": "if claim.ok:", "outcome \u003c- execute(job)": "outcome \u2190 execute(job)", "release(job)": "release(job)", "-\u003e outcome": "return outcome", "else:": "else:", "-\u003e \"busy\"": "return \"busy\"", "for n in 1..3:": "for n in 1..3:", "ok \u003c- attempt(job, n)": "ok \u2190 attempt(job, n)", "if ok:": "if ok:", "-\u003e ok": "return ok", "-\u003e failed": "return failed", "log_attempt(job, n)": "log_attempt(job, n)"}}}
+    </script>
+    <script>
+      "use strict";
+      const snapshot = JSON.parse(
+        document.getElementById("stepwise-data").textContent,
+      );
+      const ledger = snapshot.ledger;
+      const nodes = new Map(Object.entries(ledger.nodes || {}));
+      const originalIds = new Set(nodes.keys());
+      const edges = [];
+      const stateNames = new Set([
+        "draft",
+        "approved",
+        "stale",
+        "superseded",
+        "retired",
+        "frontier",
+        "unresolved",
+      ]);
+      const $ = (id) => document.getElementById(id);
+      const el = (tag, cls, value) => {
+        const e = document.createElement(tag);
+        if (cls) e.className = cls;
+        if (value !== undefined) e.textContent = String(value);
+        return e;
+      };
+      const txt = (value) =>
+        typeof value === "string" ? value : JSON.stringify(value);
+      const state = (n) => (stateNames.has(n.design) ? n.design : "unresolved");
+      // Descriptive observations and source versions never stand in for intended contracts.
+function observedOnly(n) {
+  return (
+    !!(
+      n.origin === "existing-code" ||
+      n.observation ||
+      Object.keys(n.bindings || {}).length
+    ) && !Object.keys(n.contract || {}).length
+  );
+}
+function hasObserved(n) {
+  return (
+    n.origin === "existing-code" ||
+    !!n.observation ||
+    Object.keys(n.bindings || {}).length > 0
+  );
+}
+function observed(n, into) {
+  const obs = n.observation,
+    report = n.source_report || {};
+  const conformance = n.conformance ||
+    report.conformance || {
+      status: "unassessed",
+      reason: "No intended contract is recorded.",
+    };
+  into.append(
+    el(
+      "p",
+      "lead",
+      "This records inspected implementation behavior. It does not approve that behavior as a requirement.",
+    ),
+  );
+  if (n.source_state && n.source_state !== "current")
+    into.append(
+      el(
+        "div",
+        "notice",
+        "Source inspection: " +
+          n.source_state +
+          " · " +
+          (report.reason ||
+            "Reinspect this implementation before relying on its observations."),
+      ),
+    );
+  const versions = el("details", "card change-record");
+  versions.open = true;
+  versions.append(
+    el("summary", "", "Implementation versions"),
+    el("div", "clause-label", "Current source SHA-256"),
+    el(
+      "pre",
+      "",
+      n.current_implementation_version ||
+        report.implementation_version ||
+        "No sources bound",
+    ),
+  );
+  if (obs)
+    versions.append(
+      el("div", "clause-label", "Inspected source SHA-256"),
+      el("pre", "", obs.implementation_version || "Not recorded"),
+    );
+  if (n.implementation_revision)
+    versions.append(
+      el(
+        "p",
+        "",
+        "Recorded implementation revision: " + n.implementation_revision,
+      ),
+    );
+  if (report.commit || obs?.implementation_commit)
+    versions.append(
+      el(
+        "p",
+        "",
+        "Git context: " +
+          (report.commit || obs.implementation_commit) +
+          " · Source fingerprints include working-tree edits.",
+      ),
+    );
+  into.append(versions);
+  if (obs) {
+    into.append(
+      section(
+        "Observed effect",
+        list([obs.effect]),
+        "Inspection " + obs.revision,
+      ),
+    );
+    const claims = el("div", "card");
+    for (const claim of obs.claims || []) {
+      const record = el("div", "record");
+      record.append(
+        el(
+          "span",
+          "badge " + (claim.basis === "inferred" ? "inference" : ""),
+          claim.basis,
+        ),
+        el("p", "", claim.text),
+      );
+      const refs = el("div", "chips");
+      for (const sid of claim.sources) {
+        const b = el("button", "chip", sid);
+        b.onclick = () =>
+          document
+            .getElementById("binding-" + sid)
+            ?.scrollIntoView({ block: "center" });
+        refs.append(b);
+      }
+      record.append(refs);
+      claims.append(record);
+    }
+    into.append(section("Source-backed claims", claims));
+    if (obs.body?.length)
+      into.append(
+        el(
+          "p",
+          "muted",
+          "Read the inspected algorithm in the Pseudocode tab; select Observed implementation.",
+        ),
+      );
+    if (obs.unknowns?.length)
+      into.append(section("Unresolved questions", list(obs.unknowns)));
+    into.append(el("p", "muted", "Inspected " + obs.date + " by " + obs.by));
+  } else
+    into.append(
+      el(
+        "div",
+        "empty",
+        "No behavior has been recorded yet. Bind the sources, inspect the code, and record an observation using the scan token.",
+      ),
+    );
+  const comparison = el("div", "card");
+  const status = el("div", "record");
+  status.append(
+    el("h4", "", conformance.status),
+    el("p", "", conformance.reason),
+  );
+  comparison.append(status);
+  for (const [clause, value] of Object.entries(obs?.comparisons || {})) {
+    const row = el("div", "record");
+    row.append(
+      el("h4", "", clause + " · " + value.status),
+      el("p", "", value.reason),
+    );
+    comparison.append(row);
+  }
+  into.append(
+    section(
+      "Comparison with intended contract",
+      comparison,
+      "Inspection assessment, not verification",
+    ),
+  );
+  const bindings = el("div", "card");
+  for (const [sid, binding] of Object.entries(n.bindings || {})) {
+    const row = el("div", "record");
+    row.id = "binding-" + sid;
+    const current = report.bindings?.[sid];
+    row.append(el("h4", "", sid + " · " + binding.path));
+    if (binding.symbol) row.append(el("p", "mono", binding.symbol));
+    if (binding.lines)
+      row.append(
+        el("small", "", "Location hint: lines " + binding.lines.join("–")),
+      );
+    if (current)
+      row.append(
+        el(
+          "p",
+          "",
+          current.current.state +
+            (current.changed ? " · changed since inspection" : ""),
+        ),
+      );
+    const version = current?.current?.sha256 || binding.baseline_sha256;
+    row.append(el("pre", "", version));
+    bindings.append(row);
+  }
+  if (!bindings.childElementCount)
+    bindings.append(el("div", "empty", "No source bindings."));
+  into.append(
+    section(
+      "Source bindings",
+      bindings,
+      "Whole-file fingerprints; symbols are location hints",
+    ),
+  );
+  if (n.implementation_history?.length)
+    into.append(
+      section(
+        "Implementation version history",
+        list(
+          [...n.implementation_history]
+            .reverse()
+            .map(
+              (v) =>
+                "Revision " +
+                v.revision +
+                " · " +
+                v.date +
+                "\n" +
+                v.version +
+                (v.commit ? "\nGit context: " + v.commit : ""),
+            ),
+        ),
+      ),
+    );
+  if (n.observation_history?.length) {
+    const history = el("div");
+    for (const previous of [...n.observation_history].reverse()) {
+      const card = el("details", "card change-record");
+      card.append(
+        el(
+          "summary",
+          "",
+          "Inspection " + previous.revision + " · " + previous.date,
+        ),
+        el("p", "lead", previous.effect),
+        el("pre", "", previous.implementation_version || previous.scope_hash),
+      );
+      card.append(
+        list((previous.claims || []).map((c) => c.basis + ": " + c.text)),
+      );
+      if (previous.body?.length)
+        card.append(
+          renderCode(
+            n,
+            previous.body,
+            true,
+            "Previous observed implementation",
+          ),
+        );
+      if (previous.bindings)
+        card.append(
+          list(
+            Object.entries(previous.bindings).map(
+              ([id, b]) =>
+                id + ": " + b.path + (b.symbol ? " · " + b.symbol : ""),
+            ),
+          ),
+        );
+      history.append(card);
+    }
+    into.append(section("Previous observations", history));
+  }
+}
+;
+      const name = (n) =>
+        algorithmSignature(n.statement || "")
+          .split("(")[0]
+          .trim() || n.id;
+      function addEdge(from, to, kind, code) {
+        if (!to) return;
+        if (!nodes.has(to))
+          nodes.set(to, {
+            id: to,
+            statement: code || to,
+            design:
+              kind === "child" && nodes.get(from).design !== "draft"
+                ? "frontier"
+                : "unresolved",
+            placeholder: true,
+          });
+        if (
+          !edges.some((e) => e.from === from && e.to === to && e.kind === kind)
+        )
+          edges.push({ from, to, kind });
+      }
+      for (const [id, n] of [...nodes]) {
+        n.id = id;
+        for (const line of n.body || []) {
+          if (line.child) addEdge(id, line.child, "child", line.code);
+          if (line.reuse) addEdge(id, line.reuse, "reuse", line.code);
+        }
+        for (const cid of n.observed_children || [])
+          addEdge(id, cid, "observed", nodes.get(cid)?.statement || cid);
+        for (const line of n.observation?.body || []) {
+          const cid = line.child || line.reuse;
+          if (cid) addEdge(id, cid, "observed", line.code);
+        }
+        for (const dep of n.depends || [])
+          if (/^D-\d+$/.test(dep)) addEdge(id, dep, "dependency", dep);
+      }
+      const outgoing = new Map([...nodes.keys()].map((id) => [id, []]));
+      const incoming = new Map([...nodes.keys()].map((id) => [id, []]));
+      for (const e of edges) {
+        outgoing.get(e.from).push(e);
+        incoming.get(e.to).push(e);
+      }
+      const roots = [...nodes.keys()].filter(
+        (id) => incoming.get(id).length === 0,
+      );
+      // Build a spanning forest once. Remaining edges stay references, including cycles.
+      const treeChildren = new Map([...nodes.keys()].map((id) => [id, []]));
+      const treeParent = new Map();
+      const forest = [];
+      const seen = new Set();
+      function visitRoot(root) {
+        if (seen.has(root)) return;
+        forest.push(root);
+        seen.add(root);
+        const queue = [root];
+        for (let i = 0; i < queue.length; i++)
+          for (const edge of outgoing.get(queue[i])) {
+            const reference = seen.has(edge.to);
+            treeChildren.get(edge.from).push({ ...edge, reference });
+            if (!reference) {
+              seen.add(edge.to);
+              treeParent.set(edge.to, edge.from);
+              queue.push(edge.to);
+            }
+          }
+      }
+      for (const id of [...roots, ...nodes.keys()]) visitRoot(id);
+      let selected = null;
+      let tab = "overview";
+      let query = "";
+      const expanded = new Set(forest);
+      // Review baselines stay in the browser or an explicitly downloaded JSON file.
+const reviewStorageKey =
+  "stepwise-review:" + (snapshot.review_key || snapshot.title);
+let baseline = { source: reviewStorageKey, nodes: {} };
+let reviewFilter = "all";
+try {
+  const saved = JSON.parse(localStorage.getItem(reviewStorageKey));
+  if (saved?.source === reviewStorageKey && saved.nodes) baseline = saved;
+} catch (_) {
+  /* File-origin storage can be disabled. Export/import still works. */
+}
+function stable(value) {
+  if (Array.isArray(value)) return value.map(stable);
+  if (value && typeof value === "object")
+    return Object.fromEntries(
+      Object.keys(value)
+        .sort()
+        .map((k) => [k, stable(value[k])]),
+    );
+  return value;
+}
+function reviewRecord(n) {
+  const related = {};
+  for (const dep of n.depends || [])
+    for (const group of ["terms", "facts", "scenarios"]) {
+      const record =
+        ledger[group]?.[dep] ||
+        Object.values(ledger[group] || {}).find((v) => v.name === dep);
+      if (record) related[dep] = record;
+    }
+  return stable({
+    node: n,
+    scope: ledger.scope || "",
+    nongoals: ledger.nongoals || [],
+    context: related,
+    adrs: snapshot.adrs.filter((a) => (n.depends || []).includes(a.id)),
+  });
+}
+function isChanged(id) {
+  const old = baseline.nodes[id];
+  return (
+    !old ||
+    JSON.stringify(old.record) !== JSON.stringify(reviewRecord(nodes.get(id)))
+  );
+}
+function agentChosen(n) {
+  const text = [n.approved || "", ...(n.decisions || [])]
+    .join(" ")
+    .toLowerCase();
+  if (
+    text.includes("standing approval") ||
+    text.includes("agent recommendation")
+  )
+    return true;
+  return Object.values(reviewRecord(n).context).some((e) =>
+    (e.source || "").toLowerCase().includes("agent recommendation"),
+  );
+}
+function matchesReview(n) {
+  if (reviewFilter === "sources")
+    return !!n.source_state && n.source_state !== "current";
+  if (reviewFilter === "differences")
+    return n.conformance?.status === "differs";
+  if (reviewFilter === "changed") return isChanged(n.id);
+  if (reviewFilter === "stale")
+    return (
+      n.design === "stale" ||
+      n.verification === "stale" ||
+      n.verification === "failed" ||
+      n.source_state === "stale" ||
+      n.source_state === "missing"
+    );
+  if (reviewFilter === "agent") return agentChosen(n);
+  if (reviewFilter === "open")
+    return n.placeholder || (n.design === "draft" && !observedOnly(n));
+  return true;
+}
+function reviewMessage(message) {
+  $("review-message").textContent = message;
+}
+function persistReview() {
+  try {
+    localStorage.setItem(reviewStorageKey, JSON.stringify(baseline));
+    reviewMessage("Review baseline saved in this browser.");
+  } catch (_) {
+    reviewMessage(
+      "Baseline kept for this page only. Download it to preserve your review.",
+    );
+  }
+  renderTree();
+  renderReader();
+}
+function markReviewed(ids) {
+  const at = new Date().toISOString();
+  for (const id of ids)
+    baseline.nodes[id] = { at, record: reviewRecord(nodes.get(id)) };
+  persistReview();
+}
+function review(n, into) {
+  const old = baseline.nodes[n.id];
+  into.append(
+    el(
+      "p",
+      "lead",
+      old
+        ? "Compared with your review on " + old.at.replace("T", " ")
+        : "This operation has no review baseline yet. Mark it reviewed after reading the contract and its supporting evidence.",
+    ),
+  );
+  const mark = el("button", "", "Mark this node reviewed");
+  mark.onclick = () => markReviewed([n.id]);
+  into.append(mark);
+  if (old) {
+    const current = reviewRecord(n),
+      changes = [];
+    function compare(before, after, path) {
+      if (JSON.stringify(before) === JSON.stringify(after)) return;
+      if (
+        before &&
+        after &&
+        !Array.isArray(before) &&
+        !Array.isArray(after) &&
+        typeof before === "object" &&
+        typeof after === "object"
+      ) {
+        for (const k of new Set([
+          ...Object.keys(before),
+          ...Object.keys(after),
+        ]))
+          compare(before[k], after[k], path ? path + "." + k : k);
+      } else changes.push({ path, before, after });
+    }
+    compare(old.record, current, "");
+    if (!changes.length)
+      into.append(el("p", "lead", "No changes since your last review."));
+    for (const change of changes) {
+      const card = el("details", "card change-record"),
+        head = el("summary", "", change.path.replace(/^node\./, ""));
+      const before = el(
+        "pre",
+        "",
+        change.before === undefined
+          ? "Not recorded"
+          : JSON.stringify(change.before, null, 2),
+      );
+      const after = el(
+        "pre",
+        "",
+        change.after === undefined
+          ? "Removed"
+          : JSON.stringify(change.after, null, 2),
+      );
+      card.append(
+        head,
+        el("div", "clause-label", "Previously reviewed"),
+        before,
+        el("div", "clause-label", "Current snapshot"),
+        after,
+      );
+      into.append(card);
+    }
+  }
+  const removed = Object.keys(baseline.nodes).filter((id) => !nodes.has(id));
+  if (removed.length)
+    into.append(
+      section(
+        "Removed since review",
+        list(
+          removed.map(
+            (id) =>
+              id + " · " + (baseline.nodes[id].record?.node?.statement || ""),
+          ),
+        ),
+      ),
+    );
+}
+function initReview() {
+  $("review-filter").onchange = (e) => {
+    reviewFilter = e.target.value;
+    renderTree();
+  };
+  $("review-all").onclick = () => {
+    baseline.nodes = {};
+    markReviewed([...nodes.keys()]);
+  };
+  $("review-download").onclick = () => {
+    const url = URL.createObjectURL(
+      new Blob([JSON.stringify(baseline, null, 2)], {
+        type: "application/json",
+      }),
+    );
+    const a = el("a");
+    a.href = url;
+    a.download = "stepwise-review.json";
+    document.body.append(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  };
+  $("review-upload").onchange = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    try {
+      const imported = JSON.parse(await file.text());
+      if (
+        imported.source !== reviewStorageKey ||
+        !imported.nodes ||
+        typeof imported.nodes !== "object" ||
+        Array.isArray(imported.nodes) ||
+        Object.values(imported.nodes).some(
+          (v) => !v || typeof v.at !== "string" || !v.record || !v.record.node,
+        )
+      )
+        throw Error("The file is not a review baseline for this design.");
+      baseline = imported;
+      persistReview();
+    } catch (err) {
+      reviewMessage(err.message);
+    }
+    e.target.value = "";
+  };
+}
+;
+      const searchIndex = new Map(
+        [...nodes].map(([id, n]) => [id, JSON.stringify(n).toLowerCase()]),
+      );
+      function linkTo(id, label, cls = "chip") {
+        const a = el("a", cls, label);
+        a.href = "#" + encodeURIComponent(id);
+        return a;
+      }
+      function statusBadge(n) {
+        return el("span", "badge " + state(n), state(n));
+      }
+      function summary() {
+        const real = [...nodes.values()].filter((n) => originalIds.has(n.id));
+        const live = real.filter(
+          (n) => !["retired", "superseded"].includes(n.design),
+        );
+        const approved = live.filter((n) => n.design === "approved").length;
+        const adoptionOnly = live.length > 0 && live.every(observedOnly);
+        const observedCount = live.filter(
+          (n) => n.observation && n.source_state === "current",
+        ).length;
+        const counts = [
+          [live.length, "live nodes"],
+          [
+            adoptionOnly ? observedCount : approved,
+            adoptionOnly ? "current observations" : "approved",
+          ],
+          [
+            [...nodes.values()].filter((n) => n.placeholder).length,
+            "unrefined",
+          ],
+          [
+            live.filter((n) => n.verification === "verified").length,
+            "verified",
+          ],
+          ...(ledger.source_coverage?.active
+            ? [[ledger.source_coverage.current, "source current"]]
+            : []),
+        ];
+        for (const [count, label] of counts) {
+          const d = el("div", "stat");
+          d.append(el("strong", "", count), el("span", "", label));
+          $("summary").append(d);
+        }
+        const wrap = el("div", "progress-wrap"),
+          label = el("div", "progress-label"),
+          bar = el("div", "progress"),
+          fill = el("span");
+        const denominator =
+          live.length + [...nodes.values()].filter((n) => n.placeholder).length;
+        const percent = denominator
+          ? Math.round(
+              ((adoptionOnly ? observedCount : approved) / denominator) * 100,
+            )
+          : 0;
+        label.append(
+          el(
+            "span",
+            "",
+            adoptionOnly ? "Observed coverage" : "Design approval",
+          ),
+          el("span", "", percent + "%"),
+        );
+        fill.style.width = percent + "%";
+        bar.append(fill);
+        wrap.append(label, bar);
+        $("summary").append(wrap);
+      }
+      function renderTree() {
+        const matches = new Set(
+          [...nodes.keys()].filter(
+            (id) =>
+              (!query || searchIndex.get(id).includes(query)) &&
+              matchesReview(nodes.get(id)),
+          ),
+        );
+        const visible = new Set(matches);
+        for (const id of matches) {
+          let p = treeParent.get(id);
+          while (p) {
+            visible.add(p);
+            p = treeParent.get(p);
+          }
+        }
+        $("tree").replaceChildren();
+        $("node-count").textContent =
+          query || reviewFilter !== "all"
+            ? matches.size + " matches"
+            : nodes.size + " nodes";
+        $("clear-search").hidden = !query;
+        if (!matches.size) {
+          $("tree").append(
+            el(
+              "div",
+              "empty",
+              "No matching nodes. Try another search or review filter.",
+            ),
+          );
+          return;
+        }
+        function row(id, reference = false) {
+          const n = nodes.get(id),
+            li = el("li"),
+            r = el("div", "tree-row" + (selected === id ? " selected" : ""));
+          r.dataset.nodeId = id;
+          const children = treeChildren
+            .get(id)
+            .filter((e) => visible.has(e.to));
+          const isOpen = expanded.has(id) || !!query;
+          if (children.length && !reference) {
+            const toggle = el("button", "toggle", isOpen ? "⌄" : "›");
+            toggle.setAttribute(
+              "aria-label",
+              (isOpen ? "Collapse " : "Expand ") + id,
+            );
+            toggle.setAttribute("aria-expanded", String(isOpen));
+            toggle.onclick = () => {
+              expanded.has(id) ? expanded.delete(id) : expanded.add(id);
+              renderTree();
+            };
+            r.append(toggle);
+          } else r.append(el("span", "spacer"));
+          const a = linkTo(id, "", "node-link");
+          a.title = n.gloss || n.statement || id;
+          if (selected === id) a.setAttribute("aria-current", "true");
+          const copy = el("span", "tree-copy");
+          copy.append(
+            el("strong", "", (reference ? "↗ " : "") + name(n)),
+            el(
+              "small",
+              "mono",
+              id + " · " + (observedOnly(n) ? "observed-only" : state(n)),
+            ),
+          );
+          a.append(el("span", "dot " + state(n)), copy);
+          r.append(a);
+          li.append(r);
+          if (children.length && isOpen && !reference) {
+            const ul = el("ul");
+            for (const edge of children)
+              ul.append(row(edge.to, edge.reference));
+            li.append(ul);
+          }
+          return li;
+        }
+        const ul = el("ul");
+        for (const root of forest) if (visible.has(root)) ul.append(row(root));
+        $("tree").append(ul);
+      }
+      function section(title, content, subtitle = "") {
+        const s = el("section", "section"),
+          head = el("div", "section-title");
+        head.append(el("h3", "", title));
+        if (subtitle) head.append(el("small", "", subtitle));
+        s.append(head, content);
+        return s;
+      }
+      function list(items) {
+        const ul = el("ul", "prose-list card");
+        for (const item of items) ul.append(el("li", "", txt(item)));
+        return ul;
+      }
+      // Source content always enters the document as inert text.
+function algorithmSignature(statement) {
+  return snapshot.pseudocode?.signatures[statement] || statement;
+}
+function algorithmCode(raw) {
+  const value = snapshot.pseudocode?.code[raw] || raw;
+  const code = el("code", "");
+  const keyword = value.match(
+    /^(end (?:procedure|function|if|while|for|upon|atomic|parallel)|else if|for each|parallel for each|procedure|function|return|if|else|while|for|repeat|until|assert|invariant|upon|atomic|await|raise|break|continue)\b/i,
+  );
+  if (keyword)
+    code.append(
+      el("strong", "algorithm-keyword", keyword[0]),
+      document.createTextNode(value.slice(keyword[0].length)),
+    );
+  else code.textContent = value;
+  return code;
+}
+function renderCode(
+  n,
+  body = n.body || [],
+  historical = false,
+  caption = null,
+  onReference = null,
+) {
+  const card = el("div", "card code-card algorithm-card"),
+    bar = el("div", "code-bar");
+  bar.append(
+    el("span", "", "ALGORITHM"),
+    el(
+      "span",
+      "",
+      caption ||
+        (historical
+          ? "Superseded body"
+          : state(n) === "approved"
+            ? "Approved refinement"
+            : "Unapproved refinement"),
+    ),
+  );
+  card.append(
+    bar,
+    el("div", "algorithm-title", `Algorithm ${n.id} · ${n.gloss || name(n)}`),
+  );
+  if (!historical && !caption && n.contract && Object.keys(n.contract).length) {
+    const meta = el("dl", "algorithm-meta");
+    for (const [key, value] of Object.entries(n.contract)) {
+      const label =
+        { pre: "Require", post: "Ensure", input: "Input", output: "Output" }[
+          key
+        ] || key[0].toUpperCase() + key.slice(1);
+      meta.append(el("dt", "", label), el("dd", "", txt(value)));
+    }
+    card.append(meta);
+  }
+  const appendLine = (raw, index, indent = 0, line = {}) => {
+    const row = el("div", "code-line"),
+      main = el("div", "line-content");
+    main.style.setProperty(
+      "--indent",
+      Math.min(Math.max(indent, 0), 80) * 7 + "px",
+    );
+    main.append(algorithmCode(raw));
+    const target = line.child || line.reuse;
+    const note =
+      line.gloss || (target && nodes.get(target)?.gloss) || line.note;
+    if (note) main.append(el("div", "line-note", "▷ " + txt(note)));
+    if (line.target) main.append(el("div", "line-note", "▷ " + line.target));
+    row.append(el("span", "line-no", index), main);
+    if (target && nodes.has(target)) {
+      const link = linkTo(
+        target,
+        (line.reuse ? "↗ " : "") + target,
+        "code-ref",
+      );
+      if (onReference)
+        link.onclick = (event) => {
+          event.preventDefault();
+          onReference(target);
+        };
+      row.append(link);
+    }
+    card.append(row);
+  };
+  appendLine("procedure " + algorithmSignature(n.statement || n.id), 1);
+  body.forEach((line, i) =>
+    appendLine(line.code || "", i + 2, 2 + (Number(line.indent) || 0), line),
+  );
+  appendLine("end procedure", body.length + 2);
+  return card;
+}
+
+function reachableProcedures(root, observed) {
+  const visited = new Set(),
+    result = [],
+    pending = [root.id];
+  while (pending.length) {
+    const id = pending.pop();
+    if (visited.has(id) || !nodes.has(id)) continue;
+    visited.add(id);
+    const node = nodes.get(id);
+    result.push(node);
+    const body = observed ? node.observation?.body || [] : node.body || [];
+    const refs = body
+      .flatMap((line) => [line.child, line.reuse])
+      .filter(Boolean);
+    if (observed) refs.push(...(node.observed_children || []));
+    else refs.push(...(node.depends || []).filter((ref) => nodes.has(ref)));
+    pending.push(...refs.reverse());
+  }
+  return result;
+}
+
+function pseudocode(n, into) {
+  let observed = observedOnly(n);
+  const controls = el("div", "pseudocode-controls");
+  const basis = el("select");
+  basis.setAttribute("aria-label", "Pseudocode source");
+  for (const [value, label] of [
+    ["intended", "Intended design"],
+    ["observed", "Observed implementation"],
+  ]) {
+    const option = el("option", "", label);
+    option.value = value;
+    basis.append(option);
+  }
+  basis.value = observed ? "observed" : "intended";
+  const count = el("span", "muted");
+  const navigation = el("div", "chips pseudocode-index");
+  const algorithms = el("div", "pseudocode-tree");
+  const redraw = () => {
+    algorithms.replaceChildren();
+    navigation.replaceChildren();
+    const procedures = reachableProcedures(n, observed),
+      cards = new Map();
+    count.textContent = procedures.length + " reachable procedures";
+    const jump = (id) => {
+      const card = cards.get(id);
+      if (card) {
+        card.scrollIntoView({ block: "start" });
+        card.focus({ preventScroll: true });
+      }
+    };
+    for (const node of procedures) {
+      const body = observed ? node.observation?.body || [] : node.body || [];
+      let card;
+      if (body.length)
+        card = renderCode(
+          node,
+          body,
+          false,
+          observed ? "Observed implementation" : null,
+          jump,
+        );
+      else {
+        card = el("div", "card code-card algorithm-card");
+        card.append(
+          el(
+            "div",
+            "code-bar",
+            observed ? "Observed implementation" : state(node),
+          ),
+          el(
+            "div",
+            "algorithm-title",
+            `Algorithm ${node.id} · ${node.gloss || name(node)}`,
+          ),
+        );
+        card.append(
+          el(
+            "div",
+            "empty",
+            observed
+              ? "No observed pseudocode recorded for this node."
+              : node.target
+                ? "Implementation target: " + node.target
+                : node.implementation_plan
+                  ? "Implementation approach: " +
+                    node.implementation_plan.approach
+                  : "No pseudocode recorded for this node.",
+          ),
+        );
+        if (!observed && node.implementation_plan)
+          card.append(
+            el(
+              "div",
+              "empty",
+              "Validation: " + node.implementation_plan.validation,
+            ),
+          );
+      }
+      card.dataset.procedure = node.id;
+      card.tabIndex = -1;
+      cards.set(node.id, card);
+      algorithms.append(card);
+      const link = el("button", "chip", node.id + " · " + name(node));
+      link.onclick = () => jump(node.id);
+      navigation.append(link);
+    }
+  };
+  basis.onchange = () => {
+    observed = basis.value === "observed";
+    redraw();
+  };
+  controls.append(basis, count);
+  into.append(
+    controls,
+    el(
+      "p",
+      "muted",
+      "Selected procedure and everything reachable below it, each shown once. Follow a call to jump to its procedure.",
+    ),
+    navigation,
+    algorithms,
+  );
+  redraw();
+}
+;
+      function overview(n, into) {
+        if (n.implementation_plan)
+          into.append(
+            section(
+              "Implementation-ready",
+              list([
+                "Approach: " + n.implementation_plan.approach,
+                "Validation: " + n.implementation_plan.validation,
+              ]),
+            ),
+          );
+        const clauses = Object.entries(n.contract || {}),
+          contract = el("div", "card");
+        if (clauses.length)
+          for (const [label, value] of clauses) {
+            const c = el("div", "clause");
+            c.append(el("div", "clause-label", label), el("p", "", value));
+            contract.append(c);
+          }
+        else
+          contract.append(
+            el(
+              "div",
+              "empty",
+              n.placeholder
+                ? "This operation has not been refined. No contract has been recorded yet."
+                : observedOnly(n)
+                  ? "No intended contract is recorded. See Observed code for the inspected implementation."
+                  : "No contract has been recorded.",
+            ),
+          );
+        into.append(section("Contract", contract, clauses.length + " clauses"));
+        for (const text of n.walkthrough || [])
+          into.append(el("p", "lead", text));
+        if (n.target) {
+          const t = el("div", "card code-card");
+          t.append(
+            el("div", "code-bar", "REALIZATION TARGET"),
+            el("div", "signature mono", n.target),
+          );
+          into.append(section("Concrete target", t));
+        }
+        for (const [field, title] of [
+          ["adaptation", "Contract → construct"],
+          ["composition", "Why the refinement holds"],
+          ["decisions", "Decisions"],
+          ["deferred", "Deferred decisions"],
+        ])
+          if (n[field]?.length) into.append(section(title, list(n[field])));
+        const pending = (ledger.ambiguities || []).filter(
+          (a) =>
+            a.resolves_at === n.id ||
+            outgoing.get(n.id).some((e) => e.to === a.resolves_at),
+        );
+        if (pending.length)
+          into.append(
+            section(
+              "Open questions",
+              list(
+                pending.map(
+                  (a) => a.claim + " — " + a.conflict + " → " + a.resolves_at,
+                ),
+              ),
+            ),
+          );
+        const deps = n.depends || [];
+        if (deps.length) {
+          const chips = el("div", "chips");
+          for (const id of deps) {
+            if (nodes.has(id)) chips.append(linkTo(id, id));
+            else {
+              const b = el("button", "chip", id);
+              b.onclick = () => {
+                tab = "context";
+                renderReader();
+              };
+              chips.append(b);
+            }
+          }
+          into.append(section("Depends on", chips));
+        }
+        if (n.superseded_by && nodes.has(n.superseded_by))
+          into.append(
+            section("Replacement", linkTo(n.superseded_by, n.superseded_by)),
+          );
+      }
+      function context(n, into) {
+        if (ledger.scope)
+          into.append(section("Design scope", list([ledger.scope])));
+        if (ledger.nongoals?.length)
+          into.append(section("Outside this design", list(ledger.nongoals)));
+        for (const [field, title] of [
+          ["terms", "Vocabulary"],
+          ["facts", "Facts & constraints"],
+          ["scenarios", "Scenarios"],
+        ]) {
+          const entries = Object.entries(ledger[field] || {});
+          if (!entries.length) continue;
+          const card = el("div", "card");
+          entries.sort(
+            ([a], [b]) =>
+              Number((n.depends || []).includes(b)) -
+              Number((n.depends || []).includes(a)),
+          );
+          for (const [id, entry] of entries) {
+            const related = (n.depends || []).some(
+                (d) => d === id || d === entry.name,
+              ),
+              r = el("div", "record" + (related ? " related" : ""));
+            r.append(
+              el(
+                "h4",
+                "",
+                (entry.name || id) +
+                  (entry.name && entry.name !== id ? " · " + id : ""),
+              ),
+            );
+            if (entry.definition) r.append(el("p", "", entry.definition));
+            for (const key of [
+              "given",
+              "when",
+              "then",
+              "excludes",
+              "example",
+              "avoid",
+              "not",
+              "settles",
+              "status",
+            ])
+              if (entry[key]?.length)
+                r.append(el("p", "", key + ": " + txt(entry[key])));
+            if (entry.source)
+              r.append(el("small", "", "Source: " + entry.source));
+            card.append(r);
+          }
+          into.append(section(title, card));
+        }
+        if (snapshot.adrs.length) {
+          const card = el("div", "card");
+          for (const adr of snapshot.adrs) {
+            const r = el("div", "record");
+            r.append(el("h4", "", adr.id), el("pre", "", adr.text));
+            card.append(r);
+          }
+          into.append(section("Architecture decisions", card));
+        }
+        if (!into.childElementCount)
+          into.append(
+            el(
+              "div",
+              "empty",
+              "No context entries are recorded for this design.",
+            ),
+          );
+      }
+      function evidence(n, into) {
+        if (n.coverage)
+          into.append(
+            el(
+              "div",
+              "coverage",
+              "Covered: " +
+                (n.coverage.covered.join(", ") || "none") +
+                " · Missing: " +
+                (n.coverage.missing.join(", ") || "none") +
+                " · Failed: " +
+                (n.coverage.failed.join(", ") || "none"),
+            ),
+          );
+        into.append(
+          el(
+            "p",
+            "lead",
+            "Evidence is a record of checks, not a guarantee of complete coverage. Review its scope against each contract clause.",
+          ),
+        );
+        const records = n.evidence || [];
+        const card = el("div", "card");
+        if (!records.length)
+          card.append(
+            el(
+              "div",
+              "empty",
+              "No evidence recorded. This node is not verified by this HTML export.",
+            ),
+          );
+        records.forEach((ev, i) => {
+          const r = el("div", "record");
+          if (ev.withdrawn) r.classList.add("withdrawn");
+          r.append(
+            el("h4", "", "EV-" + (i + 1) + " · " + ev.kind + " · " + (ev.withdrawn ? "withdrawn" : ev.result)),
+            el("p", "", ev.ref || ""),
+            el("small", "", ev.date || ""),
+          );
+          r.append(
+            el(
+              "small",
+              "",
+              "Clauses: " +
+                ((ev.clauses || []).join(", ") || "unscoped") +
+                " · Approval revision: " +
+                (ev.revision ?? "legacy"),
+            ),
+          );
+          if (ev.scope || ev.scenario || ev.assessment)
+            r.append(el("p", "", [ev.scope && "Scope: " + ev.scope, ev.scenario && "Scenario: " + ev.scenario, ev.assessment && "Assessment: " + ev.assessment].filter(Boolean).join(" · ")));
+          if (ev.note) r.append(el("p", "", ev.note));
+          if (ev.withdrawn)
+            r.append(el("div", "notice", "Withdrawn " + ev.withdrawn.date + " by " + ev.withdrawn.by + ": " + ev.withdrawn.reason));
+          card.append(r);
+        });
+        into.append(section("Evidence", card));
+        if (n.history?.length)
+          into.append(
+            section(
+              "Design history",
+              list(
+                n.history.map(
+                  (h) =>
+                    h.date +
+                    " · " +
+                    h.event +
+                    (h.reason ? " — " + h.reason : ""),
+                ),
+              ),
+            ),
+          );
+        if (n.revisions?.length) {
+          const archive = el("div");
+          for (const rev of [...n.revisions].reverse()) {
+            const detail = el("details", "card change-record"),
+              old = rev.content || {};
+            detail.append(
+              el(
+                "summary",
+                "",
+                "Approval revision " + rev.revision + " · " + rev.date,
+              ),
+              el("p", "lead", rev.reason || ""),
+            );
+            if (old.statement) detail.append(el("p", "mono", old.statement));
+            if (old.contract)
+              detail.append(
+                section(
+                  "Previous contract",
+                  list(
+                    Object.entries(old.contract).map(([k, v]) => k + ": " + v),
+                  ),
+                ),
+              );
+            if (old.body?.length)
+              detail.append(
+                renderCode(
+                  { ...old, id: n.id, design: "approved" },
+                  old.body,
+                  true,
+                ),
+              );
+            if (old.target)
+              detail.append(section("Previous target", list([old.target])));
+            for (const field of ["adaptation", "decisions", "composition"])
+              if (old[field]?.length)
+                detail.append(section(field, list(old[field])));
+            if (old.implementation_plan)
+              detail.append(
+                section(
+                  "Previous implementation plan",
+                  list(
+                    Object.entries(old.implementation_plan).map(
+                      ([k, v]) => k + ": " + v,
+                    ),
+                  ),
+                ),
+              );
+            archive.append(detail);
+          }
+          into.append(section("Earlier approvals", archive));
+        }
+        if (n.superseded) {
+          into.append(
+            section(
+              "Superseded refinement",
+              el(
+                "p",
+                "lead",
+                (n.superseded.date || "") + " " + (n.superseded.reason || ""),
+              ),
+            ),
+          );
+          if (n.superseded.body?.length)
+            into.append(renderCode(n, n.superseded.body, true));
+          for (const key of ["composition", "decisions", "deferred"])
+            if (n.superseded[key]?.length)
+              into.append(
+                section("Superseded " + key, list(n.superseded[key])),
+              );
+        }
+      }
+      function renderReader() {
+        const reader = $("reader");
+        reader.replaceChildren();
+        if (!selected) return;
+        const n = nodes.get(selected);
+        const crumbs = el("nav", "crumbs");
+        crumbs.setAttribute("aria-label", "Node path");
+        const path = [];
+        let parent = treeParent.get(selected);
+        while (parent) {
+          path.unshift(parent);
+          parent = treeParent.get(parent);
+        }
+        for (const id of path) {
+          crumbs.append(linkTo(id, id, ""), el("span", "", "/"));
+        }
+        crumbs.append(el("span", "mono", selected));
+        reader.append(crumbs);
+        const heading = el("div", "node-heading");
+        heading.append(
+          el("span", "mono", selected),
+          observedOnly(n)
+            ? el("span", "badge observation", "observed-only")
+            : statusBadge(n),
+        );
+        if (n.target) heading.append(el("span", "badge", "terminal"));
+        else if (n.body?.length && !n.body.some((l) => l.child || l.reuse))
+          heading.append(el("span", "badge", "collapsed leaf"));
+        reader.append(
+          heading,
+          el("h2", "", name(n)),
+          el(
+            "p",
+            "lead",
+            (observedOnly(n) ? n.observation?.effect : null) ||
+              n.effect ||
+              n.gloss ||
+              n.statement ||
+              "",
+          ),
+        );
+        if (n.implementation_plan)
+          heading.append(el("span", "badge", "implementation-ready"));
+        if (isChanged(n.id))
+          heading.append(
+            el(
+              "span",
+              "badge changed",
+              baseline.nodes[n.id] ? "changed since review" : "unreviewed",
+            ),
+          );
+        if (n.source_state)
+          heading.append(
+            el("span", "badge observation", "sources: " + n.source_state),
+          );
+        const statuses = el("div", "status-line");
+        for (const [label, value] of observedOnly(n)
+          ? [
+              ["Source inspection", n.source_state || "unbound"],
+              ["Intended contract", "not specified"],
+            ]
+          : [
+              ["Implementation", n.realization || "not-started"],
+              ["Verification", n.verification || "unverified"],
+            ]) {
+          const item = el("span");
+          item.append(
+            document.createTextNode(label + " · "),
+            el("strong", "", value),
+          );
+          statuses.append(item);
+        }
+        reader.append(statuses);
+        if (n.approved)
+          reader.append(el("p", "muted", "Approved: " + n.approved));
+        if (n.placeholder)
+          reader.append(
+            el(
+              "div",
+              "notice",
+              "Referenced operation · This node has no recorded definition yet. It remains open design work.",
+            ),
+          );
+        else if (n.design !== "approved" && !observedOnly(n))
+          reader.append(
+            el(
+              "div",
+              "notice",
+              n.design === "draft"
+                ? "Draft · This contract and refinement have not been approved."
+                : n.design === "stale"
+                  ? "Stale · A changed dependency or decision requires this design to be revisited."
+                  : n.design === "retired"
+                    ? "Retired · This operation is retained as history and is no longer active."
+                    : "Superseded · A replacement design has taken over this operation.",
+            ),
+          );
+        if (n.adr_pending)
+          reader.append(el("div", "notice", "Pending ADR: " + n.adr_pending));
+        if (n.stale_by?.length)
+          reader.append(
+            el("div", "notice", "Invalidated by: " + n.stale_by.join(", ")),
+          );
+        const detailTabs = [
+          ["overview", "Contract"],
+          ["pseudocode", "Pseudocode"],
+          ...(hasObserved(n) ? [["observed", "Observed code"]] : []),
+          ["context", "Context"],
+          ["evidence", "Evidence & history"],
+          ["review", "Changes"],
+        ];
+        if (tab === "observed" && !hasObserved(n)) tab = "overview";
+        const tabs = el("div", "tabs");
+        tabs.setAttribute("role", "tablist");
+        tabs.setAttribute("aria-label", "Node detail");
+        for (const [key, label] of detailTabs) {
+          const b = el("button", "", label);
+          b.setAttribute("role", "tab");
+          b.id = "tab-" + key;
+          b.setAttribute("aria-controls", "detail-content");
+          b.setAttribute("aria-selected", String(tab === key));
+          b.tabIndex = tab === key ? 0 : -1;
+          b.onclick = () => {
+            tab = key;
+            renderReader();
+            $("tab-" + key).focus();
+          };
+          b.onkeydown = (event) => {
+            const keys = detailTabs.map(([key]) => key);
+            let index = keys.indexOf(key);
+            if (event.key === "ArrowRight") index = (index + 1) % keys.length;
+            else if (event.key === "ArrowLeft")
+              index = (index + keys.length - 1) % keys.length;
+            else if (event.key === "Home") index = 0;
+            else if (event.key === "End") index = keys.length - 1;
+            else return;
+            event.preventDefault();
+            tab = keys[index];
+            renderReader();
+            $("tab-" + tab).focus();
+          };
+          tabs.append(b);
+        }
+        reader.append(tabs);
+        const content = el("div");
+        content.id = "detail-content";
+        content.setAttribute("role", "tabpanel");
+        content.setAttribute("aria-labelledby", "tab-" + tab);
+        ({ overview, pseudocode, observed, context, evidence, review })[tab](
+          n,
+          content,
+        );
+        reader.append(content);
+        const parents = [...new Set(incoming.get(n.id).map((e) => e.from))];
+        if (parents.length) {
+          const chips = el("div", "chips");
+          for (const id of parents) chips.append(linkTo(id, id));
+          reader.append(section("Referenced by", chips));
+        }
+      }
+      const svgNS = "http://www.w3.org/2000/svg";
+      const svgEl = (tag, attrs = {}, text) => {
+        const e = document.createElementNS(svgNS, tag);
+        for (const [k, v] of Object.entries(attrs))
+          e.setAttribute(k, String(v));
+        if (text !== undefined) e.textContent = String(text);
+        return e;
+      };
+      const positions = new Map();
+      let graphWidth = 400,
+        graphHeight = 300,
+        zoom = 1;
+      let workspaceView = "read";
+      // State and sequence charts render explicit design records, never inferred behavior.
+let chartMode = "design";
+function behaviorLink(element, node, fallback) {
+  element.setAttribute("tabindex", "0");
+  element.setAttribute("role", "button");
+  element.setAttribute("aria-label", node ? "Open " + node : fallback);
+  const activate = () => {
+    if (node && nodes.has(node)) navigate(node);
+    else $("chart-selection").textContent = fallback;
+  };
+  element.onclick = activate;
+  element.onkeydown = (e) => {
+    if (e.key === "Enter" || e.key === " ") {
+      e.preventDefault();
+      activate();
+    }
+  };
+}
+function behaviorCanvas(width, height) {
+  graphWidth = width;
+  graphHeight = height;
+  const svg = $("graph");
+  svg.replaceChildren();
+  svg.setAttribute("viewBox", `0 0 ${width} ${height}`);
+  const defs = svgEl("defs"),
+    marker = svgEl("marker", {
+      id: "behavior-arrow",
+      viewBox: "0 0 10 10",
+      refX: 9,
+      refY: 5,
+      markerWidth: 6,
+      markerHeight: 6,
+      orient: "auto",
+    });
+  marker.append(
+    svgEl("path", { d: "M 0 0 L 10 5 L 0 10 z", fill: "var(--teal)" }),
+  );
+  defs.append(marker);
+  svg.append(defs);
+  return svg;
+}
+function chartLabel(svg, x, y, value, cls = "behavior-label") {
+  const text = svgEl(
+    "text",
+    { x, y, class: cls, "text-anchor": "middle" },
+    value,
+  );
+  text.append(svgEl("title", {}, value));
+  svg.append(text);
+  return text;
+}
+function drawBehavior() {
+  const n = nodes.get(selected),
+    behavior =
+      ($("chart-basis").value === "observed"
+        ? n?.observation?.behavior
+        : n?.behavior) || {};
+  const rows =
+    chartMode === "states"
+      ? behavior.states || []
+      : behavior.participants || [];
+  $("focus-node").disabled = true;
+  const observedBasis = $("chart-basis").value === "observed";
+  document.querySelector(".chart-note").textContent = observedBasis
+    ? "Observed behavior · Source inspection: " +
+      (n?.source_state || "not recorded") +
+      ". This is not an approved requirement."
+    : "Intended behavior from the recorded design. Select an operation to read its contract.";
+  if (!rows.length) {
+    const svg = behaviorCanvas(400, 200);
+    chartLabel(
+      svg,
+      200,
+      70,
+      chartMode === "states"
+        ? "No state model recorded."
+        : "No interaction sequence recorded.",
+    );
+    chartLabel(
+      svg,
+      200,
+      100,
+      "Add explicit behavior to this node to see it here.",
+    );
+    $("edge-count").textContent = "No behavior model";
+    setZoom(zoom);
+    return;
+  }
+  if (chartMode === "states") {
+    const edges = behavior.transitions || [];
+    const width = 420,
+      height = Math.max(260, rows.length * 140 + 50);
+    const svg = behaviorCanvas(width, height),
+      places = new Map(rows.map((r, i) => [r.id, { x: 115, y: 45 + i * 140 }]));
+    edges.forEach((edge, i) => {
+      const a = places.get(edge.from),
+        b = places.get(edge.to);
+      if (!a || !b) return;
+      let d, x, y;
+      if (edge.from === edge.to) {
+        d = `M ${a.x + 30} ${a.y} C ${a.x + 20} ${a.y - 55},${a.x + 135} ${a.y - 55},${a.x + 125} ${a.y}`;
+        x = a.x + 80;
+        y = a.y - 34;
+      } else if (b.y === a.y + 140) {
+        d = `M ${a.x + 80} ${a.y + 60} L ${b.x + 80} ${b.y}`;
+        x = a.x + 130;
+        y = (a.y + 60 + b.y) / 2 - 8;
+      } else {
+        const lane = b.y > a.y ? 365 : 45;
+        const side = b.y > a.y ? 160 : 0;
+        d = `M ${a.x + side} ${a.y + 30} H ${lane} V ${b.y + 30} H ${b.x + side}`;
+        x = lane;
+        y = (a.y + b.y) / 2 + 20;
+      }
+      const path = svgEl("path", {
+        d,
+        class: "behavior-edge",
+        "marker-end": "url(#behavior-arrow)",
+      });
+      path.append(
+        svgEl(
+          "title",
+          {},
+          edge.event +
+            (edge.guard ? " [" + edge.guard + "]" : "") +
+            (edge.action ? " / " + edge.action : ""),
+        ),
+      );
+      svg.append(path);
+      const label = chartLabel(
+        svg,
+        x,
+        y,
+        edge.event + (edge.guard ? " [" + edge.guard + "]" : ""),
+      );
+      behaviorLink(
+        label,
+        edge.node,
+        edge.event + (edge.action ? " → " + edge.action : ""),
+      );
+    });
+    for (const row of rows) {
+      const p = places.get(row.id),
+        g = svgEl("g", {
+          transform: `translate(${p.x},${p.y})`,
+          class: "behavior-state",
+        });
+      g.append(svgEl("rect", { width: 160, height: 60, rx: 12 }));
+      if (row.terminal)
+        g.append(svgEl("rect", { x: 4, y: 4, width: 152, height: 52, rx: 9 }));
+      if (row.initial)
+        g.append(
+          svgEl("circle", { cx: -12, cy: 30, r: 5, fill: "var(--teal)" }),
+        );
+      g.append(
+        svgEl("text", { x: 80, y: 34, "text-anchor": "middle" }, row.label),
+      );
+      g.append(svgEl("title", {}, row.label));
+      behaviorLink(g, row.node, row.label);
+      svg.append(g);
+    }
+    $("edge-count").textContent =
+      rows.length + " states · " + edges.length + " transitions";
+  } else {
+    const messages = behavior.messages || [],
+      width = Math.max(360, rows.length * 180 + 60),
+      height = Math.max(260, messages.length * 88 + 170);
+    const svg = behaviorCanvas(width, height),
+      places = new Map(rows.map((row, i) => [row.id, 100 + i * 180]));
+    for (const row of rows) {
+      const x = places.get(row.id);
+      svg.append(
+        svgEl("path", {
+          d: `M ${x} 70 L ${x} ${height - 30}`,
+          class: "lifeline",
+        }),
+      );
+      const g = svgEl("g", { class: "behavior-state" });
+      g.append(
+        svgEl("rect", { x: x - 72, y: 20, width: 144, height: 44, rx: 8 }),
+        svgEl("text", { x, y: 47, "text-anchor": "middle" }, row.label),
+      );
+      behaviorLink(g, row.node, row.label);
+      svg.append(g);
+    }
+    messages.forEach((m, i) => {
+      const x = places.get(m.from),
+        to = places.get(m.to),
+        y = 125 + i * 88;
+      if (x === undefined || to === undefined) return;
+      const d =
+        x === to ? `M ${x} ${y} h 52 v 30 h -52` : `M ${x} ${y} H ${to}`;
+      const path = svgEl("path", {
+        d,
+        class: "behavior-edge" + (m.kind === "return" ? " returning" : ""),
+        "marker-end": "url(#behavior-arrow)",
+      });
+      svg.append(path);
+      const label = chartLabel(
+        svg,
+        x === to ? x + 55 : (x + to) / 2,
+        y - 10,
+        i + 1 + ". " + m.label,
+      );
+      behaviorLink(label, m.node, m.label);
+    });
+    $("edge-count").textContent =
+      rows.length + " participants · " + messages.length + " messages";
+  }
+  setZoom(zoom);
+}
+;
+      function drawGraph() {
+        $("chart-basis").hidden = chartMode === "design";
+        if (chartMode === "design")
+          document.querySelector(".chart-note").textContent =
+            "Explore intended refinements and observed relationships. Select a node, then read its contract or inspected implementation.";
+        document.querySelector(".chart .panel-heading h2").textContent =
+          chartMode === "states"
+            ? "STATE MODEL"
+            : chartMode === "sequence"
+              ? "INTERACTION SEQUENCE"
+              : "DESIGN MAP";
+        document.querySelector(".legend").hidden = chartMode !== "design";
+        if (chartMode !== "design") return drawBehavior();
+        $("focus-node").disabled = false;
+        const columns = new Map();
+        for (const id of nodes.keys()) {
+          let depth = 0,
+            p = treeParent.get(id);
+          while (p) {
+            depth++;
+            p = treeParent.get(p);
+          }
+          if (!columns.has(depth)) columns.set(depth, []);
+          columns.get(depth).push(id);
+        }
+        let maxRows = 1;
+        for (const [depth, ids] of columns) {
+          maxRows = Math.max(maxRows, ids.length);
+          ids.forEach((id, i) =>
+            positions.set(id, { x: 24 + depth * 218, y: 26 + i * 98 }),
+          );
+        }
+        graphWidth = Math.max(260, columns.size * 218 + 30);
+        graphHeight = Math.max(180, maxRows * 98 + 38);
+        const svg = $("graph");
+        svg.replaceChildren();
+        svg.setAttribute("viewBox", `0 0 ${graphWidth} ${graphHeight}`);
+        const defs = svgEl("defs"),
+          marker = svgEl("marker", {
+            id: "arrow",
+            viewBox: "0 0 10 10",
+            refX: 9,
+            refY: 5,
+            markerWidth: 5,
+            markerHeight: 5,
+            orient: "auto-start-reverse",
+          });
+        marker.append(
+          svgEl("path", { d: "M 0 0 L 10 5 L 0 10 z", fill: "var(--edge)" }),
+        );
+        defs.append(marker);
+        svg.append(defs);
+        for (const edge of edges) {
+          const a = positions.get(edge.from),
+            b = positions.get(edge.to);
+          let d;
+          if (a === b)
+            d = `M ${a.x + 160} ${a.y} C ${a.x + 240} ${a.y - 30},${a.x + 240} ${a.y + 90},${a.x + 180} ${a.y + 50}`;
+          else if (b.x > a.x)
+            d = `M ${a.x + 178} ${a.y + 35} C ${a.x + 205} ${a.y + 35},${b.x - 26} ${b.y + 35},${b.x} ${b.y + 35}`;
+          else
+            d = `M ${a.x + 89} ${a.y + 70} C ${a.x + 89} ${a.y + 92},${b.x + 89} ${b.y + 92},${b.x + 89} ${b.y + 70}`;
+          const path = svgEl("path", {
+            d,
+            class: "graph-edge " + edge.kind,
+            "marker-end": "url(#arrow)",
+          });
+          path.dataset.from = edge.from;
+          path.dataset.to = edge.to;
+          svg.append(path);
+        }
+        for (const [id, n] of nodes) {
+          const p = positions.get(id),
+            g = svgEl("g", {
+              class: "graph-node",
+              transform: `translate(${p.x},${p.y})`,
+              role: "button",
+              tabindex: 0,
+              "aria-label": id + " " + name(n) + " " + state(n),
+            });
+          g.dataset.nodeId = id;
+          g.append(
+            svgEl(
+              "title",
+              {},
+              id + " · " + (n.gloss || n.statement || "") + " · " + state(n),
+            ),
+            svgEl("rect", { width: 178, height: 70 }),
+            svgEl("circle", {
+              cx: 15,
+              cy: 17,
+              r: 3,
+              class: "node-dot " + state(n),
+            }),
+            svgEl("text", { x: 26, y: 20, class: "graph-id" }, id),
+            svgEl(
+              "text",
+              { x: 12, y: 40 },
+              name(n).length > 23 ? name(n).slice(0, 22) + "…" : name(n),
+            ),
+            svgEl(
+              "text",
+              { x: 12, y: 57, class: "graph-status" },
+              observedOnly(n)
+                ? "observed · " + (n.source_state || "unbound")
+                : state(n),
+            ),
+          );
+          g.onclick = () => navigate(id);
+          g.onkeydown = (e) => {
+            if (e.key === "Enter" || e.key === " ") {
+              e.preventDefault();
+              navigate(id);
+            }
+          };
+          svg.append(g);
+        }
+        $("edge-count").textContent = edges.length + " links";
+        if (!nodes.size)
+          svg.append(
+            svgEl(
+              "text",
+              { x: 24, y: 50, fill: "var(--muted)" },
+              "No design nodes yet.",
+            ),
+          );
+        setZoom(zoom);
+      }
+      function setZoom(value) {
+        zoom = Math.max(0.15, Math.min(2.5, value));
+        $("graph").style.width = graphWidth * zoom + "px";
+        $("graph").style.height = graphHeight * zoom + "px";
+        $("zoom-label").textContent = Math.round(zoom * 100) + "%";
+      }
+      function fitGraph() {
+        if (workspaceView !== "map") return;
+        const v = $("graph-viewport");
+        setZoom(
+          Math.min(
+            1.5,
+            (v.clientWidth - 20) / graphWidth,
+            chartMode === "design" ? (v.clientHeight - 20) / graphHeight : 1.5,
+          ),
+        );
+        v.scrollTo(0, 0);
+      }
+      function focusGraph() {
+        if (!selected || chartMode !== "design") return;
+        const p = positions.get(selected),
+          v = $("graph-viewport");
+        if (zoom < 0.7) setZoom(0.85);
+        v.scrollTo({
+          left: (p.x + 89) * zoom - v.clientWidth / 2,
+          top: (p.y + 35) * zoom - v.clientHeight / 2,
+        });
+      }
+      function highlightGraph() {
+        for (const g of $("graph").querySelectorAll(".graph-node")) {
+          g.classList.toggle("selected", g.dataset.nodeId === selected);
+          g.setAttribute("aria-pressed", String(g.dataset.nodeId === selected));
+        }
+        for (const p of $("graph").querySelectorAll(".graph-edge"))
+          p.classList.toggle(
+            "related",
+            p.dataset.from === selected || p.dataset.to === selected,
+          );
+        $("chart-selection").textContent = selected
+          ? selected + " · " + name(nodes.get(selected))
+          : "No node selected";
+      }
+      function select(id, reveal = false) {
+        if (!nodes.has(id)) return;
+        selected = id;
+        if (observedOnly(nodes.get(id)) && tab === "overview") tab = "observed";
+        if (observedOnly(nodes.get(id))) $("chart-basis").value = "observed";
+        let p = treeParent.get(id);
+        while (p) {
+          expanded.add(p);
+          p = treeParent.get(p);
+        }
+        renderTree();
+        renderReader();
+        if (chartMode !== "design") {
+          drawGraph();
+          fitGraph();
+        }
+        highlightGraph();
+        $("reader").scrollTop = 0;
+        if (reveal && workspaceView === "read" && window.innerWidth <= 1150)
+          $("reader").scrollIntoView({ block: "start" });
+      }
+      function navigate(id) {
+        if (location.hash === "#" + encodeURIComponent(id)) select(id, true);
+        else location.hash = encodeURIComponent(id);
+      }
+      function fromHash(event) {
+        let id;
+        try {
+          id = decodeURIComponent(location.hash.slice(1));
+        } catch {
+          id = "";
+        }
+        select(nodes.has(id) ? id : forest[0], !!event);
+      }
+      function showWorkspace(view, focus = false) {
+        workspaceView = view;
+        $("workspace").dataset.view = view;
+        $("workspace").setAttribute("aria-labelledby", "view-" + view);
+        for (const key of ["read", "map"]) {
+          const button = $("view-" + key);
+          button.setAttribute("aria-selected", String(key === view));
+          button.tabIndex = key === view ? 0 : -1;
+        }
+        $("outline-toggle").hidden = view === "map";
+        if (view === "map") {
+          drawGraph();
+          highlightGraph();
+          requestAnimationFrame(fitGraph);
+        }
+        if (focus) $("view-" + view).focus();
+      }
+      for (const key of ["read", "map"]) {
+        $("view-" + key).onclick = () => showWorkspace(key);
+        $("view-" + key).onkeydown = (e) => {
+          if (["ArrowRight", "ArrowLeft", "Home", "End"].includes(e.key)) {
+            e.preventDefault();
+            showWorkspace(
+              e.key === "Home"
+                ? "read"
+                : e.key === "End"
+                  ? "map"
+                  : key === "read"
+                    ? "map"
+                    : "read",
+              true,
+            );
+          }
+        };
+      }
+      $("read-selected").onclick = () => {
+        showWorkspace("read");
+        $("reader").scrollIntoView({ block: "start" });
+      };
+      $("design-title").textContent = snapshot.title;
+      document.title = snapshot.title + " · Stepwise";
+      $("snapshot-date").textContent =
+        "Exported " + snapshot.exported_at.replace("T", " ").split(".")[0];
+      $("search").oninput = (e) => {
+        query = e.target.value.trim().toLowerCase();
+        renderTree();
+      };
+      $("clear-search").onclick = () => {
+        $("search").value = "";
+        query = "";
+        renderTree();
+        $("search").focus();
+      };
+      $("expand-all").onclick = () => {
+        for (const id of nodes.keys()) expanded.add(id);
+        renderTree();
+      };
+      $("collapse-all").onclick = () => {
+        expanded.clear();
+        renderTree();
+      };
+      $("zoom-in").onclick = () => setZoom(zoom * 1.2);
+      $("zoom-out").onclick = () => setZoom(zoom / 1.2);
+      $("fit-graph").onclick = fitGraph;
+      $("focus-node").onclick = focusGraph;
+      $("outline-toggle").onclick = () => {
+        const hidden = $("outline").classList.toggle("hidden-mobile");
+        $("outline-toggle").setAttribute("aria-expanded", String(!hidden));
+      };
+      window.addEventListener("hashchange", fromHash);
+      window.addEventListener("resize", () => requestAnimationFrame(fitGraph));
+      initReview();
+      $("chart-basis").onchange = () => {
+        drawGraph();
+        highlightGraph();
+        fitGraph();
+      };
+      $("chart-mode").onchange = (e) => {
+        chartMode = e.target.value;
+        drawGraph();
+        highlightGraph();
+        fitGraph();
+      };
+      summary();
+      drawGraph();
+      renderTree();
+      fromHash();
+      requestAnimationFrame(fitGraph);
+      if (!nodes.size)
+        $("reader").append(
+          el("h2", "", "Your design starts here"),
+          el(
+            "p",
+            "lead",
+            "This ledger has no nodes yet. Add a root with the Stepwise CLI, then regenerate this snapshot.",
+          ),
+        );
+    </script>
+  </body>
+</html>
