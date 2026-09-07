@@ -58,7 +58,15 @@ For reconstruction, source bindings, implementation versions, and inspection pay
 | `meta <dir> scope\|title TEXT` / `meta <dir> nongoals TEXT ...` | Set design boundaries. |
 | `adr <dir> new\|accept\|supersede\|constrains ...` | Maintain consequential decisions; see [adr-ledger.md](adr-ledger.md). |
 | `status <dir> [--all]` / `frontier <dir>` / `show <dir> D-NNN` | Inspect state and next work. |
-| `check <dir>` / `sync <dir> [--repo ROOT]` | Validate, or incrementally persist source versions and refresh derived statuses/Markdown while preserving node identities. Reinspect changed nodes with observe. |
+| `check <dir> [--strict-pseudocode]` / `sync <dir> [--repo ROOT]` | Validate, or incrementally persist source versions and refresh derived statuses/Markdown while preserving node identities. Ordinary checks report algorithm gaps as warnings; the strict flag makes them failures for completed review artifacts. Reinspect changed nodes with observe. |
 | `html <dir> [--output FILE]` | Export the reader and review charts; see [html-view.md](html-view.md). |
 
 Use `--help` on the command for flags. An error should be resolved in the design or operation payload, not silenced by invented calls or claims. Evidence sufficiency, actual target guarantees, and architectural correctness remain reasoning obligations.
+
+## Algorithm audit
+
+`scan --json` includes a separate `pseudocode` object containing `complete`, `procedures`, and `issues`. Each issue names the node, `intended` or `observed` basis, kind, message, and displayed algorithm line where applicable. Untagged calls may include candidate procedure IDs; candidates are suggestions for inspection, never automatically created links.
+
+The audit covers missing explanations (including empty draft destinations), unlinked helper calls (including conditions and assertions), missing or retired/superseded procedure destinations, invalid concrete targets, and observed relationships absent from both the algorithm and behavior diagrams. An observed-only node needs an observed algorithm, not an intended target used as a substitute. An intended terminal or implementation-ready leaf remains a valid stopping boundary.
+
+Source freshness (`coverage.complete`), algorithm traceability (`pseudocode.complete`), intended approval, and runtime verification are distinct. Ordinary editing permits partial observations; complete artifacts must pass `check --strict-pseudocode` and the semantic review passes in [pseudocode.md](pseudocode.md). The audit cannot establish that the algorithm accurately models code or provides a useful abstraction.

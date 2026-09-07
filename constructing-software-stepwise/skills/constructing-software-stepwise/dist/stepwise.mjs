@@ -16992,7 +16992,7 @@ var VERBS = [
   verb("repair"),
   verb("frontier"),
   verb("sync", [], { "--repo": store("repo", null) }),
-  verb("check"),
+  verb("check", [], { "--strict-pseudocode": flagTrue("strict_pseudocode") }),
   verb("show", [p("id")]),
   verb("status", [], { "--all": flagTrue("all") }),
   verb("new", [p("id"), p("statement", "?")]),
@@ -17263,8 +17263,75 @@ var isDirectory = Effect_exports.fn("isDirectory")(function* (p2) {
 });
 var isNotFound = (error) => error.reason._tag === "NotFound";
 
+// src/algorithm-audit.ts
+var diagramRefs = (behavior) => {
+  const refs = /* @__PURE__ */ new Set();
+  for (const rows of Object.values(behavior || {})) {
+    for (const row of rows || []) if (typeof row.node === "string") refs.add(row.node);
+  }
+  return refs;
+};
+var auditAlgorithms = (nodes) => {
+  const issues = [];
+  let procedures = 0;
+  const byName = /* @__PURE__ */ new Map();
+  for (const [id, node] of Object.entries(nodes)) {
+    const name = fnOf(node.statement);
+    if (name) byName.set(name, [...byName.get(name) || [], id]);
+  }
+  for (const [id, node] of Object.entries(nodes)) {
+    if (["retired", "superseded"].includes(node.design)) continue;
+    const bases = [];
+    const hasObservation = Boolean(node.observation || node.origin === "existing-code");
+    if (!hasObservation || node.body?.length || node.target || node.implementation_plan || Object.keys(node.contract || {}).length) bases.push("intended");
+    if (hasObservation) bases.push("observed");
+    for (const basis of bases) {
+      procedures += 1;
+      const body = (basis === "observed" ? node.observation?.body : node.body) || [];
+      if (!body.length && !(basis === "intended" && (node.target || node.implementation_plan))) {
+        issues.push({ node: id, basis, kind: "missing-body", message: "No algorithm explains this procedure. Record pseudocode, or an intended terminal/implementation-ready mapping where appropriate." });
+      }
+      const refs = diagramRefs(basis === "observed" ? node.observation?.behavior : node.behavior);
+      for (const [index, step] of body.entries()) {
+        const line = index + 2;
+        const ref = step.child || step.reuse;
+        if (ref) {
+          refs.add(ref);
+          if (!(ref in nodes)) issues.push({ node: id, basis, line, kind: "missing-procedure", message: `The step refers to ${ref}, which has no recorded procedure.` });
+          else if (["retired", "superseded"].includes(nodes[ref].design)) issues.push({ node: id, basis, line, kind: "historical-procedure", message: `The active algorithm refers to ${ref}, which is ${nodes[ref].design}. Reconcile the call with the current responsibility.` });
+        }
+        if (step.target) {
+          const why = targetOk(step.target);
+          if (why) issues.push({ node: id, basis, line, kind: "invalid-target", message: why });
+        }
+        if (!ref && !step.target) {
+          const names = [...new Set(callNames(step.code))];
+          if (names.length) {
+            const candidates = [...new Set(names.flatMap((name) => byName.get(name) || []))];
+            issues.push({
+              node: id,
+              basis,
+              line,
+              kind: "unlinked-call",
+              candidates,
+              message: `Unlinked operation ${names.join(", ")}. ${candidates.length ? `Possible procedures: ${candidates.join(", ")}. ` : ""}Add an explicit procedure reference or concrete target, or explain the small operation inline.`
+            });
+          }
+        }
+      }
+      if (basis === "observed" && node.observation) {
+        for (const child of node.observed_children || []) {
+          if (!refs.has(child)) issues.push({ node: id, basis, kind: "unexplained-relationship", message: `Observed relationship to ${child} appears in neither pseudocode nor a behavior diagram. Explain the actual call, dispatch, or interaction; do not invent a synchronous call.` });
+        }
+      }
+    }
+  }
+  return { complete: procedures > 0 && issues.length === 0, procedures, issues };
+};
+var describeAlgorithmIssue = (issue) => `${issue.node} ${issue.basis}${issue.line === void 0 ? "" : ` line ${issue.line}`}: ${issue.message}`;
+
 // src/existing.ts
-var emptyReport = () => ({ repository: null, commit: null, coverage: {}, assessment_pending: [], nodes: {}, pending: [], notifications: [], current: [], differences: [] });
+var emptyReport = () => ({ repository: null, commit: null, coverage: {}, assessment_pending: [], nodes: {}, pending: [], notifications: [], current: [], differences: [], pseudocode: auditAlgorithms({}) });
 var stamp = () => now();
 var digest2 = (value) => sha256Json(value, { sortKeys: true, ensureAscii: false });
 var repository = Effect_exports.fn("repository")(function* (led, override) {
@@ -17443,7 +17510,8 @@ var scanSync = (led, root) => {
     pending: pendingIds,
     notifications,
     current: Object.entries(report2).filter(([, row]) => row.state === "current").map(([nid]) => nid),
-    differences: Object.entries(report2).filter(([, row]) => row.conformance.status === "differs").map(([nid]) => nid)
+    differences: Object.entries(report2).filter(([, row]) => row.conformance.status === "differs").map(([nid]) => nid),
+    pseudocode: auditAlgorithms(led.nodes)
   };
 };
 var scan2 = Effect_exports.fn("scan")(function* (led, override) {
@@ -18440,6 +18508,13 @@ var check = Effect_exports.fn("check")(function* (led, options = { views: true }
   const views = options.views ? yield* readViews(led) : void 0;
   checkSync(led, views);
 });
+var checkAlgorithms = (led, strict) => {
+  const audit = auditAlgorithms(led.nodes);
+  const messages = audit.issues.map(describeAlgorithmIssue);
+  if (strict && !audit.procedures) messages.push("ledger: no algorithms are recorded for pseudocode review");
+  if (strict) led.errors.push(...messages);
+  else led.warnings.push(...messages);
+};
 var compactErrors = (errors) => {
   const grouped2 = /* @__PURE__ */ new Map();
   const rest = [];
@@ -19303,6 +19378,8 @@ var scanText = (rep) => {
   const c = rep.coverage;
   lines.push(`Source coverage: ${pyStr(c.current ?? 0)}/${pyStr(c.active ?? 0)} active current; bound ${pyStr(c.bound ?? 0)}; observed ${pyStr(c.observed ?? 0)}; unbound ${(c.unbound ?? []).join(", ") || "none"}`);
   lines.push(`Inspection pending: ${rep.pending.join(", ") || "none"}; assessment pending: ${rep.assessment_pending.join(", ") || "none"}; recorded differences: ${rep.differences.join(", ") || "none"}`);
+  lines.push(`Pseudocode: ${rep.pseudocode.procedures} procedures; ${rep.pseudocode.issues.length} traceability gaps. Source coverage does not establish algorithm completeness.`);
+  lines.push(...rep.pseudocode.issues.map(describeAlgorithmIssue));
   return lines.join("\n");
 };
 var vScan = (led, a) => Effect_exports.gen(function* () {
@@ -19413,8 +19490,9 @@ var vHtml = (led, a) => Effect_exports.gen(function* () {
   yield* out(`HTML snapshot: ${output}
 `);
 });
-var vCheck = (led) => Effect_exports.gen(function* () {
+var vCheck = (led, a) => Effect_exports.gen(function* () {
   yield* check(led);
+  checkAlgorithms(led, flagOf(a, "strict_pseudocode"));
   const rc = yield* report(led);
   if (rc) return yield* new Fail2({ message: "" });
 });

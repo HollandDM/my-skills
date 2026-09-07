@@ -231,7 +231,7 @@ export const Outline = () => {
         </Show>
       </nav>
       <div class="outline-footer">
-        Select any operation to read its contract.
+        Select any operation to read its pseudocode.
         <br />
         Shared references link to the same node.
       </div>

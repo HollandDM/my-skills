@@ -24,7 +24,8 @@ export interface Position {
 
 export const createAppState = (model: Model) => {
   const [selected, setSelected] = createSignal<string | null>(null)
-  const [tab, setTab] = createSignal<DetailTab>("overview")
+  const [tab, setTab] = createSignal<DetailTab>("pseudocode")
+  const [pseudocodeSource, setPseudocodeSource] = createSignal<ChartBasis | null>(null)
   const [query, setQuery] = createSignal("")
   const [expanded, setExpanded] = createSignal<Set<string>>(new Set(model.forest))
   const [reviewFilter, setReviewFilter] = createSignal("all")
@@ -35,6 +36,25 @@ export const createAppState = (model: Model) => {
   const [chartSelectionOverride, setChartSelectionOverride] = createSignal<string | null>(null)
   const [workspaceView, setWorkspaceView] = createSignal<WorkspaceView>("read")
   const [outlineHidden, setOutlineHidden] = createSignal(false)
+  const [viewportWidth, setViewportWidth] = createSignal(window.innerWidth)
+  const outlineMin = 200
+  const outlineMax = createMemo(() => Math.max(outlineMin, Math.min(600, viewportWidth() - 368)))
+  let savedOutlineWidth = 255
+  try {
+    const saved = Number(localStorage.getItem("stepwise-outline-width"))
+    if (Number.isFinite(saved) && saved >= outlineMin && saved <= 600) savedOutlineWidth = saved
+  } catch { /* File-origin storage can be disabled. */ }
+  const [preferredOutlineWidth, setPreferredOutlineWidth] = createSignal(savedOutlineWidth)
+  const outlineWidth = createMemo(() => Math.min(outlineMax(), preferredOutlineWidth()))
+  const saveOutlineWidth = (width = preferredOutlineWidth()): void => {
+    try { localStorage.setItem("stepwise-outline-width", String(width)) } catch { /* Keep the width for this page. */ }
+  }
+  const resizeOutline = (width: number, persist = false): void => {
+    const next = Math.round(Math.max(outlineMin, Math.min(outlineMax(), width)))
+    setPreferredOutlineWidth(next)
+    // Solid batches event updates; persist the computed value, not the previous signal value.
+    if (persist) saveOutlineWidth(next)
+  }
 
   // Review baselines stay in the browser or an explicitly downloaded JSON file.
   const reviewStorageKey = "stepwise-review:" + (model.snapshot.review_key || model.snapshot.title)
@@ -173,7 +193,6 @@ export const createAppState = (model: Model) => {
     const n = model.nodes.get(id)!
     setSelected(id)
     setChartSelectionOverride(null)
-    if (model.observedOnly(n) && tab() === "overview") setTab("observed")
     if (model.observedOnly(n)) setChartBasis("observed")
     const next = new Set(expanded())
     let p = model.treeParent.get(id)
@@ -193,12 +212,16 @@ export const createAppState = (model: Model) => {
   }
 
   const fromHash = (event?: Event): void => {
-    let id: string
+    let route: string[]
     try {
-      id = decodeURIComponent(location.hash.slice(1))
+      route = location.hash.slice(1).split("/").map(decodeURIComponent)
     } catch {
-      id = ""
+      route = []
     }
+    const [id, detail, source] = route
+    const tabs: DetailTab[] = ["pseudocode", "overview", "observed", "context", "evidence", "review"]
+    if (tabs.includes(detail as DetailTab)) setTab(detail as DetailTab)
+    setPseudocodeSource(detail === "pseudocode" && (source === "observed" || source === "intended") ? source : null)
     select(model.nodes.has(id) ? id : model.forest[0], Boolean(event))
   }
 
@@ -209,11 +232,12 @@ export const createAppState = (model: Model) => {
   }
 
   return {
-    model, selected, selectedNode, tab, setTab, query, setQuery, expanded, setExpanded, reviewFilter, setReviewFilter, reviewMessage, setReviewMessage,
+    model, selected, selectedNode, tab, setTab, pseudocodeSource, query, setQuery, expanded, setExpanded, reviewFilter, setReviewFilter, reviewMessage, setReviewMessage,
     chartMode, setChartMode, chartBasis, setChartBasis, zoom, setZoom, graphSize, behavior, behaviorRows, workspaceView, showWorkspace, outlineHidden, setOutlineHidden,
     chartSelectionOverride, setChartSelectionOverride,
     baseline, isChanged, matchesReview, matches, visible, markReviewed, importBaseline, positions, designSize, registerViewport, registerReader,
     fitGraph, focusGraph, select, navigate, fromHash,
+    outlineWidth, outlineMin, outlineMax, resizeOutline, saveOutlineWidth, setViewportWidth,
   }
 }
 

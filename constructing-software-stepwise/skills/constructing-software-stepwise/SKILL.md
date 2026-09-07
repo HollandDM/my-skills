@@ -7,6 +7,16 @@ description: Stepwise software design, reconstruction of existing code, fresh re
 
 Refine an abstract operation into smaller operations whose contracts compose, until each leaf maps to a real construct or has a bounded implementation approach and validation plan. Keep the design, assumptions, decisions, and evidence durable enough for another engineer to continue.
 
+## Pseudocode is the primary artifact
+
+**Pseudocode is the most important output of this work. It must let a reader understand and reason about the system at a high level, then follow each substantial operation down to its implementation.** The hierarchy, source hashes, claims, diagrams, and reports support that explanation; none substitutes for it.
+
+**Keep pseudocode closely aligned with implementation, always.** During reconstruction and maintenance, describe the actual data flow, decisions, ownership, state changes, ordering, failures, retries, and externally visible outcomes. Do not beautify away awkward behavior, invent guarantees, or leave important work hidden behind an unexplained helper. A code change is not fully reconciled until the affected pseudocode and its references have been reinspected and updated in the same task. If inspection is blocked, mark the correspondence as unresolved instead of presenting stale pseudocode as current.
+
+Forward design describes intended behavior until implementation exists. Once code exists, compare it with that intent explicitly: update the observed algorithm to match the code, then fix the code or revise the intended design through the authorized workflow. Never silently rewrite an approved requirement to make the implementation appear conformant.
+
+Read [pseudocode.md](references/pseudocode.md) before writing or reviewing algorithms. Every substantial operation must have an explicit link to its own procedure or a concrete implementation mapping; explain small operations inline. Calls remain clickable at the algorithm line in the HTML reader. Preserve the reader's ability to reason at the current abstraction level without opening every child. Finish with a top-down readability pass, a source-correspondence pass, and `check --strict-pseudocode`; a green structural audit is necessary for a complete artifact, not proof of semantic adequacy.
+
 ## Choose the workflow
 
 - **Design new or changed behavior:** use the design discipline below.
@@ -49,7 +59,7 @@ Approval, implementation, inspection, and verification are distinct claims. Reco
 
 ## Completion
 
-For a complete intended design, every in-scope design node is approved, each leaf is terminal, collapsed, or implementation-ready, the frontier is empty, applicable ADRs are resolved, and `check` succeeds. An empty frontier alone is insufficient if intended design nodes remain draft or stale. Observational-only nodes do not require approval; assess their completeness through `scan`. A source-backed reconstruction or sync is incomplete while `coverage.complete` is false, even if `pending` used to be empty in an older tool version. If an intended refinement relies on an observed node, give it an explicit contract through the design workflow. For a bounded request, report the completed boundary and remaining frontier explicitly.
+For a complete intended design, every in-scope design node is approved, each leaf is terminal, collapsed, or implementation-ready, the frontier is empty, applicable ADRs are resolved, and `check --strict-pseudocode` succeeds. An empty frontier alone is insufficient if intended design nodes remain draft or stale. Observational-only nodes do not require approval; assess source freshness and algorithm traceability separately through `scan`. A complete reconstruction requires both `coverage.complete` and `pseudocode.complete`, plus the semantic reading and correspondence passes above. Source-current files with disconnected or opaque algorithms do not complete the work. If an intended refinement relies on an observed node, give it an explicit contract through the design workflow. For a bounded request, report the completed boundary and unresolved obligations explicitly.
 
 When implementation is requested, realize the approved design and gather evidence covering its contract obligations. Choose verification proportional to the obligation. Record evidence against explicit contract clauses. Verification is derived from coverage of the current approval revision and dependencies; failing checks prevent verified status. Evidence never changes implementation status. The CLI tracks coverage but cannot establish that an argument or test is sufficient.
 

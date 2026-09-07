@@ -1,5 +1,5 @@
 /** The reader column: crumbs, heading, notices, detail tabs and their panels. */
-import { For, Show, Switch, Match, createMemo, createSignal } from "solid-js"
+import { For, Show, Switch, Match, createMemo } from "solid-js"
 import { pseudo, txt, type BodyLine, type DesignNode } from "./model"
 import { CodeCard, List, NodeLink, Section, StatusBadge } from "./parts"
 import { useApp, type DetailTab } from "./state"
@@ -91,10 +91,30 @@ const Overview = (props: { node: DesignNode }) => {
 
 // ----------------------------------------------------------------------------- Pseudocode
 
+const ImplementationMapping = (props: { node: DesignNode; observed: boolean }) => {
+  const body = () => props.observed ? props.node.observation?.body || [] : props.node.body || []
+  const targets = () => [...new Set([props.observed ? undefined : props.node.target, ...body().map((line) => line.target)].filter((value): value is string => Boolean(value)))]
+  const bindings = () => Object.entries((props.observed ? props.node.observation?.bindings : undefined) || props.node.bindings || {})
+  return <details class="card implementation-mapping">
+    <summary>{`Implementation mapping · ${targets().length} targets · ${bindings().length} source bindings`}</summary>
+    <Show when={targets().length}><List items={targets()} /></Show>
+    <Show when={!props.observed && props.node.adaptation?.length}><List items={props.node.adaptation || []} /></Show>
+    <For each={bindings()}>{([id, binding]) => <div class="record">
+      <a href={`#${props.node.id}/observed`}>{id + " · " + binding.path}</a>
+      <Show when={binding.symbol}><p class="mono">{binding.symbol}</p></Show>
+      <Show when={binding.lines}><small>{"Location hint: lines " + binding.lines!.join("–")}</small></Show>
+    </div>}</For>
+    <Show when={!targets().length && !bindings().length}>
+      <p class="muted">No concrete target or source binding recorded. Follow the procedure calls for deeper mappings.</p>
+    </Show>
+    <Show when={bindings().length}><p class="muted">Bindings identify inspected implementation files. Open a binding for source versions and claims; matching hashes do not establish conformance.</p></Show>
+  </details>
+}
+
 const Pseudocode = (props: { node: DesignNode }) => {
   const app = useApp()
   const model = app.model
-  const [observed, setObserved] = createSignal(model.observedOnly(props.node))
+  const observed = () => (app.pseudocodeSource() || (model.observedOnly(props.node) ? "observed" : "intended")) === "observed"
   const procedures = createMemo(() => model.reachableProcedures(props.node, observed()))
   let container: HTMLDivElement | undefined
   const jump = (id: string) => {
@@ -107,44 +127,75 @@ const Pseudocode = (props: { node: DesignNode }) => {
   return (
     <>
       <div class="pseudocode-controls">
-        <select aria-label="Pseudocode source" value={observed() ? "observed" : "intended"} onChange={(e) => setObserved((e.target as HTMLSelectElement).value === "observed")}>
+        <select aria-label="Pseudocode source" value={observed() ? "observed" : "intended"} onChange={(e) => { location.hash = `${props.node.id}/pseudocode/${(e.target as HTMLSelectElement).value}` }}>
           <option value="intended">Intended design</option>
           <option value="observed">Observed implementation</option>
         </select>
         <span class="muted">{procedures().length + " reachable procedures"}</span>
       </div>
-      <p class="muted">Selected procedure and everything reachable below it, each shown once. Follow a call to jump to its procedure.</p>
-      <div class="chips pseudocode-index">
-        <For each={procedures()}>{(node) => <button class="chip" onClick={() => jump(node.id)}>{node.id + " · " + model.name(node)}</button>}</For>
-      </div>
+      <p class="muted">Read top-down. Click a call line to open its procedure; browser Back returns to the caller. Implementation mappings sit below each algorithm.</p>
+      <details class="pseudocode-index">
+        <summary>{"Procedure index · " + procedures().length + " procedures"}</summary>
+        <div class="chips">
+          <For each={procedures()}>{(node) => <button class="chip" onClick={() => jump(node.id)}>{node.id + " · " + model.name(node)}</button>}</For>
+        </div>
+      </details>
       <div class="pseudocode-tree" ref={(el) => { container = el }}>
         <For each={procedures()}>
           {(node) => {
             const body = () => (observed() ? node.observation?.body || [] : node.body || [])
+            const unresolved = () => (model.ledger.ambiguities || []).filter((item) => item.resolves_at === node.id)
             return (
-              <Show
-                when={body().length}
-                fallback={
-                  <div class="card code-card algorithm-card" data-procedure={node.id} tabindex={-1}>
-                    <div class="code-bar">{observed() ? "Observed implementation" : model.state(node)}</div>
-                    <div class="algorithm-title">{`Algorithm ${node.id} · ${node.gloss || model.name(node)}`}</div>
-                    <div class="empty">
-                      {observed()
-                        ? "No observed pseudocode recorded for this node."
-                        : node.target
-                          ? "Implementation target: " + node.target
-                          : node.implementation_plan
-                            ? "Implementation approach: " + node.implementation_plan.approach
-                            : "No pseudocode recorded for this node."}
+              <section class="procedure-group" aria-label={"Procedure " + node.id}>
+                <Show when={node.id !== props.node.id && (observed() ? node.observation?.effect : node.effect)}>
+                  <p class="algorithm-purpose">{observed() ? node.observation?.effect : node.effect}</p>
+                </Show>
+                <Show when={observed() && node.source_state && node.source_state !== "current"}>
+                  <div class="notice">{"Source inspection: " + node.source_state + ". This algorithm needs inspection before relying on its correspondence to current code."}</div>
+                </Show>
+                <Show
+                  when={body().length}
+                  fallback={
+                    <div class="card code-card algorithm-card" data-procedure={node.id} tabindex={-1}>
+                      <div class="code-bar">{observed() ? "Observed implementation" : model.state(node)}</div>
+                      <div class="algorithm-title">{`Algorithm ${node.id} · ${node.gloss || model.name(node)}`}</div>
+                      <div class="empty">
+                        {observed()
+                          ? "No observed pseudocode recorded for this node."
+                          : node.target
+                            ? "Implementation target: " + node.target
+                            : node.implementation_plan
+                              ? "Implementation approach: " + node.implementation_plan.approach
+                              : "No pseudocode recorded for this node."}
+                      </div>
+                      <Show when={!observed() && node.implementation_plan}>
+                        <div class="empty">{"Validation: " + node.implementation_plan!.validation}</div>
+                      </Show>
                     </div>
-                    <Show when={!observed() && node.implementation_plan}>
-                      <div class="empty">{"Validation: " + node.implementation_plan!.validation}</div>
-                    </Show>
-                  </div>
-                }
-              >
-                <CodeCard node={node} body={body()} caption={observed() ? "Observed implementation" : null} onReference={jump} procedure={node.id} />
-              </Show>
+                  }
+                >
+                  <CodeCard node={node} body={body()} caption={observed() ? "Observed implementation" : null} source={observed() ? "observed" : "intended"} procedure={node.id} />
+                </Show>
+                <Show when={observed() && node.observation?.unknowns?.length}>
+                  <details class="card algorithm-unknowns" open>
+                    <summary>Unresolved assumptions and behavior</summary>
+                    <List items={node.observation?.unknowns || []} />
+                  </details>
+                </Show>
+                <Show when={unresolved().length}>
+                  <details class="card algorithm-unknowns" open>
+                    <summary>Open design questions</summary>
+                    <List items={unresolved().map((item) => item.claim + " — " + item.conflict)} />
+                  </details>
+                </Show>
+                <Show when={!observed() && node.composition?.length}>
+                  <details class="card implementation-mapping">
+                    <summary>Why the algorithm establishes its contract</summary>
+                    <List items={node.composition || []} />
+                  </details>
+                </Show>
+                <ImplementationMapping node={node} observed={observed()} />
+              </section>
             )
           }}
         </For>
@@ -275,7 +326,7 @@ const Observed = (props: { node: DesignNode }) => {
                   <pre>{previous.implementation_version || previous.scope_hash}</pre>
                   <List items={(previous.claims || []).map((c) => c.basis + ": " + c.text)} />
                   <Show when={previous.body?.length}>
-                    <CodeCard node={n} body={previous.body} historical caption="Previous observed implementation" />
+                    <CodeCard node={n} body={previous.body} historical caption="Previous observed implementation" source="observed" />
                   </Show>
                   <Show when={previous.bindings}>
                     <List items={Object.entries(previous.bindings!).map(([id, b]) => id + ": " + b.path + (b.symbol ? " · " + b.symbol : ""))} />
@@ -546,14 +597,14 @@ const NodeReader = (props: { node: DesignNode }) => {
   const n = props.node
   const observedOnly = model.observedOnly(n)
   const detailTabs = createMemo<Array<[DetailTab, string]>>(() => [
-    ["overview", "Contract"],
     ["pseudocode", "Pseudocode"],
+    ["overview", "Contract"],
     ...(model.hasObserved(n) ? [["observed", "Observed code"] as [DetailTab, string]] : []),
     ["context", "Context"],
     ["evidence", "Evidence & history"],
     ["review", "Changes"],
   ])
-  const tab = createMemo<DetailTab>(() => (app.tab() === "observed" && !model.hasObserved(n) ? "overview" : app.tab()))
+  const tab = createMemo<DetailTab>(() => (app.tab() === "observed" && !model.hasObserved(n) ? "pseudocode" : app.tab()))
   const focusTab = (key: DetailTab) => {
     app.setTab(key)
     queueMicrotask(() => document.getElementById("tab-" + key)?.focus())

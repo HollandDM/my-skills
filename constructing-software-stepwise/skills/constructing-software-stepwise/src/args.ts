@@ -50,7 +50,7 @@ export const VERBS: readonly VerbSpec[] = [
   verb("repair"),
   verb("frontier"),
   verb("sync", [], { "--repo": store("repo", null) }),
-  verb("check"),
+  verb("check", [], { "--strict-pseudocode": flagTrue("strict_pseudocode") }),
   verb("show", [p("id")]),
   verb("status", [], { "--all": flagTrue("all") }),
   verb("new", [p("id"), p("statement", "?")]),

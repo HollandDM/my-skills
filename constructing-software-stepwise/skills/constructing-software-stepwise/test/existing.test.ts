@@ -190,6 +190,30 @@ describe("existing code", () => {
     expect(data()).toEqual(before)
   })
 
+  it("separates source freshness from algorithm gaps and offers a strict read-only gate", async () => {
+    await adopt()
+    await observe()
+    const payload = { effect: "Normalize input.", claims: [{ text: "Calls normalize.", basis: "observed", sources: ["S01"] }], pseudocode: "return normalize(value)" }
+    await expectCli(d, ["observe", "D-000", JSON.stringify(payload), "--at", (await scan()).nodes["D-000"].inspection_token])
+    const report = await scan()
+    expect(report.coverage.complete).toBe(true)
+    expect(report.pseudocode.complete).toBe(false)
+    expect(report.pseudocode.issues.map((issue: any) => issue.kind)).toEqual(["unlinked-call", "unexplained-relationship", "missing-body"])
+    const before = snapshotFiles(d)
+    expect(await expectCli(d, ["check"])).toContain("Unlinked operation normalize")
+    expect(await expectCli(d, ["check", "--strict-pseudocode"], { ok: false })).toContain("Unlinked operation normalize")
+    expect(snapshotFiles(d)).toEqual(before)
+    const ops = [
+      { verb: "observe", id: "D-000", payload: { ...payload, pseudocode: "return normalize(value) ▷ D-001: Normalize the input." }, at: report.nodes["D-000"].inspection_token },
+      { verb: "observe", id: "D-001", payload: { ...payload, pseudocode: "return value.strip() ▷ ⇒ python: str.strip -- Trim whitespace." }, at: report.nodes["D-001"].inspection_token },
+    ]
+    await expectCli(d, ["batch"], { stdin: JSON.stringify(ops) })
+    await expectCli(d, ["check", "--strict-pseudocode"])
+    expect((await scan()).pseudocode.complete).toBe(true)
+    expect(data().nodes["D-000"].design).toBe("draft")
+    expect(data().nodes["D-000"].contract).toEqual({})
+  })
+
   it("reconcile starts an independent model and never overwrites", async () => {
     await adopt()
     await observe()

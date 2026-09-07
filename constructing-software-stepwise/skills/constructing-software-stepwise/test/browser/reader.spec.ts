@@ -51,11 +51,9 @@ harness("navigation through tree, code, chart, and history", async ({ h }) => {
   await page.getByRole("button", { name: "Read selected node" }).click()
   expect(await page.locator("#reader .notice").first().innerText()).toContain("Stale")
   await page.getByRole("tab", { name: "Pseudocode", exact: true }).click()
-  await page.locator('#reader .code-ref[href="#D-001"]').click()
-  await h.selected("D-002")
-  expect(await page.locator('[data-procedure="D-001"]').evaluate((e) => e === document.activeElement)).toBe(true)
-  await page.locator('#tree a[href="#D-001"]').first().click()
+  await page.locator('#reader .code-link[href="#D-001/pseudocode/intended"] code').click()
   await h.selected("D-001")
+  expect(await page.getByRole("tab", { name: "Pseudocode", exact: true }).getAttribute("aria-selected")).toBe("true")
   await page.goBack()
   await h.selected("D-002")
   await page.getByRole("tab", { name: "Evidence & history" }).click()
@@ -79,6 +77,7 @@ harness("search, collapse, and frontier", async ({ h }) => {
   await page.getByRole("button", { name: "Clear search" }).click()
   await page.locator('#tree a[href="#D-003"]').click()
   await h.selected("D-003")
+  await page.getByRole("tab", { name: "Contract", exact: true }).click()
   expect(await page.locator("#reader").innerText()).toContain("No contract has been recorded yet")
   expect(await page.locator("#reader .badge").first().innerText()).toBe("frontier")
 })
@@ -95,9 +94,9 @@ harness("zoom, keyboard tabs, and mobile", async ({ h }) => {
   await page.getByRole("button", { name: "Fit", exact: true }).click()
   await page.getByRole("button", { name: "Focus selected" }).click()
   await h.readView()
-  await page.getByRole("tab", { name: "Contract" }).focus()
+  await page.getByRole("tab", { name: "Pseudocode", exact: true }).focus()
   await page.keyboard.press("ArrowRight")
-  expect(await page.getByRole("tab", { name: "Pseudocode", exact: true }).getAttribute("aria-selected")).toBe("true")
+  expect(await page.getByRole("tab", { name: "Contract", exact: true }).getAttribute("aria-selected")).toBe("true")
   await page.setViewportSize({ width: 390, height: 844 })
   await h.mapView()
   expect(await page.locator("#graph-viewport").isVisible()).toBe(true)
@@ -155,6 +154,7 @@ harness("draft and historical states remain distinct", async ({ h }) => {
   await page.locator('#graph g[data-node-id="D-002"]').click()
   await h.selected("D-002")
   await h.readView()
+  await page.getByRole("tab", { name: "Contract", exact: true }).click()
   await page
     .locator("#reader section")
     .filter({ has: page.getByRole("heading", { name: "Replacement", exact: true }) })
@@ -257,7 +257,9 @@ harness("observed code versions and drift are separate from intent", async ({ h 
     source_report: { reason: "Bound sources changed.", implementation_version: b, bindings: {} },
   })
   await h.open(data)
-  expect(await page.getByRole("tab", { name: "Observed code", exact: true }).getAttribute("aria-selected")).toBe("true")
+  expect(await page.getByRole("tab", { name: "Pseudocode", exact: true }).getAttribute("aria-selected")).toBe("true")
+  expect(await page.getByLabel("Pseudocode source", { exact: true }).inputValue()).toBe("observed")
+  await page.getByRole("tab", { name: "Observed code", exact: true }).click()
   const detail = await page.locator("#detail-content").innerText()
   expect(detail).toContain(a)
   expect(detail).toContain(b)
@@ -295,8 +297,6 @@ harness("reachable procedures are separate, deduplicated, and cycle safe", async
   delete child.target
   child.body = [{ indent: 0, code: "persist(key)", child: "D-002" }]
   await h.open(data)
-  expect(await page.locator(".algorithm-card").count()).toBe(0)
-  await page.getByRole("tab", { name: "Pseudocode", exact: true }).click()
   expect(await page.locator(".algorithm-card").count()).toBe(3)
   expect(await page.locator(".algorithm-card .algorithm-card").count()).toBe(0)
   expect(await page.locator(".algorithm-title").filter({ hasText: "Algorithm D-001" }).count()).toBe(1)
@@ -304,11 +304,96 @@ harness("reachable procedures are separate, deduplicated, and cycle safe", async
   const root = await page.locator('[data-procedure="D-000"]').innerText()
   expect(root).toContain("first ← validate(key)")
   expect(root).toContain("second ← validate(key)")
-  await page.locator('[data-procedure="D-000"] .code-ref').first().click()
-  await h.selected("D-000")
-  expect(await page.locator('[data-procedure="D-001"]').evaluate((e) => e === document.activeElement)).toBe(true)
+  await page.locator('[data-procedure="D-000"] .code-link').first().click()
+  await h.selected("D-001")
+  expect(await page.locator(".algorithm-card").first().getAttribute("data-procedure")).toBe("D-001")
   await page.getByLabel("Pseudocode source", { exact: true }).selectOption("observed")
   expect(await page.locator(".algorithm-card").count()).toBe(1)
   expect(await page.locator(".code-line").count()).toBe(0)
   expect(await page.locator("#detail-content").innerText()).toContain("No observed pseudocode")
+})
+
+harness("call lines preserve observed source, keyboard navigation, history, and direct links", async ({ h }) => {
+  const { page } = h
+  const data = fixture()
+  for (const id of ["D-000", "D-001"]) {
+    Object.assign(data.nodes[id], { origin: "existing-code", contract: {}, body: [], source_state: "current", target: undefined,
+      bindings: { S01: { path: "src/worker.ts", symbol: "Worker.run", lines: [10, 28] } },
+      observation: { effect: "Process the supplied work.", unknowns: ["Late replies require an explicit policy."], claims: [],
+        body: id === "D-000" ? [{ indent: 0, code: "result ← validate(key)", child: "D-001", gloss: "Validate identity." }]
+          : [{ indent: 0, code: "return key", target: "service: Worker.run" }] } })
+  }
+  await h.open(data)
+  expect(await page.getByRole("tab", { name: "Pseudocode", exact: true }).getAttribute("aria-selected")).toBe("true")
+  expect(await page.getByLabel("Pseudocode source", { exact: true }).inputValue()).toBe("observed")
+  const call = page.locator('[data-procedure="D-000"] .code-link')
+  await expect(call).toHaveAttribute("href", "#D-001/pseudocode/observed")
+  await call.focus()
+  await page.keyboard.press("Enter")
+  await h.selected("D-001")
+  expect(await page.locator(".algorithm-card").first().getAttribute("data-procedure")).toBe("D-001")
+  await expect(page.locator(".algorithm-unknowns")).toContainText("Late replies")
+  await page.locator(".implementation-mapping summary").click()
+  await expect(page.locator(".implementation-mapping")).toContainText("Worker.run")
+  await expect(page.locator(".implementation-mapping")).toContainText("src/worker.ts")
+  await page.reload()
+  await h.selected("D-001")
+  expect(await page.getByLabel("Pseudocode source", { exact: true }).inputValue()).toBe("observed")
+  await page.goBack()
+  await h.selected("D-000")
+  await page.goForward()
+  await h.selected("D-001")
+  await page.getByLabel("Pseudocode source", { exact: true }).selectOption("intended")
+  await expect(page.locator("#detail-content")).toContainText("No pseudocode recorded")
+  await page.goBack()
+  expect(await page.getByLabel("Pseudocode source", { exact: true }).inputValue()).toBe("observed")
+  await expect(page.locator(".code-line code").filter({ hasText: "return key" })).toBeVisible()
+})
+
+harness("outline resizes by pointer and keyboard, persists, and preserves mobile and map layouts", async ({ h }) => {
+  const { page } = h
+  await h.open()
+  const handle = page.getByRole("separator", { name: "Resize design outline" })
+  const initial = (await page.locator("#outline").boundingBox())!.width
+  const box = (await handle.boundingBox())!
+  await page.mouse.move(box.x + box.width / 2, box.y + 100)
+  await page.mouse.down()
+  await page.mouse.move(box.x + box.width / 2 + 100, box.y + 100, { steps: 5 })
+  await page.mouse.up()
+  await expect(handle).toHaveAttribute("aria-valuenow", String(initial + 100))
+  expect((await page.locator("#outline").boundingBox())!.width).toBe(initial + 100)
+  await handle.focus()
+  await page.keyboard.press("ArrowLeft")
+  await expect(handle).toHaveAttribute("aria-valuenow", String(initial + 90))
+  await page.reload()
+  await expect(handle).toHaveAttribute("aria-valuenow", String(initial + 90))
+  await handle.focus()
+  await page.keyboard.press("Home")
+  await expect(handle).toHaveAttribute("aria-valuenow", "200")
+  await page.keyboard.press("End")
+  await expect(handle).toHaveAttribute("aria-valuenow", "600")
+  await h.mapView()
+  await expect(handle).toBeHidden()
+  await h.readView()
+  await page.setViewportSize({ width: 390, height: 844 })
+  await expect(handle).toBeHidden()
+  expect(await page.evaluate("document.documentElement.scrollWidth <= window.innerWidth")).toBe(true)
+  await page.setViewportSize({ width: 1440, height: 900 })
+  await expect(handle).toHaveAttribute("aria-valuenow", "600")
+})
+
+harness("large procedure trees keep the selected algorithm above the fold", async ({ h }) => {
+  const { page } = h
+  const data = fixture()
+  for (let i = 10; i < 60; i++) {
+    const id = `D-${String(i).padStart(3, "0")}`
+    data.nodes[id] = { statement: `Operation${i}(value)`, design: "draft", target: "service: operation", contract: {} }
+    data.nodes["D-000"].depends.push(id)
+  }
+  await h.open(data)
+  await expect(page.locator(".pseudocode-index")).not.toHaveAttribute("open")
+  const firstStep = (await page.locator('[data-procedure="D-000"] .code-line').first().boundingBox())!
+  expect(firstStep.y + firstStep.height).toBeLessThan(page.viewportSize()!.height)
+  await page.locator(".pseudocode-index summary").click()
+  await expect(page.locator(".pseudocode-index .chip")).toHaveCount(54)
 })

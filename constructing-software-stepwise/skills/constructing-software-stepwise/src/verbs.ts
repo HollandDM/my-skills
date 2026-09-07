@@ -11,7 +11,8 @@ import {
 } from "./core.js"
 import { CONTENT_FIELDS, coverage, currentEvidence, fingerprint, validateBehavior } from "./state.js"
 import { renderAll, renderNode } from "./render.js"
-import { check, deriveDepends, report } from "./check.js"
+import { check, checkAlgorithms, deriveDepends, report } from "./check.js"
+import { describeAlgorithmIssue } from "./algorithm-audit.js"
 import * as existing from "./existing.js"
 import type { ScanReport } from "./existing.js"
 import { Fail, Refused, asFail, fail } from "./errors.js"
@@ -853,6 +854,8 @@ export const scanText = (rep: ScanReport): string => {
   const c = rep.coverage as Record<string, unknown>
   lines.push(`Source coverage: ${pyStr(c.current ?? 0)}/${pyStr(c.active ?? 0)} active current; bound ${pyStr(c.bound ?? 0)}; observed ${pyStr(c.observed ?? 0)}; unbound ${((c.unbound as string[] | undefined) ?? []).join(", ") || "none"}`)
   lines.push(`Inspection pending: ${rep.pending.join(", ") || "none"}; assessment pending: ${rep.assessment_pending.join(", ") || "none"}; recorded differences: ${rep.differences.join(", ") || "none"}`)
+  lines.push(`Pseudocode: ${rep.pseudocode.procedures} procedures; ${rep.pseudocode.issues.length} traceability gaps. Source coverage does not establish algorithm completeness.`)
+  lines.push(...rep.pseudocode.issues.map(describeAlgorithmIssue))
   return lines.join("\n")
 }
 
@@ -966,8 +969,9 @@ export const vHtml: Verb = (led, a) => Effect.gen(function* () {
   yield* out(`HTML snapshot: ${output}\n`)
 })
 
-export const vCheck: Verb = (led) => Effect.gen(function* () {
+export const vCheck: Verb = (led, a) => Effect.gen(function* () {
   yield* check(led)
+  checkAlgorithms(led, flagOf(a, "strict_pseudocode"))
   const rc = yield* report(led)
   if (rc) return yield* new Fail({ message: "" })
 })

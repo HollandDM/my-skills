@@ -2,6 +2,59 @@
 
 Use a consistent algorithm presentation: a caption, the operation's interface and contract, a named procedure, numbered steps, and an explanation of correctness below the algorithm. This is Stepwise's house style, drawing on common CS paper conventions; there is no single syntax shared by every research community.
 
+## The primary explanation of the system
+
+Pseudocode is the primary artifact, for both forward design and reconstruction. It is a semantic explanation of the implementation, not a function inventory, a polished alternative to the real behavior, or source code rewritten with different punctuation. A reader should understand one level without reading its children's implementation, and should be able to open a child's algorithm wherever deeper reasoning is needed.
+
+For every procedure, make these answers explicit:
+
+1. **Purpose and interface:** What responsibility does it own? Name the relevant inputs, output, and state instead of using an unexplained `input` everywhere.
+2. **Data flow:** What does each step consume, produce, or change? Preserve values needed by later steps and use consistent names across call sites.
+3. **Control and effects:** What determines each branch or loop? Where do persistence, remote dispatch, synchronization, and ownership transitions occur?
+4. **Failure and progress:** What escapes, retries, remains partially applied, or ends the operation? Where does the implementation stop making progress? Explain actual behavior rather than adding an idealized recovery path.
+5. **Drill-down:** Which named algorithm or concrete implementation realizes each substantial operation? Use explicit references, including in predicates when they hide nontrivial work.
+
+Keep one coherent abstraction level within a procedure. A parent explains the protocol and its outcomes; a child explains the difficult mechanism. Explain a small local operation directly instead of inventing a procedure merely to give a line a link. Control-flow syntax, assignments, and simple expressions need no destination. Clickability follows genuine modeled relationships, not every line of typography.
+
+### Connected algorithms, not opaque helpers
+
+This hides the work and its consequences:
+
+```pseudo
+Validate(input)
+Process(input)
+Save(input)
+```
+
+A useful high-level algorithm makes the interface, boundary, and failure behavior visible:
+
+```pseudo
+procedure AcceptJob(request)
+  job ← ValidateJobRequest(request) ▷ D-011: Reject malformed requests before writing anything.
+  record ← StoreJobIfAbsent(job.key, job.payload) ▷ D-012: Reuse the same durable job for repeated requests.
+  dispatch ← RequestJobExecution(record.key) ▷ D-013: Ask the worker to process the durable job.
+  if dispatch failed then
+    return PendingDispatch(record.key) ▷ ⇒ domain: Acceptance.PendingDispatch -- The stored job survives; dispatch is not reported as successful.
+  end if
+  return Accepted(record.key) ▷ ⇒ domain: Acceptance.Accepted -- Report acceptance, not completion of the worker's execution.
+end procedure
+```
+
+This is an example of a chosen protocol, not permission to infer those guarantees from a queue API. In a reconstruction, inspect whether these are the actual outcomes. D-012 must explain its persistence mechanism and its idempotency boundary; D-013 must explain dispatch and its failure outcome. A separately executed worker belongs in its own procedure, linked at the dispatch or in the interaction diagram. Do not insert a synchronous worker call that the implementation never makes.
+
+### Correspondence to implementation
+
+At an implementation boundary, use `▷ ⇒ <target>: <identifier> -- <explanation>` to name the real function, query, type, library, or platform primitive. In observed nodes, bind the actual source file with `bind --symbol` and optional `--lines`; source-backed claims explain the correspondence. A node may span multiple functions or repositories. Explain that mapping instead of pretending that every node is one source function. A filepath or hash alone does not explain how the algorithm corresponds to code.
+
+Canonical node references connect algorithms. Implementation targets and source bindings connect those algorithms to code. Preserve both directions during changes. Keep proposed targets visibly unimplemented in forward design; keep observed-only bodies separate from intended requirements.
+
+### Required review passes
+
+- **Top-down reading:** Read the root, then follow every substantial operation. Check meaningful interfaces, branch conditions, outputs, side effects, failure boundaries, and loop progress. A generic statement that a leaf is "bounded" does not explain why its remaining obligations are understood.
+- **Source correspondence:** Compare every affected algorithm against the selected implementation, including dispatch targets and error paths. Verify order, arguments, return values, ownership, retries, and partial effects. Update pseudocode alongside implementation changes; record inaccessible source or unresolved behavior explicitly.
+- **Scenario and decision review:** Trace nominal, retry, concurrent, and partial-failure scenarios where relevant. Check all applicable accepted decisions, including current repository ADRs as well as previous design ADRs. Assign discrepancies to the owning nodes rather than hiding them in a separate report.
+- **Structural gate:** Run `check --strict-pseudocode`. The gate detects traceability gaps; it cannot judge whether the prose is clear, whether abstraction is useful, or whether the algorithm tells the truth about code. Never add a fake call, target, or relationship to silence it.
+
 ## Structure
 
 - **Caption:** `Algorithm D-NNN: <purpose>`. Keep the node ID stable across revisions. It is the reference identity; line numbers are local reading aids.
@@ -67,7 +120,7 @@ Set it with `body <dir> D-000 --file algorithm.pseudo`, then supply the walkthro
 
 Use meaningful names instead of translating every variable into a Greek symbol. Mathematical notation should remove ambiguity or shorten a real derivation. Keep scheduling, retries, failures, persistence, and ownership concrete when they affect correctness. Avoid implementation syntax such as imports, framework types, and method chains unless the algorithm specifically depends on them. Terminal adaptations still name the actual APIs or constructs.
 
-Stepwise's reference annotations extend ordinary paper comments: `▷ D-NNN: explanation` introduces a refinement; `▷ ↗ D-NNN -- explanation` reuses an approved node; `▷ ⇒ target: identifier -- explanation` maps a concrete operation. These are graph links, not executable statements. Nontrivial predicates or helpers should be defined and referenced; do not hide difficult work behind an unexplained call inside a condition.
+Stepwise's reference annotations extend ordinary paper comments: `▷ D-NNN: explanation` introduces a refinement; `▷ ↗ D-NNN -- explanation` reuses an approved node; `▷ ⇒ target: identifier -- explanation` maps a concrete operation. In observed pseudocode, `▷ D-NNN: explanation` is a descriptive procedure reference and does not approve the target. These are graph links, not executable statements. Put the reference on the actual call or dispatch line. Nontrivial predicates or helpers should be defined and referenced; do not hide difficult work behind an unexplained call inside a condition.
 
 ## Stateful and event-driven systems
 

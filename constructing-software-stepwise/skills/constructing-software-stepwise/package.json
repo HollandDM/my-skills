@@ -1,6 +1,6 @@
 {
   "name": "constructing-software-stepwise",
-  "version": "4.0.0",
+  "version": "4.1.0",
   "private": true,
   "description": "Stepwise design ledger CLI (Effect) and interactive design reader (SolidJS).",
   "type": "module",

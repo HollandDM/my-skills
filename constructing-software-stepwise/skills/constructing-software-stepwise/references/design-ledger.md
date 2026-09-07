@@ -2,6 +2,8 @@
 
 The ledger records how child operations satisfy parent contracts, what was approved, and what evidence covers the current design. Write self-contained prose and refer to shared concepts by name or ID.
 
+Pseudocode is the primary explanation of the work. Maintain a connected chain from the high-level algorithm to child procedures and concrete implementation mappings, and keep that explanation closely aligned with code whenever implementation exists. The quality contract and required readability/correspondence passes are in [pseudocode.md](pseudocode.md).
+
 ## Storage and node fields
 
 `docs/design/<topic>/ledger.json` is canonical. `DESIGN.md`, `CONTEXT.md`, and `nodes/D-NNN.md` are generated views. Ledger mutations use the CLI. ADR prose is maintained in separate Markdown files.
@@ -56,7 +58,7 @@ end procedure
 
 One logical action per line; indentation represents nesting. Use explicit `if … then` / `end if` and `for each … do` / `end for` blocks. The optional matching procedure wrapper is removed on input and generated on output. Store contract headers in `contract`, not the body; line numbers are generated. Existing ASCII arrows and `--` tags remain accepted.
 
-Tags: `▷ D-NNN: explanation` defines a child; `▷ ↗ D-NNN -- explanation` reuses an approved node; `▷ ⇒ target: identifier -- explanation` maps a concrete operation. An existing child's gloss can supply its explanation. Calls with one unambiguous existing signature may be auto-tagged.
+Tags: `▷ D-NNN: explanation` defines a child; `▷ ↗ D-NNN -- explanation` reuses an approved node; `▷ ⇒ target: identifier -- explanation` maps a concrete operation. An existing child's gloss can supply its explanation. Intended calls with one unambiguous existing signature may be auto-tagged by the body verb; do not assume that an observed helper name creates a reference. Observed calls need their own explicit tags or concrete targets. The HTML reader makes referenced call lines navigable to the target procedure with the selected source basis preserved.
 
 `Program` presents root algorithms and separate named helper procedures. A call does not inline another procedure's local variables or returns. Approved and stale bodies display their actual state; draft bodies remain in node views, and retired/superseded bodies remain historical records. The HTML reader uses the same procedure boundaries and keeps graph references clickable.
 

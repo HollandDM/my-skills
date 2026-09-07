@@ -8,6 +8,7 @@ import { renderAll } from "./render.js"
 import * as existing from "./existing.js"
 import { Io } from "./services.js"
 import { asFail } from "./errors.js"
+import { auditAlgorithms, describeAlgorithmIssue } from "./algorithm-audit.js"
 import { isAlnumChar, maxStr, minStr, partition, repr, reprList, reprTuple, split, splitWs, strip } from "./pystr.js"
 
 /** Pure lint over the in-memory ledger; `views` compares generated views with `viewsOnDisk`. */
@@ -139,6 +140,15 @@ export const check = Effect.fn("check")(function* (led: Ledger, options: { views
   const views = options.views ? yield* readViews(led) : undefined
   checkSync(led, views)
 })
+
+/** Run explicitly for review; partial authoring remains possible between inspections. */
+export const checkAlgorithms = (led: Ledger, strict: boolean): void => {
+  const audit = auditAlgorithms(led.nodes)
+  const messages = audit.issues.map(describeAlgorithmIssue)
+  if (strict && !audit.procedures) messages.push("ledger: no algorithms are recorded for pseudocode review")
+  if (strict) led.errors.push(...messages)
+  else led.warnings.push(...messages)
+}
 
 export const compactErrors = (errors: string[]): string[] => {
   const grouped = new Map<string, string[]>()

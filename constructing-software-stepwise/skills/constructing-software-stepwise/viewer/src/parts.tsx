@@ -4,6 +4,8 @@ import type { JSX } from "@solidjs/web"
 import { txt, type BodyLine, type DesignNode } from "./model"
 import { useApp } from "./state"
 
+export const procedureHref = (id: string, source: "intended" | "observed"): string => `#${encodeURIComponent(id)}/pseudocode/${source}`
+
 export const Section = (props: { title: string; subtitle?: string; children: JSX.Element }) => (
   <section class="section">
     <div class="section-title">
@@ -57,36 +59,30 @@ export interface CodeCardProps {
   body?: BodyLine[]
   historical?: boolean
   caption?: string | null
-  onReference?: (target: string) => void
+  source?: "intended" | "observed"
   /** When set, the card is a focusable jump target inside the pseudocode tab. */
   procedure?: string
 }
 
-const CodeLine = (props: { raw: string; index: number; indent: number; line: BodyLine; onReference?: (target: string) => void }) => {
+const CodeLine = (props: { raw: string; index: number; indent: number; line: BodyLine; source?: "intended" | "observed" }) => {
   const app = useApp()
   const target = () => props.line.child || props.line.reuse
   const note = () => props.line.gloss || (target() && app.model.nodes.get(target()!)?.gloss) || props.line.note
+  const content = () => <>
+    <span class="line-no">{props.index}</span>
+    <span class="line-content" style={{ "--indent": Math.min(Math.max(props.indent, 0), 80) * 7 + "px" }}>
+      <AlgorithmCode raw={props.raw} />
+      <Show when={note()}><span class="line-note">{"▷ " + txt(note())}</span></Show>
+      <Show when={props.line.target}><span class="line-note">{"▷ " + props.line.target}</span></Show>
+    </span>
+    <Show when={target()}><span class="code-ref">{(props.line.reuse ? "↗ " : "") + target()}</span></Show>
+  </>
   return (
-    <div class="code-line">
-      <span class="line-no">{props.index}</span>
-      <div class="line-content" style={{ "--indent": Math.min(Math.max(props.indent, 0), 80) * 7 + "px" }}>
-        <AlgorithmCode raw={props.raw} />
-        <Show when={note()}>
-          <div class="line-note">{"▷ " + txt(note())}</div>
-        </Show>
-        <Show when={props.line.target}>
-          <div class="line-note">{"▷ " + props.line.target}</div>
-        </Show>
-      </div>
-      <Show when={target() && app.model.nodes.has(target()!)}>
-        <NodeLink
-          id={target()!}
-          label={(props.line.reuse ? "↗ " : "") + target()}
-          class="code-ref"
-          onClick={props.onReference ? (event) => { event.preventDefault(); props.onReference!(target()!) } : undefined}
-        />
-      </Show>
-    </div>
+    <Show when={target() && app.model.nodes.has(target()!)} fallback={<div class="code-line">{content()}</div>}>
+      <a class="code-line code-link" href={procedureHref(target()!, props.source || "intended")} title={"Read " + target() + " · " + app.model.name(app.model.nodes.get(target()!)!)}>
+        {content()}
+      </a>
+    </Show>
   )
 }
 
@@ -116,7 +112,7 @@ export const CodeCard = (props: CodeCardProps) => {
       </Show>
       <CodeLine raw={"procedure " + app.model.algorithmSignature(props.node.statement || props.node.id)} index={1} indent={0} line={{}} />
       <For each={body()}>
-        {(line, i) => <CodeLine raw={line.code || ""} index={i() + 2} indent={2 + (Number(line.indent) || 0)} line={line} onReference={props.onReference} />}
+        {(line, i) => <CodeLine raw={line.code || ""} index={i() + 2} indent={2 + (Number(line.indent) || 0)} line={line} source={props.source} />}
       </For>
       <CodeLine raw="end procedure" index={body().length + 2} indent={0} line={{}} />
     </div>

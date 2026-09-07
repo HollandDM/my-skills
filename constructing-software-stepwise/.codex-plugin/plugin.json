@@ -1,15 +1,15 @@
 {
   "name": "constructing-software-stepwise",
-  "version": "4.0.0",
-  "description": "Stepwise design and reconstruction of existing code, with whole-file source versions, incremental sync, and an interactive design reader. Zero-install Node.js CLI (Effect) and SolidJS reader; no Python required.",
+  "version": "4.1.0",
+  "description": "Pseudocode-first software design and reconstruction, with implementation correspondence, algorithm traceability checks, clickable procedure navigation, and a resizable design reader. Zero-install Node.js CLI and SolidJS reader.",
   "author": {
     "name": "HollandDM"
   },
   "skills": "./skills/",
   "interface": {
     "displayName": "Stepwise Software Design",
-    "shortDescription": "Design software and track existing implementation changes.",
-    "longDescription": "Stepwise design and reconstruction of existing code, with whole-file source versions, incremental sync, and an interactive design reader. Zero-install Node.js CLI (Effect) and SolidJS reader; no Python required.",
+    "shortDescription": "Reason about software through implementation-aligned pseudocode.",
+    "longDescription": "Pseudocode-first software design and reconstruction, with implementation correspondence, algorithm traceability checks, clickable procedure navigation, and a resizable design reader. Zero-install Node.js CLI and SolidJS reader.",
     "developerName": "HollandDM",
     "category": "Productivity",
     "capabilities": [],
