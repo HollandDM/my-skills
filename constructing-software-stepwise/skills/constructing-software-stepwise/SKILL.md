@@ -31,6 +31,14 @@ Read [pseudocode.md](references/pseudocode.md) before writing or reviewing algor
 
 State the scope and completion boundary briefly. Respect an explicit design-only, subtree, or depth bound. For forward design, otherwise finish the refinement tree. For adoption or reconciliation, use the source-inspection completion boundary in existing-work.md. Implement and verify only when implementation is part of the request. Auto-approval changes pacing and decision ownership within that scope, not permission for unrelated external actions.
 
+## HTML before every review question
+
+**HTML is the primary user review surface. Before every user-facing question, clarification, decision request, or approval request in a Stepwise workflow, persist the current review context through the CLI and export a fresh HTML snapshot with `node <skill>/dist/stepwise.mjs html <dir>`.** This applies to design, reconstruction, sync, and follow-up questions after a previous answer. Export again before each request; an older snapshot does not satisfy this requirement.
+
+Record the relevant draft proposal, pseudocode, alternatives, or unresolved question before export so the reader contains what the user is being asked to assess. Keep drafts and unknowns explicit; exporting does not approve anything. Include a clickable HTML link in the question, with the relevant node fragment and intended/observed pseudocode route when applicable. Keep chat focused on the decision and recommendation rather than making the user review a duplicate inline design.
+
+If no ledger exists yet, create a minimal draft with the known scope and explicit unknowns through the CLI, then export before asking. If creation or export is genuinely blocked, report the blocker and request only the information needed to unblock it; do not present a stale snapshot as current review material. Internal CLI queries and source inspection do not require exports. Before the final handoff, export the latest state and link its HTML as well.
+
 ## Design discipline
 
 Write a node's statement, effect, and contract before resolving its unknowns or refining it. Use `?slug` for an unresolved term or decision. Inspect relevant code, documentation, or experiments for factual answers; ask the user only for information or choices they hold. Defer child-specific unknowns to their owning nodes.

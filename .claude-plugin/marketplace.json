@@ -93,8 +93,8 @@
     {
       "name": "constructing-software-stepwise",
       "source": "./constructing-software-stepwise",
-      "description": "Pseudocode-first software design and reconstruction, with implementation correspondence, algorithm traceability checks, clickable procedure navigation, and a resizable design reader. Zero-install Node.js CLI and SolidJS reader.",
-      "version": "4.1.0",
+      "description": "Pseudocode-first software design and reconstruction, with implementation correspondence, algorithm traceability checks, and mandatory fresh HTML review snapshots before every user question. Zero-install Node.js CLI and SolidJS reader.",
+      "version": "4.1.1",
       "author": {
         "name": "HollandDM"
       },
