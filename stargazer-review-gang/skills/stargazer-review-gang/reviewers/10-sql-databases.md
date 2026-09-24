@@ -22,6 +22,12 @@ Read-only review. Inspect changed SQL, migration registration/order, callers, de
 - Notification fan-out uses group-commit JSON Stream Load (5000-row chunks) — check chunking + failure handling on changed loaders.
 - `GroupCommitInsertShape` scalafix rule (datalake repo, CI-enforced) guards insert shape — regression to subquery-form inserts fails CI; treat matching diff hunks as blockers.
 
+## Doris Read-After-Write Visibility
+
+- Doris write acks do not guarantee immediate read visibility (group-commit/ROUTINE LOAD lag). Flag code that polls, sleeps, or retries in-process waiting for a just-written row to appear, or that re-reads right after an acked write to verify it landed — trust the ack.
+- When a later step needs rows from an earlier write, require the write and the read to live in separate Temporal Activities (see reviewer 06 §12), with the reading Activity retrying on a lag signal (e.g. row count below the stamped count) rather than the caller looping.
+- A digest/provenance mismatch is a genuine data problem, not lag — it must fail non-retryably, never merged with the lag-retry path.
+
 ## Multi-Region (EU)
 
 - Region-aware config: `local/local-eu.conf`, `isSecondaryRegion=true`, app `apps.gondor.gondorAppServerEU`. Minimal infra (`isMinimalInfra=true`) SKIPS TiDB, Doris, Datalake migrations — schema drift between regions is expected state; changed migrations must tolerate a secondary region never running them.

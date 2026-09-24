@@ -54,6 +54,14 @@ Do not report a pattern by itself. Identify the evidence discarded or assumption
 - Do not hide a low-evidence contract behind a type alias.
 - Do not widen a value merely to route it through a generic helper if that helper can be parameterized by the precise type; do not require precision a real external boundary cannot establish.
 
+### Pure functions never throw
+
+- Flag a changed pure/domain function that raises via `require`, `assert`, `throw`, `.get` on `Option`/`Either`/`Try`, an unsafe constructor/parser (hand-rolled `apply`, `URI.create`, `LocalDate.parse`, etc.) on untrusted or computed input, or a throw inside `map`/`fold`/`getOrElse`, when the input can actually violate the assumption. Model the failure with `Either` and require the caller to handle it; do not report one source-evidently guarded by an exhaustive prior check.
+- Flag a case class whose fields need validation but exposes a public unchecked constructor. Require `final case class X private (...)` with a companion `apply`/`from` returning `Either[E, X]`, so the invalid construction path is unreachable outside the owner.
+- Prefer an opaque type with a private/smart constructor returning `Either` over a raw validated primitive passed around by convention at a domain boundary.
+- Lift a validated `Either` into a ZIO effect with `ZIO.fromEither`; do not throw inside the effect and let it surface as a defect.
+- Reviewer 01 owns the mechanical `.get`/`.head`/exhaustiveness finding on unrelated partial code; report here only when the missing `Either`/smart-constructor also hides a domain validation decision from callers.
+
 ### Parse at owner boundaries
 
 - Decode and validate HTTP, JSON/YAML, database, configuration, queue, JavaScript, reflection, and third-party values at the closest owner boundary.

@@ -470,6 +470,22 @@ For non-Temporal execution, use the repository's actual framework and contracts 
 
 ---
 
+## 12. Doris Read-After-Write Visibility (Activity Boundary)
+
+Doris load pipelines (Kafka → ROUTINE LOAD / group-commit) are not immediately consistent — an acked write can stay invisible to a read for a lag window. Handle that lag with Temporal Activity retry, never in-code waiting.
+
+Flag:
+- **In-code poll loop, `ZIO.retry`/`Schedule`, or `sleep` waiting for Doris rows to become visible** — `[BLOCKER]` — holds worker/fiber resources; move the wait to Activity retry.
+- **Read-back verification immediately after an acked Doris write in the same Activity/method** — `[BLOCKER]` — trust the ack; do not re-read to confirm it landed.
+- **Write and the dependent read fused into one Activity** — `[BLOCKER]` — split into a writer Activity and a separate reader Activity so Temporal retries only the read.
+- **Reading Activity missing explicit `maximumRetryAttempts`, initial interval, backoff coefficient, or a `startToCloseTimeout`/schedule-to-close sized for the whole envelope (attempts × start-to-close + total backoff)** — `[BLOCKER]`.
+- **Lag failure is non-retryable, or lag and a genuine data mismatch (digest/provenance) share one error type** — `[BLOCKER]` — lag must be a retryable error (e.g. row count below the stamped count); a digest/provenance mismatch stays non-retryable.
+- **Workflow execution timeout or an external waiter budget not covering the reading Activity's full retry envelope** — `[SUGGESTION]` — Temporal retries the Activity but the workflow can still time out around it.
+
+Reviewer 10 owns Doris-specific group-commit/visibility mechanics; this reviewer owns the Activity/retry-boundary shape.
+
+---
+
 ## Diff-Bound Rule
 
 Only flag issues on lines **added or modified in diff**. No critique pre-existing code author didn't touch. Pre-existing code with genuine production failure risk (missing activity attributes, idempotency violation) → mention as `[NOTE]` only.
